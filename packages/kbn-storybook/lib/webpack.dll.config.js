@@ -54,7 +54,6 @@ module.exports = {
     'highlight.js',
     'html-entities',
     'jquery',
-    'lodash.clone',
     'lodash',
     'markdown-it',
     'mocha',
@@ -73,7 +72,6 @@ module.exports = {
     'rxjs',
     'sinon',
     'tinycolor2',
-    './src/legacy/ui/public/styles/font_awesome.less',
     './src/legacy/ui/public/styles/bootstrap/bootstrap_light.less',
   ],
   plugins: [
@@ -129,7 +127,7 @@ module.exports = {
             loader: 'postcss-loader',
             options: {
               config: {
-                path: path.resolve(REPO_ROOT, 'src/optimize/postcss.config.js'),
+                path: require.resolve('@kbn/optimizer/postcss.config.js'),
               },
             },
           },

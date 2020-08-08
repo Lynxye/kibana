@@ -64,7 +64,7 @@ const preResponseResult = {
 };
 
 /**
- * A tool set defining an outcome of OnPreAuth interceptor for incoming request.
+ * A tool set defining an outcome of OnPreResponse interceptor for incoming request.
  * @public
  */
 export interface OnPreResponseToolkit {
@@ -77,7 +77,7 @@ const toolkit: OnPreResponseToolkit = {
 };
 
 /**
- * See {@link OnPreAuthToolkit}.
+ * See {@link OnPreRoutingToolkit}.
  * @public
  */
 export type OnPreResponseHandler = (
@@ -120,8 +120,8 @@ export function adoptToHapiOnPreResponseFormat(fn: OnPreResponseHandler, log: Lo
               ...(result.headers as any), // hapi types don't specify string[] as valid value
             };
           } else {
+            findHeadersIntersection(response.headers, result.headers, log);
             for (const [headerName, headerValue] of Object.entries(result.headers)) {
-              findHeadersIntersection(response.headers, result.headers, log);
               response.header(headerName, headerValue as any); // hapi types don't specify string[] as valid value
             }
           }
@@ -147,8 +147,8 @@ function findHeadersIntersection(
   headers: ResponseHeaders,
   log: Logger
 ) {
-  Object.keys(headers).forEach(headerName => {
-    if (responseHeaders[headerName] !== undefined) {
+  Object.keys(headers).forEach((headerName) => {
+    if (Reflect.has(responseHeaders, headerName)) {
       log.warn(`onPreResponseHandler rewrote a response header [${headerName}].`);
     }
   });

@@ -72,6 +72,7 @@ Object {
       },
     },
   },
+  "loggers": undefined,
   "root": Object {
     "level": "off",
   },
@@ -90,6 +91,7 @@ Object {
       },
     },
   },
+  "loggers": undefined,
   "root": Object {
     "level": "all",
   },
@@ -117,7 +119,10 @@ Object {
 
 exports[`#set correctly sets values for paths that do not exist. 1`] = `
 Object {
-  "unknown": "value",
+  "unknown": Object {
+    "sub1": "sub-value-1",
+    "sub2": "sub-value-2",
+  },
 }
 `;
 

@@ -19,7 +19,6 @@
 
 import BaseOptimizer from '../base_optimizer';
 import { createBundlesRoute } from '../bundles_route';
-import { DllCompiler } from '../dynamic_dll_plugin';
 import { fromRoot } from '../../core/server/utils';
 import * as Rx from 'rxjs';
 import { mergeMap, take } from 'rxjs/operators';
@@ -35,16 +34,12 @@ export default class WatchOptimizer extends BaseOptimizer {
   constructor(opts) {
     super(opts);
     this.prebuild = opts.prebuild || false;
-    this.watchCache = opts.watchCache;
     this.status$ = new Rx.ReplaySubject(1);
   }
 
   async init() {
     this.initializing = true;
     this.initialBuildComplete = false;
-
-    // try reset the watch optimizer cache
-    await this.watchCache.tryReset();
 
     // log status changes
     this.status$.subscribe(this.onStatusChangeHandler);
@@ -83,7 +78,7 @@ export default class WatchOptimizer extends BaseOptimizer {
   registerCompilerDoneHook() {
     super.registerCompilerDoneHook();
 
-    this.compiler.hooks.done.tap('watch_optimizer-done', stats => {
+    this.compiler.hooks.done.tap('watch_optimizer-done', (stats) => {
       if (stats.compilation.needAdditionalPass) {
         return;
       }
@@ -106,7 +101,7 @@ export default class WatchOptimizer extends BaseOptimizer {
     });
   }
 
-  bindToServer(server, basePath) {
+  bindToServer(server, basePath, npUiPluginPublicDirs, buildHash) {
     // pause all requests received while the compiler is running
     // and continue once an outcome is reached (aborting the request
     // with an error if it was a failure).
@@ -117,8 +112,9 @@ export default class WatchOptimizer extends BaseOptimizer {
 
     server.route(
       createBundlesRoute({
+        npUiPluginPublicDirs: npUiPluginPublicDirs,
+        buildHash,
         regularBundlesPath: this.compiler.outputPath,
-        dllBundlesPath: DllCompiler.getRawDllConfig().outputPath,
         basePublicPath: basePath,
         builtCssPath: fromRoot('built_assets/css'),
       })
@@ -143,7 +139,7 @@ export default class WatchOptimizer extends BaseOptimizer {
     }
   }
 
-  compilerWatchErrorHandler = error => {
+  compilerWatchErrorHandler = (error) => {
     if (error) {
       this.status$.next({
         type: STATUS.FATAL,

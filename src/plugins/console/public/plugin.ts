@@ -18,19 +18,15 @@
  */
 
 import { i18n } from '@kbn/i18n';
-
-import { CoreSetup, CoreStart, Plugin } from 'kibana/public';
+import { Plugin, CoreSetup } from 'src/core/public';
 
 import { FeatureCatalogueCategory } from '../../home/public';
-
 import { AppSetupUIPluginDependencies } from './types';
 
 export class ConsoleUIPlugin implements Plugin<void, void, AppSetupUIPluginDependencies> {
-  constructor() {}
-
-  async setup(
+  public setup(
     { notifications, getStartServices }: CoreSetup,
-    { dev_tools, home, usageCollection }: AppSetupUIPluginDependencies
+    { devTools, home, usageCollection }: AppSetupUIPluginDependencies
   ) {
     home.featureCatalogue.register({
       id: 'console',
@@ -41,28 +37,37 @@ export class ConsoleUIPlugin implements Plugin<void, void, AppSetupUIPluginDepen
         defaultMessage: 'Skip cURL and use this JSON interface to work with your data directly.',
       }),
       icon: 'consoleApp',
-      path: '/app/kibana#/dev_tools/console',
+      path: '/app/dev_tools#/console',
       showOnHomePage: true,
       category: FeatureCatalogueCategory.ADMIN,
     });
 
-    dev_tools.register({
+    devTools.register({
       id: 'console',
       order: 1,
       title: i18n.translate('console.consoleDisplayName', {
         defaultMessage: 'Console',
       }),
       enableRouting: false,
-      mount: async ({ core: { docLinks, i18n: i18nDep } }, { element }) => {
+      mount: async ({ element }) => {
+        const [core] = await getStartServices();
+
+        const {
+          injectedMetadata,
+          i18n: { Context: I18nContext },
+          docLinks: { DOC_LINK_VERSION },
+        } = core;
+
         const { renderApp } = await import('./application');
-        const [{ injectedMetadata }] = await getStartServices();
+
         const elasticsearchUrl = injectedMetadata.getInjectedVar(
           'elasticsearchUrl',
           'http://localhost:9200'
         ) as string;
+
         return renderApp({
-          docLinkVersion: docLinks.DOC_LINK_VERSION,
-          I18nContext: i18nDep.Context,
+          docLinkVersion: DOC_LINK_VERSION,
+          I18nContext,
           notifications,
           elasticsearchUrl,
           usageCollection,
@@ -72,5 +77,5 @@ export class ConsoleUIPlugin implements Plugin<void, void, AppSetupUIPluginDepen
     });
   }
 
-  async start(core: CoreStart) {}
+  public start() {}
 }

@@ -22,7 +22,7 @@ import { load } from 'cheerio';
 import { httpServerMock } from '../http/http_server.mocks';
 import { uiSettingsServiceMock } from '../ui_settings/ui_settings_service.mock';
 import { mockRenderingServiceParams, mockRenderingSetupDeps } from './__mocks__/params';
-import { RenderingServiceSetup } from './types';
+import { InternalRenderingServiceSetup } from './types';
 import { RenderingService } from './rendering_service';
 
 const INJECTED_METADATA = {
@@ -30,17 +30,18 @@ const INJECTED_METADATA = {
   branch: expect.any(String),
   buildNumber: expect.any(Number),
   env: {
-    binDir: expect.any(String),
-    configDir: expect.any(String),
-    homeDir: expect.any(String),
-    logDir: expect.any(String),
+    mode: {
+      name: expect.any(String),
+      dev: expect.any(Boolean),
+      prod: expect.any(Boolean),
+    },
     packageInfo: {
       branch: expect.any(String),
       buildNum: expect.any(Number),
       buildSha: expect.any(String),
+      dist: expect.any(Boolean),
       version: expect.any(String),
     },
-    pluginSearchPaths: expect.any(Array),
   },
   legacyMetadata: {
     branch: expect.any(String),
@@ -62,15 +63,9 @@ describe('RenderingService', () => {
   });
 
   describe('setup()', () => {
-    it('creates instance of RenderingServiceSetup', async () => {
-      const rendering = await service.setup(mockRenderingSetupDeps);
-
-      expect(rendering.render).toBeInstanceOf(Function);
-    });
-
     describe('render()', () => {
       let uiSettings: ReturnType<typeof uiSettingsServiceMock.createClient>;
-      let render: RenderingServiceSetup['render'];
+      let render: InternalRenderingServiceSetup['render'];
 
       beforeEach(async () => {
         uiSettings = uiSettingsServiceMock.createClient();
@@ -78,6 +73,13 @@ describe('RenderingService', () => {
           registered: { name: 'title' },
         });
         render = (await service.setup(mockRenderingSetupDeps)).render;
+        await service.start({
+          legacy: {
+            legacyInternals: {
+              getVars: () => ({}),
+            },
+          },
+        } as any);
       });
 
       it('renders "core" page', async () => {

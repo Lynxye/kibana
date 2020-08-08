@@ -77,9 +77,7 @@ export default () =>
         .default('')
         .allow('')
         .regex(/(^$|^\/.*[^\/]$)/, `start with a slash, don't end with one`),
-      host: Joi.string()
-        .hostname()
-        .default('localhost'),
+      host: Joi.string().hostname().default('localhost'),
       port: Joi.number().default(5601),
       rewriteBasePath: Joi.boolean().when('basePath', {
         is: '',
@@ -103,6 +101,10 @@ export default () =>
 
     logging: Joi.object()
       .keys({
+        appenders: HANDLED_IN_NEW_PLATFORM,
+        loggers: HANDLED_IN_NEW_PLATFORM,
+        root: HANDLED_IN_NEW_PLATFORM,
+
         silent: Joi.boolean().default(false),
 
         quiet: Joi.boolean().when('silent', {
@@ -129,20 +131,14 @@ export default () =>
           .keys({
             enabled: Joi.boolean().default(false),
             everyBytes: Joi.number()
-              // > 100KB
-              .greater(102399)
+              // > 1MB
+              .greater(1048576)
               // < 1GB
               .less(1073741825)
               // 10MB
               .default(10485760),
-            keepFiles: Joi.number()
-              .greater(2)
-              .less(1024)
-              .default(7),
-            pollingInterval: Joi.number()
-              .greater(5000)
-              .less(3600000)
-              .default(10000),
+            keepFiles: Joi.number().greater(2).less(1024).default(7),
+            pollingInterval: Joi.number().greater(5000).less(3600000).default(10000),
             usePolling: Joi.boolean().default(false),
           })
           .default(),
@@ -154,12 +150,8 @@ export default () =>
     }).default(),
 
     plugins: Joi.object({
-      paths: Joi.array()
-        .items(Joi.string())
-        .default([]),
-      scanDirs: Joi.array()
-        .items(Joi.string())
-        .default([]),
+      paths: Joi.array().items(Joi.string()).default([]),
+      scanDirs: Joi.array().items(Joi.string()).default([]),
       initialize: Joi.boolean().default(true),
     }).default(),
 
@@ -176,9 +168,7 @@ export default () =>
       viewCaching: Joi.boolean().default(Joi.ref('$prod')),
       watch: Joi.boolean().default(false),
       watchPort: Joi.number().default(5602),
-      watchHost: Joi.string()
-        .hostname()
-        .default('localhost'),
+      watchHost: Joi.string().hostname().default('localhost'),
       watchPrebuild: Joi.boolean().default(false),
       watchProxyTimeout: Joi.number().default(10 * 60000),
       useBundleCache: Joi.boolean().default(!!process.env.CODE_COVERAGE ? true : Joi.ref('$prod')),
@@ -191,6 +181,7 @@ export default () =>
       }),
       workers: Joi.number().min(1),
       profile: Joi.boolean().default(false),
+      validateSyntaxOfNodeModules: Joi.boolean().default(true),
     }).default(),
     status: Joi.object({
       allowAnonymous: Joi.boolean().default(false),
@@ -202,25 +193,14 @@ export default () =>
         url: Joi.string(),
         options: Joi.object({
           attribution: Joi.string(),
-          minZoom: Joi.number()
-            .min(0, 'Must be 0 or higher')
-            .default(0),
+          minZoom: Joi.number().min(0, 'Must be 0 or higher').default(0),
           maxZoom: Joi.number().default(10),
           tileSize: Joi.number(),
-          subdomains: Joi.array()
-            .items(Joi.string())
-            .single(),
+          subdomains: Joi.array().items(Joi.string()).single(),
           errorTileUrl: Joi.string().uri(),
           tms: Joi.boolean(),
           reuseTiles: Joi.boolean(),
-          bounds: Joi.array()
-            .items(
-              Joi.array()
-                .items(Joi.number())
-                .min(2)
-                .required()
-            )
-            .min(2),
+          bounds: Joi.array().items(Joi.array().items(Joi.number()).min(2).required()).min(2),
           default: Joi.boolean(),
         }).default({
           default: true,
@@ -254,12 +234,10 @@ export default () =>
           )
           .default([]),
       }).default(),
-      manifestServiceUrl: Joi.string()
-        .default('')
-        .allow(''),
-      emsFileApiUrl: Joi.string().default('https://vector-staging.maps.elastic.co'),
+      manifestServiceUrl: Joi.string().default('').allow(''),
+      emsFileApiUrl: Joi.string().default('https://vector.maps.elastic.co'),
       emsTileApiUrl: Joi.string().default('https://tiles.maps.elastic.co'),
-      emsLandingPageUrl: Joi.string().default('https://maps.elastic.co/v7.4'),
+      emsLandingPageUrl: Joi.string().default('https://maps.elastic.co/v7.9'),
       emsFontLibraryUrl: Joi.string().default(
         'https://tiles.maps.elastic.co/fonts/{fontstack}/{range}.pbf'
       ),

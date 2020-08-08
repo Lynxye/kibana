@@ -18,14 +18,14 @@
  */
 
 import { defaultState, pureTransitions, TodoActions, TodoState } from '../state_containers/todomvc';
-import { BaseState, BaseStateContainer, createStateContainer } from '../../public/state_containers';
+import { BaseState, BaseStateContainer, createStateContainer } from '../../common/state_containers';
 import {
   createKbnUrlStateStorage,
   syncState,
   INullableBaseStateContainer,
 } from '../../public/state_sync';
 
-const tick = () => new Promise(resolve => setTimeout(resolve));
+const tick = () => new Promise((resolve) => setTimeout(resolve));
 
 const stateContainer = createStateContainer<TodoState, TodoActions>(defaultState, pureTransitions);
 const { start, stop } = syncState({

@@ -7,8 +7,7 @@
 import * as t from 'io-ts';
 import { isRight } from 'fp-ts/lib/Either';
 
-export class DateFromStringType extends t.Type<Date, string, t.mixed> {
-  // eslint-disable-next-line
+class DateFromStringType extends t.Type<Date, string, t.mixed> {
   public readonly _tag: 'DateFromISOStringType' = 'DateFromISOStringType';
   constructor() {
     super(
@@ -24,7 +23,7 @@ export class DateFromStringType extends t.Type<Date, string, t.mixed> {
           return isNaN(d.getTime()) ? t.failure(s, c) : t.success(d);
         }
       },
-      a => a.toISOString()
+      (a) => a.toISOString()
     );
   }
 }

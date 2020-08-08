@@ -18,7 +18,11 @@
  */
 
 export { CollectorSet } from './collector_set';
-// @ts-ignore
-export { Collector } from './collector';
-// @ts-ignore
+export {
+  Collector,
+  AllowedSchemaTypes,
+  SchemaField,
+  MakeSchemaFrom,
+  CollectorOptions,
+} from './collector';
 export { UsageCollector } from './usage_collector';

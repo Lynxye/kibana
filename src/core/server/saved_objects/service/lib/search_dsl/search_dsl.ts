@@ -20,11 +20,11 @@
 import Boom from 'boom';
 
 import { IndexMapping } from '../../../mappings';
-import { SavedObjectsSchema } from '../../../schema';
 import { getQueryParams } from './query_params';
 import { getSortingParams } from './sorting_params';
 // eslint-disable-next-line @kbn/eslint/no-restricted-paths
-import { esKuery } from '../../../../../../plugins/data/server';
+import { KueryNode } from '../../../../../../plugins/data/server';
+import { ISavedObjectTypeRegistry } from '../../../saved_objects_type_registry';
 
 interface GetSearchDslOptions {
   type: string | string[];
@@ -33,17 +33,17 @@ interface GetSearchDslOptions {
   searchFields?: string[];
   sortField?: string;
   sortOrder?: string;
-  namespace?: string;
+  namespaces?: string[];
   hasReference?: {
     type: string;
     id: string;
   };
-  kueryNode?: esKuery.KueryNode;
+  kueryNode?: KueryNode;
 }
 
 export function getSearchDsl(
   mappings: IndexMapping,
-  schema: SavedObjectsSchema,
+  registry: ISavedObjectTypeRegistry,
   options: GetSearchDslOptions
 ) {
   const {
@@ -53,7 +53,7 @@ export function getSearchDsl(
     searchFields,
     sortField,
     sortOrder,
-    namespace,
+    namespaces,
     hasReference,
     kueryNode,
   } = options;
@@ -69,8 +69,8 @@ export function getSearchDsl(
   return {
     ...getQueryParams({
       mappings,
-      schema,
-      namespace,
+      registry,
+      namespaces,
       type,
       search,
       searchFields,

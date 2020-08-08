@@ -3,6 +3,7 @@
   "version": "kibana",
   "server": true,
   "ui": true,
-  "requiredPlugins": ["dev_tools", "home"],
-  "optionalPlugins": ["usageCollection"]
+  "requiredPlugins": ["devTools", "home"],
+  "optionalPlugins": ["usageCollection"],
+  "requiredBundles": ["esUiShared", "kibanaReact", "kibanaUtils"]
 }

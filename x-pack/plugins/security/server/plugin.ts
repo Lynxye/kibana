@@ -5,53 +5,58 @@
  */
 
 import { combineLatest } from 'rxjs';
-import { first } from 'rxjs/operators';
+import { first, map } from 'rxjs/operators';
+import { TypeOf } from '@kbn/config-schema';
 import {
-  ICustomClusterClient,
+  deepFreeze,
+  ILegacyCustomClusterClient,
   CoreSetup,
-  KibanaRequest,
+  CoreStart,
   Logger,
   PluginInitializerContext,
-  RecursiveReadonly,
 } from '../../../../src/core/server';
-import { deepFreeze } from '../../../../src/core/utils';
 import { SpacesPluginSetup } from '../../spaces/server';
-import { PluginSetupContract as FeaturesSetupContract } from '../../features/server';
-import { LicensingPluginSetup } from '../../licensing/server';
+import {
+  PluginSetupContract as FeaturesPluginSetup,
+  PluginStartContract as FeaturesPluginStart,
+} from '../../features/server';
+import { LicensingPluginSetup, LicensingPluginStart } from '../../licensing/server';
 
 import { Authentication, setupAuthentication } from './authentication';
-import { Authorization, setupAuthorization } from './authorization';
-import { createConfig$ } from './config';
+import { AuthorizationService, AuthorizationServiceSetup } from './authorization';
+import { ConfigSchema, createConfig } from './config';
 import { defineRoutes } from './routes';
 import { SecurityLicenseService, SecurityLicense } from '../common/licensing';
 import { setupSavedObjects } from './saved_objects';
-import { SecurityAuditLogger } from './audit';
+import { AuditService, SecurityAuditLogger, AuditServiceSetup } from './audit';
 import { elasticsearchClientPlugin } from './elasticsearch_client_plugin';
+import { SecurityFeatureUsageService, SecurityFeatureUsageServiceStart } from './feature_usage';
 
 export type SpacesService = Pick<
   SpacesPluginSetup['spacesService'],
   'getSpaceId' | 'namespaceToSpaceId'
 >;
 
-export type FeaturesService = Pick<FeaturesSetupContract, 'getFeatures'>;
-
-/**
- * Describes a set of APIs that is available in the legacy platform only and required by this plugin
- * to function properly.
- */
-export interface LegacyAPI {
-  isSystemAPIRequest: (request: KibanaRequest) => boolean;
-  auditLogger: {
-    log: (eventType: string, message: string, data?: Record<string, unknown>) => void;
-  };
-}
-
 /**
  * Describes public Security plugin contract returned at the `setup` stage.
  */
-export interface PluginSetupContract {
-  authc: Authentication;
-  authz: Pick<Authorization, 'actions' | 'checkPrivilegesWithRequest' | 'mode'>;
+export interface SecurityPluginSetup {
+  authc: Pick<
+    Authentication,
+    | 'isAuthenticated'
+    | 'getCurrentUser'
+    | 'areAPIKeysEnabled'
+    | 'createAPIKey'
+    | 'invalidateAPIKey'
+    | 'grantAPIKeyAsInternalUser'
+    | 'invalidateAPIKeyAsInternalUser'
+  >;
+  authz: Pick<
+    AuthorizationServiceSetup,
+    'actions' | 'checkPrivilegesDynamicallyWithRequest' | 'checkPrivilegesWithRequest' | 'mode'
+  >;
+  license: SecurityLicense;
+  audit: Pick<AuditServiceSetup, 'getLogger'>;
 
   /**
    * If Spaces plugin is available it's supposed to register its SpacesService with Security plugin
@@ -62,22 +67,16 @@ export interface PluginSetupContract {
    * @param service Spaces service exposed by the Spaces plugin.
    */
   registerSpacesService: (service: SpacesService) => void;
-
-  __legacyCompat: {
-    registerLegacyAPI: (legacyAPI: LegacyAPI) => void;
-    registerPrivilegesWithCluster: () => void;
-    license: SecurityLicense;
-    config: RecursiveReadonly<{
-      secureCookies: boolean;
-      cookieName: string;
-      loginAssistanceMessage: string;
-    }>;
-  };
 }
 
 export interface PluginSetupDependencies {
-  features: FeaturesService;
+  features: FeaturesPluginSetup;
   licensing: LicensingPluginSetup;
+}
+
+export interface PluginStartDependencies {
+  features: FeaturesPluginStart;
+  licensing: LicensingPluginStart;
 }
 
 /**
@@ -85,17 +84,21 @@ export interface PluginSetupDependencies {
  */
 export class Plugin {
   private readonly logger: Logger;
-  private clusterClient?: ICustomClusterClient;
+  private clusterClient?: ILegacyCustomClusterClient;
   private spacesService?: SpacesService | symbol = Symbol('not accessed');
   private securityLicenseService?: SecurityLicenseService;
 
-  private legacyAPI?: LegacyAPI;
-  private readonly getLegacyAPI = () => {
-    if (!this.legacyAPI) {
-      throw new Error('Legacy API is not registered!');
+  private readonly featureUsageService = new SecurityFeatureUsageService();
+  private featureUsageServiceStart?: SecurityFeatureUsageServiceStart;
+  private readonly getFeatureUsageService = () => {
+    if (!this.featureUsageServiceStart) {
+      throw new Error(`featureUsageServiceStart is not registered!`);
     }
-    return this.legacyAPI;
+    return this.featureUsageServiceStart;
   };
+
+  private readonly auditService = new AuditService(this.initializerContext.logger.get('audit'));
+  private readonly authorizationService = new AuthorizationService();
 
   private readonly getSpacesService = () => {
     // Changing property value from Symbol to undefined denotes the fact that property was accessed.
@@ -110,15 +113,24 @@ export class Plugin {
     this.logger = this.initializerContext.logger.get();
   }
 
-  public async setup(core: CoreSetup, { features, licensing }: PluginSetupDependencies) {
+  public async setup(
+    core: CoreSetup<PluginStartDependencies>,
+    { features, licensing }: PluginSetupDependencies
+  ) {
     const [config, legacyConfig] = await combineLatest([
-      createConfig$(this.initializerContext, core.http.isTlsEnabled),
+      this.initializerContext.config.create<TypeOf<typeof ConfigSchema>>().pipe(
+        map((rawConfig) =>
+          createConfig(rawConfig, this.initializerContext.logger.get('config'), {
+            isTLSEnabled: core.http.getServerInfo().protocol === 'https',
+          })
+        )
+      ),
       this.initializerContext.config.legacy.globalConfig$,
     ])
       .pipe(first())
       .toPromise();
 
-    this.clusterClient = core.elasticsearch.createClient('security', {
+    this.clusterClient = core.elasticsearch.legacy.createClient('security', {
       plugins: [elasticsearchClientPlugin],
     });
 
@@ -127,82 +139,98 @@ export class Plugin {
       license$: licensing.license$,
     });
 
+    this.featureUsageService.setup({ featureUsage: licensing.featureUsage });
+
+    const audit = this.auditService.setup({ license, config: config.audit });
+    const auditLogger = new SecurityAuditLogger(audit.getLogger());
+
     const authc = await setupAuthentication({
+      auditLogger,
+      getFeatureUsageService: this.getFeatureUsageService,
       http: core.http,
       clusterClient: this.clusterClient,
       config,
       license,
       loggers: this.initializerContext.logger,
-      getLegacyAPI: this.getLegacyAPI,
     });
 
-    const authz = await setupAuthorization({
+    const authz = this.authorizationService.setup({
       http: core.http,
+      capabilities: core.capabilities,
+      status: core.status,
       clusterClient: this.clusterClient,
       license,
       loggers: this.initializerContext.logger,
       kibanaIndexName: legacyConfig.kibana.index,
       packageVersion: this.initializerContext.env.packageInfo.version,
       getSpacesService: this.getSpacesService,
-      featuresService: features,
+      features,
     });
 
     setupSavedObjects({
-      auditLogger: new SecurityAuditLogger(() => this.getLegacyAPI().auditLogger),
+      auditLogger,
       authz,
       savedObjects: core.savedObjects,
+      getSpacesService: this.getSpacesService,
     });
-
-    core.capabilities.registerSwitcher(authz.disableUnauthorizedCapabilities);
 
     defineRoutes({
       router: core.http.createRouter(),
       basePath: core.http.basePath,
+      httpResources: core.http.resources,
       logger: this.initializerContext.logger.get('routes'),
       clusterClient: this.clusterClient,
       config,
       authc,
       authz,
-      csp: core.http.csp,
+      license,
+      getFeatures: () =>
+        core
+          .getStartServices()
+          .then(([, { features: featuresStart }]) => featuresStart.getFeatures()),
+      getFeatureUsageService: this.getFeatureUsageService,
     });
 
-    return deepFreeze<PluginSetupContract>({
-      authc,
+    return deepFreeze<SecurityPluginSetup>({
+      audit: {
+        getLogger: audit.getLogger,
+      },
+
+      authc: {
+        isAuthenticated: authc.isAuthenticated,
+        getCurrentUser: authc.getCurrentUser,
+        areAPIKeysEnabled: authc.areAPIKeysEnabled,
+        createAPIKey: authc.createAPIKey,
+        invalidateAPIKey: authc.invalidateAPIKey,
+        grantAPIKeyAsInternalUser: authc.grantAPIKeyAsInternalUser,
+        invalidateAPIKeyAsInternalUser: authc.invalidateAPIKeyAsInternalUser,
+      },
 
       authz: {
         actions: authz.actions,
         checkPrivilegesWithRequest: authz.checkPrivilegesWithRequest,
+        checkPrivilegesDynamicallyWithRequest: authz.checkPrivilegesDynamicallyWithRequest,
         mode: authz.mode,
       },
 
-      registerSpacesService: service => {
+      license,
+
+      registerSpacesService: (service) => {
         if (this.wasSpacesServiceAccessed()) {
           throw new Error('Spaces service has been accessed before registration.');
         }
 
         this.spacesService = service;
       },
-
-      __legacyCompat: {
-        registerLegacyAPI: (legacyAPI: LegacyAPI) => (this.legacyAPI = legacyAPI),
-
-        registerPrivilegesWithCluster: async () => await authz.registerPrivilegesWithCluster(),
-
-        license,
-
-        // We should stop exposing this config as soon as only new platform plugin consumes it. The only
-        // exception may be `sessionTimeout` as other parts of the app may want to know it.
-        config: {
-          loginAssistanceMessage: config.loginAssistanceMessage,
-          secureCookies: config.secureCookies,
-          cookieName: config.cookieName,
-        },
-      },
     });
   }
 
-  public start() {
+  public start(core: CoreStart, { features, licensing }: PluginStartDependencies) {
     this.logger.debug('Starting plugin');
+    this.featureUsageServiceStart = this.featureUsageService.start({
+      featureUsage: licensing.featureUsage,
+    });
+    this.authorizationService.start({ features, clusterClient: this.clusterClient! });
   }
 
   public stop() {
@@ -217,6 +245,12 @@ export class Plugin {
       this.securityLicenseService.stop();
       this.securityLicenseService = undefined;
     }
+
+    if (this.featureUsageServiceStart) {
+      this.featureUsageServiceStart = undefined;
+    }
+    this.auditService.stop();
+    this.authorizationService.stop();
   }
 
   private wasSpacesServiceAccessed() {

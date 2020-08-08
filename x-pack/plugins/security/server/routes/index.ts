@@ -4,9 +4,17 @@
  * you may not use this file except in compliance with the Elastic License.
  */
 
-import { CoreSetup, IClusterClient, IRouter, Logger } from '../../../../../src/core/server';
+import { Feature } from '../../../features/server';
+import {
+  CoreSetup,
+  HttpResources,
+  ILegacyClusterClient,
+  IRouter,
+  Logger,
+} from '../../../../../src/core/server';
+import { SecurityLicense } from '../../common/licensing';
 import { Authentication } from '../authentication';
-import { Authorization } from '../authorization';
+import { AuthorizationServiceSetup } from '../authorization';
 import { ConfigType } from '../config';
 
 import { defineAuthenticationRoutes } from './authentication';
@@ -15,6 +23,8 @@ import { defineApiKeysRoutes } from './api_keys';
 import { defineIndicesRoutes } from './indices';
 import { defineUsersRoutes } from './users';
 import { defineRoleMappingRoutes } from './role_mapping';
+import { defineViewRoutes } from './views';
+import { SecurityFeatureUsageServiceStart } from '../feature_usage';
 
 /**
  * Describes parameters used to define HTTP routes.
@@ -22,12 +32,15 @@ import { defineRoleMappingRoutes } from './role_mapping';
 export interface RouteDefinitionParams {
   router: IRouter;
   basePath: CoreSetup['http']['basePath'];
-  csp: CoreSetup['http']['csp'];
+  httpResources: HttpResources;
   logger: Logger;
-  clusterClient: IClusterClient;
+  clusterClient: ILegacyClusterClient;
   config: ConfigType;
   authc: Authentication;
-  authz: Authorization;
+  authz: AuthorizationServiceSetup;
+  license: SecurityLicense;
+  getFeatures: () => Promise<Feature[]>;
+  getFeatureUsageService: () => SecurityFeatureUsageServiceStart;
 }
 
 export function defineRoutes(params: RouteDefinitionParams) {
@@ -37,4 +50,5 @@ export function defineRoutes(params: RouteDefinitionParams) {
   defineIndicesRoutes(params);
   defineUsersRoutes(params);
   defineRoleMappingRoutes(params);
+  defineViewRoutes(params);
 }

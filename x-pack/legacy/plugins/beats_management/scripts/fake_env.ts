@@ -3,18 +3,19 @@
  * or more contributor license agreements. Licensed under the Elastic License;
  * you may not use this file except in compliance with the Elastic License.
  */
-import Chance from 'chance'; // eslint-disable-line
+import Chance from 'chance';
 // @ts-ignore
 import request from 'request';
 import uuidv4 from 'uuid/v4';
 import { configBlockSchemas } from '../common/config_schemas';
 import { BeatTag } from '../common/domain_types';
-import { compose } from '../public/lib/compose/scripts';
+// eslint-disable-next-line @kbn/eslint/no-restricted-paths
+import { compose } from '../../../../plugins/beats_management/public/lib/compose/scripts';
 const args = process.argv.slice(2);
 const chance = new Chance();
 
 function sleep(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 function getRandomColor() {
   const letters = '0123456789ABCDEF';
@@ -120,8 +121,8 @@ const start = async (
               () =>
                 ({
                   type: configBlockSchemas[Math.floor(Math.random())].id,
-                  description: `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sint ista Graecorum; 
-Nihil ad rem! Ne sit sane; Quod quidem nobis non saepe contingit. 
+                  description: `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sint ista Graecorum;
+Nihil ad rem! Ne sit sane; Quod quidem nobis non saepe contingit.
 Duo Reges: constructio interrete. Itaque his sapiens semper vacabit.`.substring(
                     0,
                     Math.floor(Math.random() * (0 - 115 + 1))

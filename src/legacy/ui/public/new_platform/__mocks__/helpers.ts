@@ -17,7 +17,6 @@
  * under the License.
  */
 
-/* eslint-disable @kbn/eslint/no-restricted-paths */
 import { coreMock } from '../../../../../core/public/mocks';
 import { dataPluginMock } from '../../../../../plugins/data/public/mocks';
 import { embeddablePluginMock } from '../../../../../plugins/embeddable/public/mocks';
@@ -27,8 +26,12 @@ import { inspectorPluginMock } from '../../../../../plugins/inspector/public/moc
 import { uiActionsPluginMock } from '../../../../../plugins/ui_actions/public/mocks';
 import { managementPluginMock } from '../../../../../plugins/management/public/mocks';
 import { usageCollectionPluginMock } from '../../../../../plugins/usage_collection/public/mocks';
+import { kibanaLegacyPluginMock } from '../../../../../plugins/kibana_legacy/public/mocks';
 import { chartPluginMock } from '../../../../../plugins/charts/public/mocks';
-/* eslint-enable @kbn/eslint/no-restricted-paths */
+import { advancedSettingsMock } from '../../../../../plugins/advanced_settings/public/mocks';
+import { savedObjectsManagementPluginMock } from '../../../../../plugins/saved_objects_management/public/mocks';
+import { visualizationsPluginMock } from '../../../../../plugins/visualizations/public/mocks';
+import { discoverPluginMock } from '../../../../../plugins/discover/public/mocks';
 
 export const pluginsMock = {
   createSetup: () => ({
@@ -40,6 +43,11 @@ export const pluginsMock = {
     expressions: expressionsPluginMock.createSetupContract(),
     uiActions: uiActionsPluginMock.createSetupContract(),
     usageCollection: usageCollectionPluginMock.createSetupContract(),
+    advancedSettings: advancedSettingsMock.createSetupContract(),
+    visualizations: visualizationsPluginMock.createSetupContract(),
+    kibanaLegacy: kibanaLegacyPluginMock.createSetupContract(),
+    savedObjectsManagement: savedObjectsManagementPluginMock.createSetupContract(),
+    discover: discoverPluginMock.createSetupContract(),
   }),
   createStart: () => ({
     data: dataPluginMock.createStartContract(),
@@ -50,6 +58,11 @@ export const pluginsMock = {
     expressions: expressionsPluginMock.createStartContract(),
     uiActions: uiActionsPluginMock.createStartContract(),
     management: managementPluginMock.createStartContract(),
+    advancedSettings: advancedSettingsMock.createStartContract(),
+    visualizations: visualizationsPluginMock.createStartContract(),
+    kibanaLegacy: kibanaLegacyPluginMock.createStartContract(),
+    savedObjectsManagement: savedObjectsManagementPluginMock.createStartContract(),
+    discover: discoverPluginMock.createStartContract(),
   }),
 };
 

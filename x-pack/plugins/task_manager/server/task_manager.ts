@@ -9,13 +9,14 @@ import { filter } from 'rxjs/operators';
 import { performance } from 'perf_hooks';
 
 import { pipe } from 'fp-ts/lib/pipeable';
-import { Option, none, some, map as mapOptional } from 'fp-ts/lib/Option';
+import { Option, some, map as mapOptional, getOrElse } from 'fp-ts/lib/Option';
+
 import {
   SavedObjectsSerializer,
-  IScopedClusterClient,
+  ILegacyScopedClusterClient,
   ISavedObjectsRepository,
 } from '../../../../src/core/server';
-import { Result, asErr, either, map, mapErr, promiseResult } from './lib/result_type';
+import { Result, asOk, asErr, either, map, mapErr, promiseResult } from './lib/result_type';
 import { TaskManagerConfig } from './config';
 
 import { Logger } from './types';
@@ -43,6 +44,7 @@ import {
   TaskLifecycle,
   TaskLifecycleResult,
   TaskStatus,
+  ElasticJs,
 } from './task';
 import { createTaskPoller, PollingError, PollingErrorType } from './task_poller';
 import { TaskPool } from './task_pool';
@@ -56,13 +58,14 @@ import {
 } from './task_store';
 import { identifyEsError } from './lib/identify_es_error';
 import { ensureDeprecatedFieldsAreCorrected } from './lib/correct_deprecated_fields';
+import { BufferedTaskStore } from './buffered_task_store';
 
 const VERSION_CONFLICT_STATUS = 409;
 
 export interface TaskManagerOpts {
   logger: Logger;
   config: TaskManagerConfig;
-  callAsInternalUser: IScopedClusterClient['callAsInternalUser'];
+  callAsInternalUser: ILegacyScopedClusterClient['callAsInternalUser'];
   savedObjectsRepository: ISavedObjectsRepository;
   serializer: SavedObjectsSerializer;
   taskManagerId: string;
@@ -89,7 +92,10 @@ export type TaskLifecycleEvent = TaskMarkRunning | TaskRun | TaskClaim | TaskRun
  */
 export class TaskManager {
   private definitions: TaskDictionary<TaskDefinition> = {};
+
   private store: TaskStore;
+  private bufferedStore: BufferedTaskStore;
+
   private logger: Logger;
   private pool: TaskPool;
   // all task related events (task claimed, task marked as running, etc.) are emitted through events$
@@ -129,14 +135,18 @@ export class TaskManager {
     this.store = new TaskStore({
       serializer: opts.serializer,
       savedObjectsRepository: opts.savedObjectsRepository,
-      callCluster: opts.callAsInternalUser,
+      callCluster: (opts.callAsInternalUser as unknown) as ElasticJs,
       index: opts.config.index,
       maxAttempts: opts.config.max_attempts,
       definitions: this.definitions,
       taskManagerId: `kibana:${taskManagerId}`,
     });
     // pipe store events into the TaskManager's event stream
-    this.store.events.subscribe(event => this.events$.next(event));
+    this.store.events.subscribe((event) => this.events$.next(event));
+
+    this.bufferedStore = new BufferedTaskStore(this.store, {
+      bufferMaxOperations: opts.config.max_workers,
+    });
 
     this.pool = new TaskPool({
       logger: this.logger,
@@ -156,15 +166,15 @@ export class TaskManager {
     this.events$.next(event);
   };
 
-  private attemptToRun(task: Option<string> = none) {
-    this.claimRequests$.next(task);
+  private attemptToRun(task: string) {
+    this.claimRequests$.next(some(task));
   }
 
   private createTaskRunnerForTask = (instance: ConcreteTaskInstance) => {
     return new TaskManagerRunner({
       logger: this.logger,
       instance,
-      store: this.store,
+      store: this.bufferedStore,
       definitions: this.definitions,
       beforeRun: this.middleware.beforeRun,
       beforeMarkRunning: this.middleware.beforeMarkRunning,
@@ -199,7 +209,7 @@ export class TaskManager {
   public start() {
     if (!this.isStarted) {
       // Some calls are waiting until task manager is started
-      this.startQueue.forEach(fn => fn());
+      this.startQueue.forEach((fn) => fn());
       this.startQueue = [];
 
       this.pollingSubscription = this.poller$.subscribe(
@@ -207,7 +217,7 @@ export class TaskManager {
           if (error.type === PollingErrorType.RequestCapacityReached) {
             pipe(
               error.data,
-              mapOptional(id => this.emitEvent(asTaskRunRequestEvent(id, asErr(error))))
+              mapOptional((id) => this.emitEvent(asTaskRunRequestEvent(id, asErr(error))))
             );
           }
           this.logger.error(error.message);
@@ -218,7 +228,7 @@ export class TaskManager {
 
   private async waitUntilStarted() {
     if (!this.isStarted) {
-      await new Promise(resolve => {
+      await new Promise((resolve) => {
         this.startQueue.push(resolve);
       });
     }
@@ -239,8 +249,8 @@ export class TaskManager {
    * @param taskDefinitions - The Kibana task definitions dictionary
    */
   public registerTaskDefinitions(taskDefinitions: TaskDictionary<TaskDefinition>) {
-    this.assertUninitialized('register task definitions');
-    const duplicate = Object.keys(taskDefinitions).find(k => !!this.definitions[k]);
+    this.assertUninitialized('register task definitions', Object.keys(taskDefinitions).join(', '));
+    const duplicate = Object.keys(taskDefinitions).find((k) => !!this.definitions[k]);
     if (duplicate) {
       throw new Error(`Task ${duplicate} is already defined!`);
     }
@@ -273,16 +283,14 @@ export class TaskManager {
    */
   public async schedule(
     taskInstance: TaskInstanceWithDeprecatedFields,
-    options?: any
+    options?: object
   ): Promise<ConcreteTaskInstance> {
     await this.waitUntilStarted();
     const { taskInstance: modifiedTask } = await this.middleware.beforeSave({
       ...options,
       taskInstance: ensureDeprecatedFieldsAreCorrected(taskInstance, this.logger),
     });
-    const result = await this.store.schedule(modifiedTask);
-    this.attemptToRun();
-    return result;
+    return await this.store.schedule(modifiedTask);
   }
 
   /**
@@ -298,7 +306,7 @@ export class TaskManager {
         .then(resolve)
         .catch(reject);
 
-      this.attemptToRun(some(taskId));
+      this.attemptToRun(taskId);
     });
   }
 
@@ -310,7 +318,7 @@ export class TaskManager {
    */
   public async ensureScheduled(
     taskInstance: TaskInstanceWithId,
-    options?: any
+    options?: object
   ): Promise<TaskInstanceWithId> {
     try {
       return await this.schedule(taskInstance, options);
@@ -334,6 +342,17 @@ export class TaskManager {
   }
 
   /**
+   * Get the current state of a specified task.
+   *
+   * @param {string} id
+   * @returns {Promise<RemoveResult>}
+   */
+  public async get(id: string): Promise<ConcreteTaskInstance> {
+    await this.waitUntilStarted();
+    return this.store.get(id);
+  }
+
+  /**
    * Removes the specified task from the index.
    *
    * @param {string} id
@@ -350,9 +369,11 @@ export class TaskManager {
    * @param {string} message shown if task manager is already initialized
    * @returns void
    */
-  private assertUninitialized(message: string) {
+  private assertUninitialized(message: string, context?: string) {
     if (this.isStarted) {
-      throw new Error(`Cannot ${message} after the task manager is initialized!`);
+      throw new Error(
+        `${context ? `[${context}] ` : ''}Cannot ${message} after the task manager is initialized`
+      );
     }
   }
 }
@@ -385,7 +406,9 @@ export async function claimAvailableTasks(
 
       if (docs.length !== claimedTasks) {
         logger.warn(
-          `[Task Ownership error]: (${claimedTasks}) tasks were claimed by Kibana, but (${docs.length}) tasks were fetched`
+          `[Task Ownership error]: ${claimedTasks} tasks were claimed by Kibana, but ${
+            docs.length
+          } task(s) were fetched (${docs.map((doc) => doc.id).join(', ')})`
         );
       }
       return docs;
@@ -400,7 +423,7 @@ export async function claimAvailableTasks(
     }
   } else {
     performance.mark('claimAvailableTasks.noAvailableWorkers');
-    logger.info(
+    logger.debug(
       `[Task Ownership]: Task Manager has skipped Claiming Ownership of available tasks at it has ran out Available Workers.`
     );
   }
@@ -417,48 +440,65 @@ export async function awaitTaskRunResult(
       // listen for all events related to the current task
       .pipe(filter(({ id }: TaskLifecycleEvent) => id === taskId))
       .subscribe((taskEvent: TaskLifecycleEvent) => {
-        either(
-          taskEvent.event,
-          (taskInstance: ConcreteTaskInstance) => {
-            // resolve if the task has run sucessfully
-            if (isTaskRunEvent(taskEvent)) {
-              subscription.unsubscribe();
-              resolve({ id: taskInstance.id });
-            }
-          },
-          async (error: Error) => {
+        if (isTaskClaimEvent(taskEvent)) {
+          mapErr(async (error: Option<ConcreteTaskInstance>) => {
             // reject if any error event takes place for the requested task
             subscription.unsubscribe();
-            if (isTaskRunRequestEvent(taskEvent)) {
-              return reject(
-                new Error(
-                  `Failed to run task "${taskId}" as Task Manager is at capacity, please try again later`
-                )
-              );
-            } else if (isTaskClaimEvent(taskEvent)) {
-              reject(
-                map(
-                  // if the error happened in the Claim phase - we try to provide better insight
-                  // into why we failed to claim by getting the task's current lifecycle status
-                  await promiseResult<TaskLifecycle, Error>(getLifecycle(taskId)),
-                  (taskLifecycleStatus: TaskLifecycle) => {
-                    if (taskLifecycleStatus === TaskLifecycleResult.NotFound) {
-                      return new Error(`Failed to run task "${taskId}" as it does not exist`);
-                    } else if (
-                      taskLifecycleStatus === TaskStatus.Running ||
-                      taskLifecycleStatus === TaskStatus.Claiming
-                    ) {
-                      return new Error(`Failed to run task "${taskId}" as it is currently running`);
-                    }
-                    return error;
-                  },
-                  () => error
-                )
-              );
+            return reject(
+              map(
+                await pipe(
+                  error,
+                  mapOptional(async (taskReturnedBySweep) => asOk(taskReturnedBySweep.status)),
+                  getOrElse(() =>
+                    // if the error happened in the Claim phase - we try to provide better insight
+                    // into why we failed to claim by getting the task's current lifecycle status
+                    promiseResult<TaskLifecycle, Error>(getLifecycle(taskId))
+                  )
+                ),
+                (taskLifecycleStatus: TaskLifecycle) => {
+                  if (taskLifecycleStatus === TaskLifecycleResult.NotFound) {
+                    return new Error(`Failed to run task "${taskId}" as it does not exist`);
+                  } else if (
+                    taskLifecycleStatus === TaskStatus.Running ||
+                    taskLifecycleStatus === TaskStatus.Claiming
+                  ) {
+                    return new Error(`Failed to run task "${taskId}" as it is currently running`);
+                  }
+                  return new Error(
+                    `Failed to run task "${taskId}" for unknown reason (Current Task Lifecycle is "${taskLifecycleStatus}")`
+                  );
+                },
+                (getLifecycleError: Error) =>
+                  new Error(
+                    `Failed to run task "${taskId}" and failed to get current Status:${getLifecycleError}`
+                  )
+              )
+            );
+          }, taskEvent.event);
+        } else {
+          either<ConcreteTaskInstance, Error | Option<ConcreteTaskInstance>>(
+            taskEvent.event,
+            (taskInstance: ConcreteTaskInstance) => {
+              // resolve if the task has run sucessfully
+              if (isTaskRunEvent(taskEvent)) {
+                subscription.unsubscribe();
+                resolve({ id: taskInstance.id });
+              }
+            },
+            async (error: Error | Option<ConcreteTaskInstance>) => {
+              // reject if any error event takes place for the requested task
+              subscription.unsubscribe();
+              if (isTaskRunRequestEvent(taskEvent)) {
+                return reject(
+                  new Error(
+                    `Failed to run task "${taskId}" as Task Manager is at capacity, please try again later`
+                  )
+                );
+              }
+              return reject(new Error(`Failed to run task "${taskId}": ${error}`));
             }
-            return reject(error);
-          }
-        );
+          );
+        }
       });
   });
 }

@@ -16,6 +16,18 @@ import { ActionsConfigurationUtilities } from '../actions_config';
 // https://v2.developer.pagerduty.com/docs/events-api-v2
 const PAGER_DUTY_API_URL = 'https://events.pagerduty.com/v2/enqueue';
 
+export type PagerDutyActionType = ActionType<
+  ActionTypeConfigType,
+  ActionTypeSecretsType,
+  ActionParamsType,
+  unknown
+>;
+export type PagerDutyActionTypeExecutorOptions = ActionTypeExecutorOptions<
+  ActionTypeConfigType,
+  ActionTypeSecretsType,
+  ActionParamsType
+>;
+
 // config definition
 
 export type ActionTypeConfigType = TypeOf<typeof ConfigSchema>;
@@ -68,20 +80,27 @@ const ParamsSchema = schema.object(
   { validate: validateParams }
 );
 
-function validateParams(paramsObject: any): string | void {
-  const params: ActionParamsType = paramsObject;
-
-  const { timestamp } = params;
+function validateParams(paramsObject: unknown): string | void {
+  const { timestamp } = paramsObject as ActionParamsType;
   if (timestamp != null) {
-    let date;
     try {
-      date = Date.parse(timestamp);
+      const date = Date.parse(timestamp);
+      if (isNaN(date)) {
+        return i18n.translate('xpack.actions.builtin.pagerduty.invalidTimestampErrorMessage', {
+          defaultMessage: `error parsing timestamp "{timestamp}"`,
+          values: {
+            timestamp,
+          },
+        });
+      }
     } catch (err) {
-      return 'error parsing timestamp: ${err.message}';
-    }
-
-    if (isNaN(date)) {
-      return 'error parsing timestamp';
+      return i18n.translate('xpack.actions.builtin.pagerduty.timestampParsingFailedErrorMessage', {
+        defaultMessage: `error parsing timestamp "{timestamp}": {message}`,
+        values: {
+          timestamp,
+          message: err.message,
+        },
+      });
     }
   }
 }
@@ -93,9 +112,10 @@ export function getActionType({
 }: {
   logger: Logger;
   configurationUtilities: ActionsConfigurationUtilities;
-}): ActionType {
+}): PagerDutyActionType {
   return {
     id: '.pagerduty',
+    minimumLicenseRequired: 'gold',
     name: i18n.translate('xpack.actions.builtin.pagerdutyTitle', {
       defaultMessage: 'PagerDuty',
     }),
@@ -134,12 +154,12 @@ function getPagerDutyApiUrl(config: ActionTypeConfigType): string {
 
 async function executor(
   { logger }: { logger: Logger },
-  execOptions: ActionTypeExecutorOptions
-): Promise<ActionTypeExecutorResult> {
+  execOptions: PagerDutyActionTypeExecutorOptions
+): Promise<ActionTypeExecutorResult<unknown>> {
   const actionId = execOptions.actionId;
-  const config = execOptions.config as ActionTypeConfigType;
-  const secrets = execOptions.secrets as ActionTypeSecretsType;
-  const params = execOptions.params as ActionParamsType;
+  const config = execOptions.config;
+  const secrets = execOptions.secrets;
+  const params = execOptions.params;
   const services = execOptions.services;
 
   const apiUrl = getPagerDutyApiUrl(config);
@@ -209,11 +229,23 @@ async function executor(
 
 const AcknowledgeOrResolve = new Set([EVENT_ACTION_ACKNOWLEDGE, EVENT_ACTION_RESOLVE]);
 
-function getBodyForEventAction(actionId: string, params: ActionParamsType): any {
+function getBodyForEventAction(actionId: string, params: ActionParamsType): unknown {
   const eventAction = params.eventAction || EVENT_ACTION_TRIGGER;
   const dedupKey = params.dedupKey || `action:${actionId}`;
 
-  const data: any = {
+  const data: {
+    event_action: ActionParamsType['eventAction'];
+    dedup_key: string;
+    payload?: {
+      summary: string;
+      source: string;
+      severity: string;
+      timestamp?: string;
+      component?: string;
+      group?: string;
+      class?: string;
+    };
+  } = {
     event_action: eventAction,
     dedup_key: dedupKey,
   };
