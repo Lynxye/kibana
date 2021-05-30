@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
@@ -73,14 +74,14 @@ export const FILTER_OR_SEARCH_WITH_KQL = i18n.translate(
 export const ALL_EVENT = i18n.translate(
   'xpack.securitySolution.timeline.searchOrFilter.eventTypeAllEvent',
   {
-    defaultMessage: 'All',
+    defaultMessage: 'All data sources',
   }
 );
 
 export const RAW_EVENT = i18n.translate(
   'xpack.securitySolution.timeline.searchOrFilter.eventTypeRawEvent',
   {
-    defaultMessage: 'Raw events',
+    defaultMessage: 'Events',
   }
 );
 
@@ -88,5 +89,61 @@ export const DETECTION_ALERTS_EVENT = i18n.translate(
   'xpack.securitySolution.timeline.searchOrFilter.eventTypeDetectionAlertsEvent',
   {
     defaultMessage: 'Detection Alerts',
+  }
+);
+
+export const CUSTOM_INDEX_PATTERNS = i18n.translate(
+  'xpack.securitySolution.timeline.searchOrFilter.customeIndexNames',
+  {
+    defaultMessage: 'Custom',
+  }
+);
+
+export const SELECT_INDEX_PATTERNS = i18n.translate(
+  'xpack.securitySolution.timeline.searchOrFilter.indexPatterns.help',
+  {
+    defaultMessage: 'Data sources selection',
+  }
+);
+
+export const CONFIGURE_INDEX_PATTERNS = i18n.translate(
+  'xpack.securitySolution.timeline.searchOrFilter.indexPatterns.configure',
+  {
+    defaultMessage: 'View data sources associated with each of the above selections',
+  }
+);
+
+export const SAVE_INDEX_PATTERNS = i18n.translate(
+  'xpack.securitySolution.timeline.searchOrFilter.indexPatterns.save',
+  {
+    defaultMessage: 'Save',
+  }
+);
+
+export const SHOW_INDEX_PATTERNS_ADVANCED_SETTINGS = i18n.translate(
+  'xpack.securitySolution.timeline.searchOrFilter.indexPatterns.showAdvancedSettings',
+  {
+    defaultMessage: 'Show Advanced',
+  }
+);
+
+export const HIDE_INDEX_PATTERNS_ADVANCED_SETTINGS = i18n.translate(
+  'xpack.securitySolution.timeline.searchOrFilter.indexPatterns.hideAdvancedSettings',
+  {
+    defaultMessage: 'Hide Advanced',
+  }
+);
+
+export const DATA_SOURCES_RESET = i18n.translate(
+  'xpack.securitySolution.timeline.searchOrFilter.indexPatterns.resetSettings',
+  {
+    defaultMessage: 'Reset',
+  }
+);
+
+export const PICK_INDEX_PATTERNS = i18n.translate(
+  'xpack.securitySolution.timeline.searchOrFilter.indexPatterns.pickIndexPatternsCombo',
+  {
+    defaultMessage: 'Pick index patterns',
   }
 );

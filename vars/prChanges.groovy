@@ -11,8 +11,10 @@ def getSkippablePaths() {
     /^.ci\/.+\.yml$/,
     /^.ci\/es-snapshots\//,
     /^.ci\/pipeline-library\//,
+    /^.ci\/Jenkinsfile_[^\/]+$/,
     /^\.github\//,
     /\.md$/,
+    /^\.backportrc\.json$/
   ]
 }
 
@@ -21,7 +23,7 @@ def getSkippablePaths() {
 def getNotSkippablePaths() {
   return [
     // this file is auto-generated and changes to it need to be validated with CI
-    /^docs\/developer\/architecture\/code-exploration.asciidoc$/,
+    /^docs\/developer\/plugin-list.asciidoc$/,
     // don't skip CI on prs with changes to plugin readme files (?i) is for case-insensitive matching
     /(?i)\/plugins\/[^\/]+\/readme\.(md|asciidoc)$/,
   ]

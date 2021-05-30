@@ -1,86 +1,37 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { Crypto } from '@elastic/node-crypto';
-import { i18n } from '@kbn/i18n';
-import Hapi from 'hapi';
-import { KibanaRequest } from '../../../../../../src/core/server';
-import { CONTENT_TYPE_CSV, CSV_JOB_TYPE } from '../../../common/constants';
-import { cryptoFactory, LevelLogger } from '../../lib';
-import { ESQueueWorkerExecuteFn, RunTaskFnFactory } from '../../types';
-import { ScheduledTaskParamsCSV } from './types';
+import { CONTENT_TYPE_CSV } from '../../../common/constants';
+import { RunTaskFn, RunTaskFnFactory } from '../../types';
+import { decryptJobHeaders } from '../common';
 import { createGenerateCsv } from './generate_csv';
+import { TaskPayloadDeprecatedCSV } from './types';
 
-const getRequest = async (headers: string | undefined, crypto: Crypto, logger: LevelLogger) => {
-  const decryptHeaders = async () => {
-    try {
-      if (typeof headers !== 'string') {
-        throw new Error(
-          i18n.translate(
-            'xpack.reporting.exportTypes.csv.executeJob.missingJobHeadersErrorMessage',
-            {
-              defaultMessage: 'Job headers are missing',
-            }
-          )
-        );
-      }
-      return await crypto.decrypt(headers);
-    } catch (err) {
-      logger.error(err);
-      throw new Error(
-          i18n.translate(
-            'xpack.reporting.exportTypes.csv.executeJob.failedToDecryptReportJobDataErrorMessage',
-            {
-              defaultMessage: 'Failed to decrypt report job data. Please ensure that {encryptionKey} is set and re-generate this report. {err}',
-              values: { encryptionKey: 'xpack.reporting.encryptionKey', err: err.toString() },
-            }
-          )
-        ); // prettier-ignore
-    }
-  };
-
-  return KibanaRequest.from({
-    headers: await decryptHeaders(),
-    // This is used by the spaces SavedObjectClientWrapper to determine the existing space.
-    // We use the basePath from the saved job, which we'll have post spaces being implemented;
-    // or we use the server base path, which uses the default space
-    path: '/',
-    route: { settings: {} },
-    url: { href: '/' },
-    raw: { req: { url: '/' } },
-  } as Hapi.Request);
-};
-
-export const runTaskFnFactory: RunTaskFnFactory<ESQueueWorkerExecuteFn<
-  ScheduledTaskParamsCSV
->> = function executeJobFactoryFn(reporting, parentLogger) {
+export const runTaskFnFactory: RunTaskFnFactory<
+  RunTaskFn<TaskPayloadDeprecatedCSV>
+> = function executeJobFactoryFn(reporting, parentLogger) {
   const config = reporting.getConfig();
-  const crypto = cryptoFactory(config.get('encryptionKey'));
-  const logger = parentLogger.clone([CSV_JOB_TYPE, 'execute-job']);
 
   return async function runTask(jobId, job, cancellationToken) {
-    const elasticsearch = reporting.getElasticsearchService();
-    const jobLogger = logger.clone([jobId]);
-    const generateCsv = createGenerateCsv(jobLogger);
+    const elasticsearch = await reporting.getEsClient();
+    const logger = parentLogger.clone([jobId]);
+    const generateCsv = createGenerateCsv(logger);
 
-    const { headers } = job;
-    const fakeRequest = await getRequest(headers, crypto, logger);
-
-    const { callAsCurrentUser } = elasticsearch.legacy.client.asScoped(fakeRequest);
-    const callEndpoint = (endpoint: string, clientParams = {}, options = {}) =>
-      callAsCurrentUser(endpoint, clientParams, options);
-
-    const savedObjectsClient = await reporting.getSavedObjectsClient(fakeRequest);
-    const uiSettingsClient = await reporting.getUiSettingsServiceFactory(savedObjectsClient);
+    const encryptionKey = config.get('encryptionKey');
+    const headers = await decryptJobHeaders(encryptionKey, job.headers, logger);
+    const fakeRequest = reporting.getFakeRequest({ headers }, job.spaceId, logger);
+    const uiSettingsClient = await reporting.getUiSettingsClient(fakeRequest, logger);
+    const { asCurrentUser: elasticsearchClient } = elasticsearch.asScoped(fakeRequest);
 
     const { content, maxSizeReached, size, csvContainsFormulas, warnings } = await generateCsv(
       job,
       config,
       uiSettingsClient,
-      callEndpoint,
+      elasticsearchClient,
       cancellationToken
     );
 

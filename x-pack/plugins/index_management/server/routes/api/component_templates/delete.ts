@@ -1,8 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import { schema } from '@kbn/config-schema';
 
 import { RouteDependencies } from '../../../types';
@@ -12,7 +14,7 @@ const paramsSchema = schema.object({
   names: schema.string(),
 });
 
-export const registerDeleteRoute = ({ router, license }: RouteDependencies): void => {
+export const registerDeleteRoute = ({ router }: RouteDependencies): void => {
   router.delete(
     {
       path: addBasePath('/component_templates/{names}'),
@@ -20,7 +22,7 @@ export const registerDeleteRoute = ({ router, license }: RouteDependencies): voi
         params: paramsSchema,
       },
     },
-    license.guardApiRoute(async (ctx, req, res) => {
+    async (ctx, req, res) => {
       const { callAsCurrentUser } = ctx.dataManagement!.client;
       const { names } = req.params;
       const componentNames = names.split(',');
@@ -46,6 +48,6 @@ export const registerDeleteRoute = ({ router, license }: RouteDependencies): voi
       );
 
       return res.ok({ body: response });
-    })
+    }
   );
 };

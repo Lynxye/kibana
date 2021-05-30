@@ -1,13 +1,14 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { head } from 'lodash/fp';
 import React from 'react';
 
-import { TimelineNonEcsData } from '../../../../../graphql/types';
+import { TimelineNonEcsData } from '../../../../../../common/search_strategy/timeline';
 import { ColumnHeaderOptions } from '../../../../../timelines/store/timeline/model';
 import { getEmptyTagValue } from '../../../../../common/components/empty_value';
 import { ColumnRenderer } from './column_renderer';
@@ -39,9 +40,9 @@ export const plainColumnRenderer: ColumnRenderer = {
     linkValues?: string[] | null | undefined;
   }) =>
     values != null
-      ? values.map((value) => (
+      ? values.map((value, i) => (
           <FormattedFieldValue
-            key={`plain-column-renderer-formatted-field-value-${timelineId}-${columnName}-${eventId}-${field.id}-${value}`}
+            key={`plain-column-renderer-formatted-field-value-${timelineId}-${columnName}-${eventId}-${field.id}-${value}-${i}`}
             contextId={`plain-column-renderer-formatted-field-value-${timelineId}`}
             eventId={eventId}
             fieldFormat={field.format || ''}

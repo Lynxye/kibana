@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
@@ -11,7 +12,7 @@ import { FunctionFactory } from '../../../types';
 
 export const help: FunctionHelp<FunctionFactory<typeof timerange>> = {
   help: i18n.translate('xpack.canvas.functions.timerangeHelpText', {
-    defaultMessage: `An object that represents a span of time`,
+    defaultMessage: `An object that represents a span of time.`,
   }),
   args: {
     from: i18n.translate('xpack.canvas.functions.timerange.args.fromHelpText', {

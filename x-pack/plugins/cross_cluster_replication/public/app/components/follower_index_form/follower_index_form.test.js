@@ -1,12 +1,11 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { updateFields, updateFormErrors } from './follower_index_form';
-
-jest.mock('ui/new_platform');
 
 describe('<FollowerIndexForm /> state transitions', () => {
   it('updateFormErrors() should merge errors with existing fieldsErrors', () => {

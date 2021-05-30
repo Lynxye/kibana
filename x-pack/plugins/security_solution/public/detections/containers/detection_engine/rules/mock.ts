@@ -1,39 +1,11 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { NewRule, FetchRulesResponse, Rule } from './types';
-
-export const ruleMock: NewRule = {
-  description: 'some desc',
-  enabled: true,
-  false_positives: [],
-  filters: [],
-  from: 'now-360s',
-  index: [
-    'apm-*-transaction*',
-    'auditbeat-*',
-    'endgame-*',
-    'filebeat-*',
-    'packetbeat-*',
-    'winlogbeat-*',
-  ],
-  interval: '5m',
-  rule_id: 'bbd3106e-b4b5-4d7c-a1a2-47531d6a2baf',
-  language: 'kuery',
-  risk_score: 75,
-  name: 'Test rule',
-  query: "user.email: 'root@elastic.co'",
-  references: [],
-  severity: 'high',
-  tags: ['APM'],
-  to: 'now',
-  type: 'query',
-  threat: [],
-  throttle: null,
-};
+import { FetchRulesResponse, Rule } from './types';
 
 export const savedRuleMock: Rule = {
   author: [],

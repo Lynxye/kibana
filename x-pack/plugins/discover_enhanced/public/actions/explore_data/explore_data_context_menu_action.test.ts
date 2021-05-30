@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { ExploreDataContextMenuAction } from './explore_data_context_menu_action';
@@ -140,6 +141,7 @@ describe('"Explore underlying data" panel action', () => {
 
     test('returns false if embeddable does not have index patterns', async () => {
       const { action, output, context } = setup();
+      // @ts-expect-error
       delete output.indexPatterns;
 
       const isCompatible = await action.isCompatible(context);

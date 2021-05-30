@@ -1,92 +1,86 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
-import { Observable } from 'rxjs';
 import { PackageInfo } from 'kibana/server';
-import { SearchAggsSetup, SearchAggsStart } from './aggs';
-import { LegacyApiCaller } from './legacy/es_client';
-import { SearchInterceptor } from './search_interceptor';
-import { ISearchSource, SearchSourceFields } from './search_source';
 import { SearchUsageCollector } from './collectors';
-import {
-  IKibanaSearchRequest,
-  IKibanaSearchResponse,
-  IEsSearchRequest,
-  IEsSearchResponse,
-} from '../../common/search';
+import { AggsSetup, AggsSetupDependencies, AggsStartDependencies, AggsStart } from './aggs';
+import { ISearchGeneric, ISearchStartSearchSource } from '../../common/search';
 import { IndexPatternsContract } from '../../common/index_patterns/index_patterns';
-import { ExpressionsSetup } from '../../../expressions/public';
 import { UsageCollectionSetup } from '../../../usage_collection/public';
-import { GetInternalStartServicesFn } from '../types';
+import { ISessionsClient, ISessionService } from './session';
 
-export interface ISearchOptions {
-  signal?: AbortSignal;
-}
-
-export type ISearch = (
-  request: IKibanaSearchRequest,
-  options?: ISearchOptions
-) => Observable<IKibanaSearchResponse>;
-
-// Service API types
-export interface IStrategyOptions extends ISearchOptions {
-  strategy?: string;
-}
-
-export type ISearchGeneric = (
-  request: IEsSearchRequest,
-  options?: IStrategyOptions
-) => Observable<IEsSearchResponse>;
-
-export interface ISearchStartLegacy {
-  esClient: LegacyApiCaller;
-}
+export { ISearchStartSearchSource, SearchUsageCollector };
 
 /**
  * The setup contract exposed by the Search plugin exposes the search strategy extension
  * point.
  */
 export interface ISearchSetup {
-  aggs: SearchAggsSetup;
+  aggs: AggsSetup;
+  usageCollector?: SearchUsageCollector;
+  /**
+   * Current session management
+   * {@link ISessionService}
+   */
+  session: ISessionService;
+  /**
+   * Search sessions SO CRUD
+   * {@link ISessionsClient}
+   */
+  sessionsClient: ISessionsClient;
 }
 
+/**
+ * search service
+ * @public
+ */
 export interface ISearchStart {
-  aggs: SearchAggsStart;
-  setInterceptor: (searchInterceptor: SearchInterceptor) => void;
+  /**
+   * agg config sub service
+   * {@link AggsStart}
+   *
+   */
+  aggs: AggsStart;
+  /**
+   * low level search
+   * {@link ISearchGeneric}
+   */
   search: ISearchGeneric;
-  searchSource: {
-    create: (fields?: SearchSourceFields) => Promise<ISearchSource>;
-    createEmpty: () => ISearchSource;
-  };
-  usageCollector?: SearchUsageCollector;
-  __LEGACY: ISearchStartLegacy;
+
+  showError: (e: Error) => void;
+  /**
+   * high level search
+   * {@link ISearchStartSearchSource}
+   */
+  searchSource: ISearchStartSearchSource;
+  /**
+   * Current session management
+   * {@link ISessionService}
+   */
+  session: ISessionService;
+  /**
+   * Search sessions SO CRUD
+   * {@link ISessionsClient}
+   */
+  sessionsClient: ISessionsClient;
 }
 
 export { SEARCH_EVENT_TYPE } from './collectors';
 
+/** @internal */
 export interface SearchServiceSetupDependencies {
-  expressions: ExpressionsSetup;
-  usageCollection?: UsageCollectionSetup;
-  getInternalStartServices: GetInternalStartServicesFn;
   packageInfo: PackageInfo;
+  registerFunction: AggsSetupDependencies['registerFunction'];
+  usageCollection?: UsageCollectionSetup;
 }
 
+/** @internal */
 export interface SearchServiceStartDependencies {
+  fieldFormats: AggsStartDependencies['fieldFormats'];
   indexPatterns: IndexPatternsContract;
 }

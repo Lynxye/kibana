@@ -9,15 +9,12 @@
     "embeddable",
     "inspector",
     "kibanaLegacy",
+    "urlForwarding",
     "navigation",
     "uiActions",
-    "visualizations"
-  ],
-  "optionalPlugins": ["home", "share"],
-  "requiredBundles": [
-    "kibanaUtils",
-    "home",
     "savedObjects",
-    "kibanaReact"
-  ]
+    "indexPatternFieldEditor"
+  ],
+  "optionalPlugins": ["home", "share", "usageCollection"],
+  "requiredBundles": ["kibanaUtils", "home", "kibanaReact"]
 }

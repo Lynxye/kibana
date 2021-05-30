@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { FC } from 'react';
@@ -10,20 +11,20 @@ import { FormattedMessage } from '@kbn/i18n/react';
 import { i18n } from '@kbn/i18n';
 
 interface Props {
-  previewDateColumns: string[];
-  indexPatternDateField: string | undefined;
+  indexPatternAvailableTimeFields: string[];
+  indexPatternTimeField: string | undefined;
   onTimeFieldChanged: (e: React.ChangeEvent<HTMLSelectElement>) => void;
 }
 
 export const StepDetailsTimeField: FC<Props> = ({
-  previewDateColumns,
-  indexPatternDateField,
+  indexPatternAvailableTimeFields,
+  indexPatternTimeField,
   onTimeFieldChanged,
 }) => {
   const noTimeFieldLabel = i18n.translate(
     'xpack.transform.stepDetailsForm.noTimeFieldOptionLabel',
     {
-      defaultMessage: "I don't want to use the Time Filter",
+      defaultMessage: "I don't want to use the time field option",
     }
   );
 
@@ -42,26 +43,26 @@ export const StepDetailsTimeField: FC<Props> = ({
     <EuiFormRow
       label={
         <FormattedMessage
-          id="xpack.transform.stepDetailsForm.indexPatternTimeFilterLabel"
-          defaultMessage="Time Filter field name"
+          id="xpack.transform.stepDetailsForm.indexPatternTimeFieldLabel"
+          defaultMessage="Time field for Kibana index pattern"
         />
       }
       helpText={
         <FormattedMessage
-          id="xpack.transform.stepDetailsForm.indexPatternTimeFilterHelpText"
-          defaultMessage="The Time Filter will use this field to filter your data by time. You can choose not to have a time field, but you will not be able to narrow down your data by a time range."
+          id="xpack.transform.stepDetailsForm.indexPatternTimeFieldHelpText"
+          defaultMessage="Select a primary time field for use with the global time filter."
         />
       }
     >
       <EuiSelect
         options={[
-          ...previewDateColumns.map((text) => ({ text })),
+          ...indexPatternAvailableTimeFields.map((text) => ({ text })),
           disabledDividerOption,
           noTimeFieldOption,
         ]}
-        value={indexPatternDateField}
+        value={indexPatternTimeField}
         onChange={onTimeFieldChanged}
-        data-test-subj="transformIndexPatternDateFieldSelect"
+        data-test-subj="transformIndexPatternTimeFieldSelect"
       />
     </EuiFormRow>
   );

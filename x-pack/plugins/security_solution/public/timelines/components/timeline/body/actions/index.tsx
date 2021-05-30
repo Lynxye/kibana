@@ -1,205 +1,213 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
-import React from 'react';
-import { useSelector } from 'react-redux';
+
+import React, { useCallback, useMemo } from 'react';
 import { EuiButtonIcon, EuiCheckbox, EuiLoadingSpinner, EuiToolTip } from '@elastic/eui';
-
-import { Note } from '../../../../../common/lib/note';
-import { StoreState } from '../../../../../common/store/types';
-import { TimelineType } from '../../../../../../common/types/timeline';
-
-import { TimelineModel } from '../../../../store/timeline/model';
-
-import { AssociateNote, UpdateNote } from '../../../notes/helpers';
-import { Pin } from '../../pin';
-import { NotesButton } from '../../properties/helpers';
-import { EventsLoading, EventsTd, EventsTdContent, EventsTdGroupActions } from '../../styles';
-import { eventHasNotes, getPinTooltip } from '../helpers';
+import {
+  eventHasNotes,
+  getEventType,
+  getPinOnClick,
+  InvestigateInResolverAction,
+} from '../helpers';
+import { AlertContextMenu } from '../../../../../detections/components/alerts_table/timeline_actions/alert_context_menu';
+import { InvestigateInTimelineAction } from '../../../../../detections/components/alerts_table/timeline_actions/investigate_in_timeline_action';
+import { AddEventNoteAction } from '../actions/add_note_icon_item';
+import { PinEventAction } from '../actions/pin_event_action';
+import { EventsTdContent } from '../../styles';
 import * as i18n from '../translations';
-import { OnRowSelected } from '../../events';
-import { Ecs, TimelineNonEcsData } from '../../../../../graphql/types';
 import { DEFAULT_ICON_BUTTON_WIDTH } from '../../helpers';
-
-export interface TimelineRowActionOnClick {
-  eventId: string;
-  ecsData: Ecs;
-  data: TimelineNonEcsData[];
-}
-
-export interface TimelineRowAction {
-  ariaLabel?: string;
-  dataTestSubj?: string;
-  displayType: 'icon' | 'contextMenu';
-  iconType?: string;
-  id: string;
-  isActionDisabled?: (ecsData?: Ecs) => boolean;
-  onClick: ({ eventId, ecsData }: TimelineRowActionOnClick) => void;
-  content: string | JSX.Element;
-  width?: number;
-}
+import { useShallowEqualSelector } from '../../../../../common/hooks/use_selector';
+import { AddToCaseAction } from '../../../../../cases/components/timeline_actions/add_to_case_action';
+import { TimelineId, TimelineTabs } from '../../../../../../common/types/timeline';
+import { timelineSelectors } from '../../../../store/timeline';
+import { timelineDefaults } from '../../../../store/timeline/defaults';
+import { Ecs } from '../../../../../../common/ecs';
+import { inputsModel } from '../../../../../common/store';
+import { TimelineNonEcsData } from '../../../../../../common/search_strategy/timeline';
+import { OnPinEvent, OnRowSelected, OnUnPinEvent } from '../../events';
+import { RowCellRender } from '../control_columns';
 
 interface Props {
-  actionsColumnWidth: number;
-  additionalActions?: JSX.Element[];
-  associateNote: AssociateNote;
+  ariaRowindex: number;
+  action?: RowCellRender;
+  width?: number;
+  columnId: string;
+  columnValues: string;
   checked: boolean;
   onRowSelected: OnRowSelected;
-  expanded: boolean;
   eventId: string;
-  eventIsPinned: boolean;
-  getNotesByIds: (noteIds: string[]) => Note[];
-  isEventViewer?: boolean;
-  loading: boolean;
   loadingEventIds: Readonly<string[]>;
-  noteIds: string[];
-  onEventToggled: () => void;
-  onPinClicked: () => void;
-  showNotes: boolean;
+  onEventDetailsPanelOpened: () => void;
   showCheckboxes: boolean;
+  data: TimelineNonEcsData[];
+  ecsData: Ecs;
+  index: number;
+  eventIdToNoteIds: Readonly<Record<string, string[]>>;
+  isEventPinned: boolean;
+  isEventViewer?: boolean;
+  onPinEvent: OnPinEvent;
+  onUnPinEvent: OnUnPinEvent;
+  refetch: inputsModel.Refetch;
+  rowIndex: number;
+  onRuleChange?: () => void;
+  showNotes: boolean;
+  tabType?: TimelineTabs;
+  timelineId: string;
   toggleShowNotes: () => void;
-  updateNote: UpdateNote;
 }
 
-const emptyNotes: string[] = [];
+export type ActionProps = Props;
 
-export const Actions = React.memo<Props>(
-  ({
-    actionsColumnWidth,
-    additionalActions,
-    associateNote,
-    checked,
-    expanded,
-    eventId,
-    eventIsPinned,
-    getNotesByIds,
-    isEventViewer = false,
-    loading = false,
-    loadingEventIds,
-    noteIds,
-    onEventToggled,
-    onPinClicked,
-    onRowSelected,
-    showCheckboxes,
-    showNotes,
-    toggleShowNotes,
-    updateNote,
-  }) => {
-    const timeline = useSelector<StoreState, TimelineModel>((state) => {
-      return state.timeline.timelineById['timeline-1'];
-    });
-    return (
-      <EventsTdGroupActions
-        actionsColumnWidth={actionsColumnWidth}
-        data-test-subj="event-actions-container"
-      >
-        {showCheckboxes && (
-          <EventsTd key="select-event-container" data-test-subj="select-event-container">
-            <EventsTdContent textAlign="center" width={DEFAULT_ICON_BUTTON_WIDTH}>
-              {loadingEventIds.includes(eventId) ? (
-                <EuiLoadingSpinner size="m" data-test-subj="event-loader" />
-              ) : (
-                <EuiCheckbox
-                  data-test-subj="select-event"
-                  id={eventId}
-                  checked={checked}
-                  onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
-                    onRowSelected({
-                      eventIds: [eventId],
-                      isSelected: event.currentTarget.checked,
-                    });
-                  }}
-                />
-              )}
-            </EventsTdContent>
-          </EventsTd>
-        )}
+const ActionsComponent: React.FC<ActionProps> = ({
+  ariaRowindex,
+  width,
+  checked,
+  columnValues,
+  eventId,
+  data,
+  ecsData,
+  eventIdToNoteIds,
+  isEventPinned = false,
+  isEventViewer = false,
+  loadingEventIds,
+  onEventDetailsPanelOpened,
+  onPinEvent,
+  onRowSelected,
+  onUnPinEvent,
+  refetch,
+  onRuleChange,
+  showCheckboxes,
+  showNotes,
+  timelineId,
+  toggleShowNotes,
+}) => {
+  const emptyNotes: string[] = [];
+  const getTimeline = useMemo(() => timelineSelectors.getTimelineByIdSelector(), []);
 
-        <EventsTd key="expand-event">
+  const handleSelectEvent = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) =>
+      onRowSelected({
+        eventIds: [eventId],
+        isSelected: event.currentTarget.checked,
+      }),
+    [eventId, onRowSelected]
+  );
+  const handlePinClicked = useCallback(
+    () =>
+      getPinOnClick({
+        allowUnpinning: !eventHasNotes(eventIdToNoteIds[eventId]),
+        eventId,
+        onPinEvent,
+        onUnPinEvent,
+        isEventPinned,
+      }),
+    [eventIdToNoteIds, eventId, isEventPinned, onPinEvent, onUnPinEvent]
+  );
+  const timelineType = useShallowEqualSelector(
+    (state) => (getTimeline(state, timelineId) ?? timelineDefaults).timelineType
+  );
+  const eventType = getEventType(ecsData);
+
+  const isEventContextMenuEnabled = useMemo(
+    () => !!ecsData.event?.kind && ecsData.event?.kind[0] === 'event',
+    [ecsData.event?.kind]
+  );
+
+  return (
+    <>
+      {showCheckboxes && (
+        <div key="select-event-container" data-test-subj="select-event-container">
           <EventsTdContent textAlign="center" width={DEFAULT_ICON_BUTTON_WIDTH}>
-            {loading ? (
-              <EventsLoading />
+            {loadingEventIds.includes(eventId) ? (
+              <EuiLoadingSpinner size="m" data-test-subj="event-loader" />
             ) : (
-              <EuiButtonIcon
-                aria-label={expanded ? i18n.COLLAPSE : i18n.EXPAND}
-                data-test-subj="expand-event"
-                iconType={expanded ? 'arrowDown' : 'arrowRight'}
+              <EuiCheckbox
+                aria-label={i18n.CHECKBOX_FOR_ROW({ ariaRowindex, columnValues, checked })}
+                data-test-subj="select-event"
                 id={eventId}
-                onClick={onEventToggled}
+                checked={checked}
+                onChange={handleSelectEvent}
               />
             )}
           </EventsTdContent>
-        </EventsTd>
-
-        <>{additionalActions}</>
+        </div>
+      )}
+      <div key="expand-event">
+        <EventsTdContent textAlign="center" width={DEFAULT_ICON_BUTTON_WIDTH}>
+          <EuiToolTip data-test-subj="expand-event-tool-tip" content={i18n.VIEW_DETAILS}>
+            <EuiButtonIcon
+              aria-label={i18n.VIEW_DETAILS_FOR_ROW({ ariaRowindex, columnValues })}
+              data-test-subj="expand-event"
+              iconType="arrowRight"
+              onClick={onEventDetailsPanelOpened}
+            />
+          </EuiToolTip>
+        </EventsTdContent>
+      </div>
+      <>
+        <InvestigateInResolverAction
+          ariaLabel={i18n.ACTION_INVESTIGATE_IN_RESOLVER_FOR_ROW({ ariaRowindex, columnValues })}
+          key="investigate-in-resolver"
+          timelineId={timelineId}
+          ecsData={ecsData}
+        />
+        {timelineId !== TimelineId.active && eventType === 'signal' && (
+          <InvestigateInTimelineAction
+            ariaLabel={i18n.SEND_ALERT_TO_TIMELINE_FOR_ROW({ ariaRowindex, columnValues })}
+            key="investigate-in-timeline"
+            ecsRowData={ecsData}
+            nonEcsRowData={data}
+          />
+        )}
 
         {!isEventViewer && (
           <>
-            <EventsTd key="timeline-action-pin-tool-tip">
-              <EventsTdContent textAlign="center" width={DEFAULT_ICON_BUTTON_WIDTH}>
-                <EuiToolTip
-                  data-test-subj="timeline-action-pin-tool-tip"
-                  content={getPinTooltip({
-                    isPinned: eventIsPinned,
-                    eventHasNotes: eventHasNotes(noteIds),
-                    timelineType: timeline.timelineType,
-                  })}
-                >
-                  <Pin
-                    allowUnpinning={!eventHasNotes(noteIds)}
-                    data-test-subj="pin-event"
-                    onClick={onPinClicked}
-                    pinned={eventIsPinned}
-                    timelineType={timeline.timelineType}
-                  />
-                </EuiToolTip>
-              </EventsTdContent>
-            </EventsTd>
-
-            <EventsTd key="add-note">
-              <EventsTdContent textAlign="center" width={DEFAULT_ICON_BUTTON_WIDTH}>
-                <NotesButton
-                  animate={false}
-                  associateNote={associateNote}
-                  data-test-subj="add-note"
-                  getNotesByIds={getNotesByIds}
-                  noteIds={noteIds || emptyNotes}
-                  showNotes={showNotes}
-                  size="s"
-                  status={timeline.status}
-                  timelineType={timeline.timelineType}
-                  toggleShowNotes={toggleShowNotes}
-                  toolTip={
-                    timeline.timelineType === TimelineType.template
-                      ? i18n.NOTES_DISABLE_TOOLTIP
-                      : i18n.NOTES_TOOLTIP
-                  }
-                  updateNote={updateNote}
-                />
-              </EventsTdContent>
-            </EventsTd>
+            <AddEventNoteAction
+              ariaLabel={i18n.ADD_NOTES_FOR_ROW({ ariaRowindex, columnValues })}
+              key="add-event-note"
+              showNotes={showNotes}
+              toggleShowNotes={toggleShowNotes}
+              timelineType={timelineType}
+            />
+            <PinEventAction
+              ariaLabel={i18n.PIN_EVENT_FOR_ROW({ ariaRowindex, columnValues, isEventPinned })}
+              key="pin-event"
+              onPinClicked={handlePinClicked}
+              noteIds={eventIdToNoteIds[eventId] || emptyNotes}
+              eventIsPinned={isEventPinned}
+              timelineType={timelineType}
+            />
           </>
         )}
-      </EventsTdGroupActions>
-    );
-  },
-  (nextProps, prevProps) => {
-    return (
-      prevProps.actionsColumnWidth === nextProps.actionsColumnWidth &&
-      prevProps.additionalActions === nextProps.additionalActions &&
-      prevProps.checked === nextProps.checked &&
-      prevProps.expanded === nextProps.expanded &&
-      prevProps.eventId === nextProps.eventId &&
-      prevProps.eventIsPinned === nextProps.eventIsPinned &&
-      prevProps.loading === nextProps.loading &&
-      prevProps.loadingEventIds === nextProps.loadingEventIds &&
-      prevProps.noteIds === nextProps.noteIds &&
-      prevProps.onRowSelected === nextProps.onRowSelected &&
-      prevProps.showCheckboxes === nextProps.showCheckboxes &&
-      prevProps.showNotes === nextProps.showNotes
-    );
-  }
-);
-Actions.displayName = 'Actions';
+        {[
+          TimelineId.detectionsPage,
+          TimelineId.detectionsRulesDetailsPage,
+          TimelineId.active,
+        ].includes(timelineId as TimelineId) && (
+          <AddToCaseAction
+            ariaLabel={i18n.ATTACH_ALERT_TO_CASE_FOR_ROW({ ariaRowindex, columnValues })}
+            key="attach-to-case"
+            ecsRowData={ecsData}
+          />
+        )}
+        <AlertContextMenu
+          ariaLabel={i18n.MORE_ACTIONS_FOR_ROW({ ariaRowindex, columnValues })}
+          key="alert-context-menu"
+          ecsRowData={ecsData}
+          timelineId={timelineId}
+          disabled={eventType !== 'signal' && !isEventContextMenuEnabled}
+          refetch={refetch}
+          onRuleChange={onRuleChange}
+        />
+      </>
+    </>
+  );
+};
+
+ActionsComponent.displayName = 'ActionsComponent';
+
+export const Actions = React.memo(ActionsComponent);

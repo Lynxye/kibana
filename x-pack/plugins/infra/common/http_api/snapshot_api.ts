@@ -1,12 +1,13 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import * as rt from 'io-ts';
 import { SnapshotMetricTypeRT, ItemTypeRT } from '../inventory_models/types';
-import { metricsExplorerSeriesRT } from './metrics_explorer';
+import { MetricsAPISeriesRT } from './metrics_api';
 
 export const SnapshotNodePathRT = rt.intersection([
   rt.type({
@@ -22,11 +23,11 @@ const SnapshotNodeMetricOptionalRT = rt.partial({
   value: rt.union([rt.number, rt.null]),
   avg: rt.union([rt.number, rt.null]),
   max: rt.union([rt.number, rt.null]),
-  timeseries: metricsExplorerSeriesRT,
+  timeseries: MetricsAPISeriesRT,
 });
 
 const SnapshotNodeMetricRequiredRT = rt.type({
-  name: SnapshotMetricTypeRT,
+  name: rt.union([SnapshotMetricTypeRT, rt.string]),
 });
 
 export const SnapshotNodeMetricRT = rt.intersection([
@@ -36,6 +37,7 @@ export const SnapshotNodeMetricRT = rt.intersection([
 export const SnapshotNodeRT = rt.type({
   metrics: rt.array(SnapshotNodeMetricRT),
   path: rt.array(SnapshotNodePathRT),
+  name: rt.string,
 });
 
 export const SnapshotNodeResponseRT = rt.type({
@@ -98,7 +100,7 @@ export const SnapshotRequestRT = rt.intersection([
   rt.type({
     timerange: InfraTimerangeInputRT,
     metrics: rt.array(SnapshotMetricInputRT),
-    groupBy: SnapshotGroupByRT,
+    groupBy: rt.union([SnapshotGroupByRT, rt.null]),
     nodeType: ItemTypeRT,
     sourceId: rt.string,
   }),

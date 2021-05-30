@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import {
@@ -83,7 +84,7 @@ describe('Lens UI telemetry', () => {
 
     jest.runOnlyPendingTimers();
 
-    expect(http.post).toHaveBeenCalledWith(`/api/lens/telemetry`, {
+    expect(http.post).toHaveBeenCalledWith(`/api/lens/stats`, {
       body: JSON.stringify({
         events: {
           '2019-10-23': {

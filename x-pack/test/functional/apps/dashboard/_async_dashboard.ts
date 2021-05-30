@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import expect from '@kbn/expect';
@@ -12,6 +13,7 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
   const retry = getService('retry');
   const browser = getService('browser');
   const kibanaServer = getService('kibanaServer');
+  const esArchiver = getService('esArchiver');
   const log = getService('log');
   const pieChart = getService('pieChart');
   const find = getService('find');
@@ -27,17 +29,20 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
     'timePicker',
   ]);
 
-  // Flakky: https://github.com/elastic/kibana/issues/65949
-  describe.skip('sample data dashboard', function describeIndexTests() {
+  describe('sample data dashboard', function describeIndexTests() {
     before(async () => {
+      await esArchiver.emptyKibanaIndex();
       await PageObjects.common.sleep(5000);
       await PageObjects.common.navigateToUrl('home', '/tutorial_directory/sampleData', {
         useActualUrl: true,
       });
       await PageObjects.header.waitUntilLoadingHasFinished();
       await PageObjects.home.addSampleDataSet('flights');
-      const isInstalled = await PageObjects.home.isSampleDataSetInstalled('flights');
-      expect(isInstalled).to.be(true);
+      await retry.tryForTime(10000, async () => {
+        const isInstalled = await PageObjects.home.isSampleDataSetInstalled('flights');
+        expect(isInstalled).to.be(true);
+      });
+
       // add the range of the sample data so we can pick it in the quick pick list
       const SAMPLE_DATA_RANGE = `[
         {
@@ -174,7 +179,7 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
       log.debug('Checking area, bar and heatmap charts rendered');
       await dashboardExpect.seriesElementCount(15);
       log.debug('Checking saved searches rendered');
-      await dashboardExpect.savedSearchRowCount(50);
+      await dashboardExpect.savedSearchRowCount(10);
       log.debug('Checking input controls rendered');
       await dashboardExpect.inputControlItemCount(3);
       log.debug('Checking tag cloud rendered');

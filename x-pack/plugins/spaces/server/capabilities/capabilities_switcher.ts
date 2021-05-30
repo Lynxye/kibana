@@ -1,34 +1,39 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import _ from 'lodash';
-import { Capabilities, CapabilitiesSwitcher, CoreSetup, Logger } from 'src/core/server';
-import { Feature } from '../../../../plugins/features/server';
-import { Space } from '../../common/model/space';
-import { SpacesServiceSetup } from '../spaces_service';
-import { PluginsStart } from '../plugin';
+
+import type { Capabilities, CapabilitiesSwitcher, CoreSetup, Logger } from 'src/core/server';
+import type { Space } from 'src/plugins/spaces_oss/common';
+
+import type { KibanaFeature } from '../../../features/server';
+import type { PluginsStart } from '../plugin';
+import type { SpacesServiceStart } from '../spaces_service';
 
 export function setupCapabilitiesSwitcher(
   core: CoreSetup<PluginsStart>,
-  spacesService: SpacesServiceSetup,
+  getSpacesService: () => SpacesServiceStart,
   logger: Logger
 ): CapabilitiesSwitcher {
-  return async (request, capabilities) => {
-    const isAnonymousRequest = !request.route.options.authRequired;
+  return async (request, capabilities, useDefaultCapabilities) => {
+    const isAuthRequiredOrOptional = !request.route.options.authRequired;
+    const shouldNotToggleCapabilities = isAuthRequiredOrOptional || useDefaultCapabilities;
 
-    if (isAnonymousRequest) {
+    if (shouldNotToggleCapabilities) {
       return capabilities;
     }
 
     try {
       const [activeSpace, [, { features }]] = await Promise.all([
-        spacesService.getActiveSpace(request),
+        getSpacesService().getActiveSpace(request),
         core.getStartServices(),
       ]);
 
-      const registeredFeatures = features.getFeatures();
+      const registeredFeatures = features.getKibanaFeatures();
 
       // try to retrieve capabilities for authenticated or "maybe authenticated" users
       return toggleCapabilities(registeredFeatures, capabilities, activeSpace);
@@ -39,7 +44,11 @@ export function setupCapabilitiesSwitcher(
   };
 }
 
-function toggleCapabilities(features: Feature[], capabilities: Capabilities, activeSpace: Space) {
+function toggleCapabilities(
+  features: KibanaFeature[],
+  capabilities: Capabilities,
+  activeSpace: Space
+) {
   const clonedCapabilities = _.cloneDeep(capabilities);
 
   toggleDisabledFeatures(features, clonedCapabilities, activeSpace);
@@ -48,7 +57,7 @@ function toggleCapabilities(features: Feature[], capabilities: Capabilities, act
 }
 
 function toggleDisabledFeatures(
-  features: Feature[],
+  features: KibanaFeature[],
   capabilities: Capabilities,
   activeSpace: Space
 ) {
@@ -61,7 +70,7 @@ function toggleDisabledFeatures(
       }
       return [[...acc[0], feature], acc[1]];
     },
-    [[], []] as [Feature[], Feature[]]
+    [[], []] as [KibanaFeature[], KibanaFeature[]]
   );
 
   const navLinks = capabilities.navLinks;

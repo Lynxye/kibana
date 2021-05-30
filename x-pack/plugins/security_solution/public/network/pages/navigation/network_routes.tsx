@@ -1,14 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { useCallback } from 'react';
 import { Route, Switch } from 'react-router-dom';
 import { EuiFlexItem, EuiSpacer } from '@elastic/eui';
 
-import { FlowTargetSourceDest } from '../../../graphql/types';
+import { FlowTargetSourceDest } from '../../../../common/search_strategy/security_solution/network';
 import { scoreIntervalToDateTime } from '../../../common/components/ml/score/score_interval_to_datetime';
 
 import { IPsQueryTabBody } from './ips_query_tab_body';
@@ -27,12 +28,14 @@ import { UpdateDateRange } from '../../../common/components/charts/common';
 export const NetworkRoutes = React.memo<NetworkRoutesProps>(
   ({
     networkPagePath,
+    docValueFields,
     type,
     to,
     filterQuery,
     isInitializing,
     from,
     indexPattern,
+    indexNames,
     setQuery,
     setAbsoluteRangeDatePicker,
   }) => {
@@ -83,6 +86,7 @@ export const NetworkRoutes = React.memo<NetworkRoutesProps>(
     const commonProps = {
       startDate: from,
       endDate: to,
+      indexNames,
       skip: isInitializing,
       type,
       narrowDateRange,
@@ -105,7 +109,7 @@ export const NetworkRoutes = React.memo<NetworkRoutesProps>(
     return (
       <Switch>
         <Route path={`/:tabName(${NetworkRouteType.dns})`}>
-          <DnsQueryTabBody {...tabProps} />
+          <DnsQueryTabBody {...tabProps} docValueFields={docValueFields} />
         </Route>
         <Route path={`/:tabName(${NetworkRouteType.flows})`}>
           <>

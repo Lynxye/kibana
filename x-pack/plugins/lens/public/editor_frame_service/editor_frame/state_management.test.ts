@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { getInitialState, reducer } from './state_management';
@@ -12,6 +13,7 @@ import { coreMock } from 'src/core/public/mocks';
 import { uiActionsPluginMock } from '../../../../../../src/plugins/ui_actions/public/mocks';
 import { dataPluginMock } from '../../../../../../src/plugins/data/public/mocks';
 import { expressionsPluginMock } from '../../../../../../src/plugins/expressions/public/mocks';
+import { chartPluginMock } from 'src/plugins/charts/public/mocks';
 
 describe('editor_frame state management', () => {
   describe('initialization', () => {
@@ -22,19 +24,15 @@ describe('editor_frame state management', () => {
         onError: jest.fn(),
         datasourceMap: { testDatasource: ({} as unknown) as Datasource },
         visualizationMap: { testVis: ({ initialize: jest.fn() } as unknown) as Visualization },
-        initialDatasourceId: 'testDatasource',
-        initialVisualizationId: 'testVis',
         ExpressionRenderer: createExpressionRendererMock(),
-        onChange: jest.fn(),
-        core: coreMock.createSetup(),
+        core: coreMock.createStart(),
         plugins: {
           uiActions: uiActionsPluginMock.createStartContract(),
           data: dataPluginMock.createStartContract(),
           expressions: expressionsPluginMock.createStartContract(),
+          charts: chartPluginMock.createStartContract(),
         },
-        dateRange: { fromDate: 'now-7d', toDate: 'now' },
-        query: { query: '', language: 'lucene' },
-        filters: [],
+        palettes: chartPluginMock.createPaletteRegistry(),
         showNoDataPopover: jest.fn(),
       };
     });
@@ -57,19 +55,16 @@ describe('editor_frame state management', () => {
       const initialState = getInitialState({
         ...props,
         doc: {
-          expression: '',
           state: {
             datasourceStates: {
               testDatasource: { internalState1: '' },
               testDatasource2: { internalState2: '' },
             },
             visualization: {},
-            datasourceMetaData: {
-              filterableIndexPatterns: [],
-            },
             query: { query: '', language: 'lucene' },
             filters: [],
           },
+          references: [],
           title: '',
           visualizationType: 'testVis',
         },
@@ -99,8 +94,8 @@ describe('editor_frame state management', () => {
       `);
     });
 
-    it('should not set active id if no initial visualization is passed in', () => {
-      const initialState = getInitialState({ ...props, initialVisualizationId: null });
+    it('should not set active id if initiated with empty document and visualizationMap is empty', () => {
+      const initialState = getInitialState({ ...props, visualizationMap: {} });
 
       expect(initialState.visualization.state).toEqual(null);
       expect(initialState.visualization.activeId).toEqual(null);
@@ -129,7 +124,7 @@ describe('editor_frame state management', () => {
         {
           type: 'UPDATE_VISUALIZATION_STATE',
           visualizationId: 'testVis',
-          newState: newVisState,
+          updater: newVisState,
         }
       );
 
@@ -379,10 +374,8 @@ describe('editor_frame state management', () => {
         {
           type: 'VISUALIZATION_LOADED',
           doc: {
-            id: 'b',
-            expression: '',
+            savedObjectId: 'b',
             state: {
-              datasourceMetaData: { filterableIndexPatterns: [] },
               datasourceStates: { a: { foo: 'c' } },
               visualization: { bar: 'd' },
               query: { query: '', language: 'lucene' },
@@ -392,6 +385,7 @@ describe('editor_frame state management', () => {
             description: 'My lens',
             type: 'lens',
             visualizationType: 'line',
+            references: [],
           },
         }
       );

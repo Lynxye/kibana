@@ -22,37 +22,30 @@ exports[`Storyshots renderers/TimeFilter default 1`] = `
         >
           <div
             className="euiPopover euiPopover--anchorDownLeft"
-            id="QuickSelectPopover"
-            onKeyDown={[Function]}
-            onMouseDown={[Function]}
-            onMouseUp={[Function]}
-            onTouchEnd={[Function]}
-            onTouchStart={[Function]}
           >
             <div
               className="euiPopover__anchor euiQuickSelectPopover__anchor"
             >
               <button
                 aria-label="Date quick select"
-                className="euiButtonEmpty euiButtonEmpty--primary euiButtonEmpty--xSmall euiButtonEmpty--iconRight euiFormControlLayout__prepend"
+                className="euiButtonEmpty euiButtonEmpty--primary euiButtonEmpty--xSmall euiFormControlLayout__prepend"
                 data-test-subj="superDatePickerToggleQuickMenuButton"
                 disabled={false}
                 onClick={[Function]}
                 type="button"
               >
                 <span
-                  className="euiButtonEmpty__content"
+                  className="euiButtonContent euiButtonContent--iconRight euiButtonEmpty__content"
                 >
-                  <div
-                    aria-hidden="true"
-                    className="euiButtonEmpty__icon"
+                  <span
+                    className="euiButtonContent__icon"
                     data-euiicon-type="arrowDown"
                     size="m"
                   />
                   <span
                     className="euiButtonEmpty__text euiQuickSelectPopover__buttonText"
                   >
-                    <div
+                    <span
                       data-euiicon-type="clock"
                     />
                   </span>
@@ -110,37 +103,30 @@ exports[`Storyshots renderers/TimeFilter with absolute time bounds 1`] = `
         >
           <div
             className="euiPopover euiPopover--anchorDownLeft"
-            id="QuickSelectPopover"
-            onKeyDown={[Function]}
-            onMouseDown={[Function]}
-            onMouseUp={[Function]}
-            onTouchEnd={[Function]}
-            onTouchStart={[Function]}
           >
             <div
               className="euiPopover__anchor euiQuickSelectPopover__anchor"
             >
               <button
                 aria-label="Date quick select"
-                className="euiButtonEmpty euiButtonEmpty--primary euiButtonEmpty--xSmall euiButtonEmpty--iconRight euiFormControlLayout__prepend"
+                className="euiButtonEmpty euiButtonEmpty--primary euiButtonEmpty--xSmall euiFormControlLayout__prepend"
                 data-test-subj="superDatePickerToggleQuickMenuButton"
                 disabled={false}
                 onClick={[Function]}
                 type="button"
               >
                 <span
-                  className="euiButtonEmpty__content"
+                  className="euiButtonContent euiButtonContent--iconRight euiButtonEmpty__content"
                 >
-                  <div
-                    aria-hidden="true"
-                    className="euiButtonEmpty__icon"
+                  <span
+                    className="euiButtonContent__icon"
                     data-euiicon-type="arrowDown"
                     size="m"
                   />
                   <span
                     className="euiButtonEmpty__text euiQuickSelectPopover__buttonText"
                   >
-                    <div
+                    <span
                       data-euiicon-type="clock"
                     />
                   </span>
@@ -156,11 +142,6 @@ exports[`Storyshots renderers/TimeFilter with absolute time bounds 1`] = `
             >
               <div
                 className="euiPopover euiPopover--anchorDownLeft euiPopover--displayBlock euiSuperDatePicker__startPopoverButton"
-                onKeyDown={[Function]}
-                onMouseDown={[Function]}
-                onMouseUp={[Function]}
-                onTouchEnd={[Function]}
-                onTouchStart={[Function]}
               >
                 <div
                   className="euiPopover__anchor"
@@ -187,11 +168,6 @@ exports[`Storyshots renderers/TimeFilter with absolute time bounds 1`] = `
               </div>
               <div
                 className="euiPopover euiPopover--anchorDownRight euiPopover--displayBlock"
-                onKeyDown={[Function]}
-                onMouseDown={[Function]}
-                onMouseUp={[Function]}
-                onTouchEnd={[Function]}
-                onTouchStart={[Function]}
               >
                 <div
                   className="euiPopover__anchor"
@@ -238,37 +214,30 @@ exports[`Storyshots renderers/TimeFilter with commonlyUsedRanges 1`] = `
         >
           <div
             className="euiPopover euiPopover--anchorDownLeft"
-            id="QuickSelectPopover"
-            onKeyDown={[Function]}
-            onMouseDown={[Function]}
-            onMouseUp={[Function]}
-            onTouchEnd={[Function]}
-            onTouchStart={[Function]}
           >
             <div
               className="euiPopover__anchor euiQuickSelectPopover__anchor"
             >
               <button
                 aria-label="Date quick select"
-                className="euiButtonEmpty euiButtonEmpty--primary euiButtonEmpty--xSmall euiButtonEmpty--iconRight euiFormControlLayout__prepend"
+                className="euiButtonEmpty euiButtonEmpty--primary euiButtonEmpty--xSmall euiFormControlLayout__prepend"
                 data-test-subj="superDatePickerToggleQuickMenuButton"
                 disabled={false}
                 onClick={[Function]}
                 type="button"
               >
                 <span
-                  className="euiButtonEmpty__content"
+                  className="euiButtonContent euiButtonContent--iconRight euiButtonEmpty__content"
                 >
-                  <div
-                    aria-hidden="true"
-                    className="euiButtonEmpty__icon"
+                  <span
+                    className="euiButtonContent__icon"
                     data-euiicon-type="arrowDown"
                     size="m"
                   />
                   <span
                     className="euiButtonEmpty__text euiQuickSelectPopover__buttonText"
                   >
-                    <div
+                    <span
                       data-euiicon-type="clock"
                     />
                   </span>
@@ -326,37 +295,30 @@ exports[`Storyshots renderers/TimeFilter with dateFormat 1`] = `
         >
           <div
             className="euiPopover euiPopover--anchorDownLeft"
-            id="QuickSelectPopover"
-            onKeyDown={[Function]}
-            onMouseDown={[Function]}
-            onMouseUp={[Function]}
-            onTouchEnd={[Function]}
-            onTouchStart={[Function]}
           >
             <div
               className="euiPopover__anchor euiQuickSelectPopover__anchor"
             >
               <button
                 aria-label="Date quick select"
-                className="euiButtonEmpty euiButtonEmpty--primary euiButtonEmpty--xSmall euiButtonEmpty--iconRight euiFormControlLayout__prepend"
+                className="euiButtonEmpty euiButtonEmpty--primary euiButtonEmpty--xSmall euiFormControlLayout__prepend"
                 data-test-subj="superDatePickerToggleQuickMenuButton"
                 disabled={false}
                 onClick={[Function]}
                 type="button"
               >
                 <span
-                  className="euiButtonEmpty__content"
+                  className="euiButtonContent euiButtonContent--iconRight euiButtonEmpty__content"
                 >
-                  <div
-                    aria-hidden="true"
-                    className="euiButtonEmpty__icon"
+                  <span
+                    className="euiButtonContent__icon"
                     data-euiicon-type="arrowDown"
                     size="m"
                   />
                   <span
                     className="euiButtonEmpty__text euiQuickSelectPopover__buttonText"
                   >
-                    <div
+                    <span
                       data-euiicon-type="clock"
                     />
                   </span>
@@ -414,37 +376,30 @@ exports[`Storyshots renderers/TimeFilter with relative time bounds 1`] = `
         >
           <div
             className="euiPopover euiPopover--anchorDownLeft"
-            id="QuickSelectPopover"
-            onKeyDown={[Function]}
-            onMouseDown={[Function]}
-            onMouseUp={[Function]}
-            onTouchEnd={[Function]}
-            onTouchStart={[Function]}
           >
             <div
               className="euiPopover__anchor euiQuickSelectPopover__anchor"
             >
               <button
                 aria-label="Date quick select"
-                className="euiButtonEmpty euiButtonEmpty--primary euiButtonEmpty--xSmall euiButtonEmpty--iconRight euiFormControlLayout__prepend"
+                className="euiButtonEmpty euiButtonEmpty--primary euiButtonEmpty--xSmall euiFormControlLayout__prepend"
                 data-test-subj="superDatePickerToggleQuickMenuButton"
                 disabled={false}
                 onClick={[Function]}
                 type="button"
               >
                 <span
-                  className="euiButtonEmpty__content"
+                  className="euiButtonContent euiButtonContent--iconRight euiButtonEmpty__content"
                 >
-                  <div
-                    aria-hidden="true"
-                    className="euiButtonEmpty__icon"
+                  <span
+                    className="euiButtonContent__icon"
                     data-euiicon-type="arrowDown"
                     size="m"
                   />
                   <span
                     className="euiButtonEmpty__text euiQuickSelectPopover__buttonText"
                   >
-                    <div
+                    <span
                       data-euiicon-type="clock"
                     />
                   </span>
@@ -460,11 +415,6 @@ exports[`Storyshots renderers/TimeFilter with relative time bounds 1`] = `
             >
               <div
                 className="euiPopover euiPopover--anchorDownLeft euiPopover--displayBlock euiSuperDatePicker__startPopoverButton"
-                onKeyDown={[Function]}
-                onMouseDown={[Function]}
-                onMouseUp={[Function]}
-                onTouchEnd={[Function]}
-                onTouchStart={[Function]}
               >
                 <div
                   className="euiPopover__anchor"
@@ -491,11 +441,6 @@ exports[`Storyshots renderers/TimeFilter with relative time bounds 1`] = `
               </div>
               <div
                 className="euiPopover euiPopover--anchorDownRight euiPopover--displayBlock"
-                onKeyDown={[Function]}
-                onMouseDown={[Function]}
-                onMouseUp={[Function]}
-                onTouchEnd={[Function]}
-                onTouchStart={[Function]}
               >
                 <div
                   className="euiPopover__anchor"

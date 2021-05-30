@@ -1,13 +1,12 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { ExpressionFunctionDefinition, ExpressionValueRender } from 'src/plugins/expressions';
-// @ts-expect-error untyped local
 import { resolveWithMissingImage } from '../../../common/lib/resolve_dataurl';
-// @ts-expect-error .png file
 import { elasticOutline } from '../../lib/elastic_outline';
 import { getFunctionHelp, getFunctionErrors } from '../../../i18n';
 
@@ -24,11 +23,18 @@ interface Arguments {
   origin: Origin;
 }
 
+export interface Output {
+  image: string;
+  emptyImage: string;
+  origin: Origin;
+  percent: number;
+}
+
 export function revealImage(): ExpressionFunctionDefinition<
   'revealImage',
   number,
   Arguments,
-  ExpressionValueRender<Arguments>
+  ExpressionValueRender<Output>
 > {
   const { help, args: argHelp } = getFunctionHelp().revealImage;
   const errors = getFunctionErrors().revealImage;
@@ -68,8 +74,8 @@ export function revealImage(): ExpressionFunctionDefinition<
         value: {
           percent,
           ...args,
-          image: resolveWithMissingImage(args.image, elasticOutline),
-          emptyImage: resolveWithMissingImage(args.emptyImage),
+          image: resolveWithMissingImage(args.image, elasticOutline) as string,
+          emptyImage: resolveWithMissingImage(args.emptyImage) as string,
         },
       };
     },

@@ -1,13 +1,23 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
+import { emsWorldLayerId } from '../../../../../common';
 
 jest.mock('../../../../kibana_services', () => {
   return {
     getIsDarkMode() {
       return false;
+    },
+    getEMSSettings() {
+      return {
+        isEMSUrlSet() {
+          return false;
+        },
+      };
     },
   };
 });
@@ -35,10 +45,13 @@ describe('createLayerDescriptor', () => {
       __dataRequests: [],
       alpha: 0.75,
       id: '12345',
+      includeInFitToBounds: true,
       joins: [
         {
           leftField: 'iso2',
           right: {
+            applyGlobalQuery: true,
+            applyGlobalTime: true,
             id: '12345',
             indexPatternId: 'apm_static_index_pattern_id',
             indexPatternTitle: 'apm-*',
@@ -61,7 +74,7 @@ describe('createLayerDescriptor', () => {
       maxZoom: 24,
       minZoom: 0,
       sourceDescriptor: {
-        id: 'world_countries',
+        id: emsWorldLayerId,
         tooltipProperties: ['name', 'iso2'],
         type: 'EMS_FILE',
       },
@@ -166,7 +179,7 @@ describe('createLayerDescriptor', () => {
       __dataRequests: [],
       alpha: 0.75,
       id: '12345',
-      joins: [],
+      includeInFitToBounds: true,
       label: '[Performance] Duration',
       maxZoom: 24,
       minZoom: 0,
@@ -175,6 +188,8 @@ describe('createLayerDescriptor', () => {
         query: 'processor.event:"transaction"',
       },
       sourceDescriptor: {
+        applyGlobalQuery: true,
+        applyGlobalTime: true,
         geoField: 'client.geo.location',
         id: '12345',
         indexPatternId: 'apm_static_index_pattern_id',
@@ -207,6 +222,7 @@ describe('createLayerDescriptor', () => {
       __dataRequests: [],
       alpha: 0.75,
       id: '12345',
+      includeInFitToBounds: true,
       joins: [],
       label: '[Performance] Duration',
       maxZoom: 24,
@@ -216,6 +232,8 @@ describe('createLayerDescriptor', () => {
         query: 'processor.event:"transaction"',
       },
       sourceDescriptor: {
+        applyGlobalQuery: true,
+        applyGlobalTime: true,
         geoField: 'client.geo.location',
         id: '12345',
         indexPatternId: 'apm_static_index_pattern_id',

@@ -1,19 +1,19 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
-import { plot } from '../../../canvas_plugin_src/functions/common/plot';
-import { FunctionHelp } from '../function_help';
-import { FunctionFactory } from '../../../types';
-import { Position } from '../../../types';
+import { plotFunctionFactory } from '../../../public/functions/plot';
+import { FunctionFactoryHelp } from '../function_help';
+import { Legend } from '../../../types';
 import { CSS, FONT_FAMILY, FONT_WEIGHT, BOOLEAN_FALSE } from '../../constants';
 
-export const help: FunctionHelp<FunctionFactory<typeof plot>> = {
+export const help: FunctionFactoryHelp<typeof plotFunctionFactory> = {
   help: i18n.translate('xpack.canvas.functions.plotHelpText', {
-    defaultMessage: 'Configure a chart element',
+    defaultMessage: 'Configures a chart element.',
   }),
   args: {
     defaultStyle: i18n.translate('xpack.canvas.functions.plot.args.defaultStyleHelpText', {
@@ -30,20 +30,18 @@ export const help: FunctionHelp<FunctionFactory<typeof plot>> = {
     }),
     legend: i18n.translate('xpack.canvas.functions.plot.args.legendHelpText', {
       defaultMessage:
-        'The legend position. For example, {positions}, or {BOOLEAN_FALSE}. When {BOOLEAN_FALSE}, the legend is hidden.',
+        'The legend position. For example, {legend}, or {BOOLEAN_FALSE}. When {BOOLEAN_FALSE}, the legend is hidden.',
       values: {
-        positions: Object.values(Position)
+        legend: Object.values(Legend)
           .map((position) => `\`"${position}"\``)
           .join(', '),
         BOOLEAN_FALSE,
       },
     }),
     palette: i18n.translate('xpack.canvas.functions.plot.args.paletteHelpText', {
-      defaultMessage:
-        'A {palette} object for describing the colors to use in this chart. See {paletteFn}.',
+      defaultMessage: 'A {palette} object for describing the colors to use in this chart.',
       values: {
         palette: '`palette`',
-        paletteFn: '`palette`',
       },
     }),
     seriesStyle: i18n.translate('xpack.canvas.functions.plot.args.seriesStyleHelpText', {

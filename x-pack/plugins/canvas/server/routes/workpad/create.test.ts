@@ -1,19 +1,16 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import sinon from 'sinon';
-import {
-  savedObjectsClientMock,
-  httpServiceMock,
-  httpServerMock,
-  loggingSystemMock,
-} from 'src/core/server/mocks';
+import { savedObjectsClientMock, httpServerMock } from 'src/core/server/mocks';
 import { CANVAS_TYPE } from '../../../common/lib/constants';
 import { initializeCreateWorkpadRoute } from './create';
 import { kibanaResponseFactory, RequestHandlerContext, RequestHandler } from 'src/core/server';
+import { getMockedRouterDeps } from '../test_helpers';
 
 let mockRouteContext = ({
   core: {
@@ -44,15 +41,10 @@ describe('POST workpad', () => {
 
     clock = sinon.useFakeTimers(now);
 
-    const httpService = httpServiceMock.createSetupContract();
+    const routerDeps = getMockedRouterDeps();
+    initializeCreateWorkpadRoute(routerDeps);
 
-    const router = httpService.createRouter();
-    initializeCreateWorkpadRoute({
-      router,
-      logger: loggingSystemMock.create().get(),
-    });
-
-    routeHandler = router.post.mock.calls[0][1];
+    routeHandler = routerDeps.router.post.mock.calls[0][1];
   });
 
   afterEach(() => {

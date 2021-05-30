@@ -1,10 +1,84 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
+
+export const commonMonitorStateI18 = [
+  {
+    name: 'monitorName',
+    description: i18n.translate('xpack.uptime.alerts.monitorStatus.actionVariables.state.monitor', {
+      defaultMessage: 'A human friendly rendering of name or ID, preferring name (e.g. My Monitor)',
+    }),
+  },
+  {
+    name: 'monitorId',
+    description: i18n.translate(
+      'xpack.uptime.alerts.monitorStatus.actionVariables.state.monitorId',
+      {
+        defaultMessage: 'ID of the monitor.',
+      }
+    ),
+  },
+  {
+    name: 'monitorUrl',
+    description: i18n.translate(
+      'xpack.uptime.alerts.monitorStatus.actionVariables.state.monitorUrl',
+      {
+        defaultMessage: 'URL of the monitor.',
+      }
+    ),
+  },
+  {
+    name: 'monitorType',
+    description: i18n.translate(
+      'xpack.uptime.alerts.monitorStatus.actionVariables.state.monitorType',
+      {
+        defaultMessage: 'Type (e.g. HTTP/TCP) of the monitor.',
+      }
+    ),
+  },
+  {
+    name: 'statusMessage',
+    description: i18n.translate(
+      'xpack.uptime.alerts.monitorStatus.actionVariables.state.statusMessage',
+      {
+        defaultMessage:
+          'Status message e.g down or is below availability threshold in case of availability check or both.',
+      }
+    ),
+  },
+  {
+    name: 'latestErrorMessage',
+    description: i18n.translate(
+      'xpack.uptime.alerts.monitorStatus.actionVariables.state.lastErrorMessage',
+      {
+        defaultMessage: 'Monitor latest error message',
+      }
+    ),
+  },
+  {
+    name: 'observerLocation',
+    description: i18n.translate(
+      'xpack.uptime.alerts.monitorStatus.actionVariables.state.observerLocation',
+      {
+        defaultMessage: 'Observer location from which heartbeat check is performed.',
+      }
+    ),
+  },
+  {
+    name: 'observerHostname',
+    description: i18n.translate(
+      'xpack.uptime.alerts.monitorStatus.actionVariables.state.observerHostname',
+      {
+        defaultMessage: 'Observer hostname from which heartbeat check is performed.',
+      }
+    ),
+  },
+];
 
 export const commonStateTranslations = [
   {
@@ -238,3 +312,7 @@ export const durationAnomalyTranslations = {
     },
   ],
 };
+
+export const DOWN_LABEL = i18n.translate('xpack.uptime.alerts.monitorStatus.actionVariables.down', {
+  defaultMessage: 'down',
+});

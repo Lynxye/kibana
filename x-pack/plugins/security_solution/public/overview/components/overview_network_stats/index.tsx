@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { EuiAccordion, EuiFlexGroup, EuiFlexItem, EuiHorizontalRule, EuiText } from '@elastic/eui';
@@ -9,16 +10,18 @@ import { FormattedMessage } from '@kbn/i18n/react';
 import React from 'react';
 import styled from 'styled-components';
 
-import { OverviewNetworkData } from '../../../graphql/types';
+import { NetworkOverviewStrategyResponse } from '../../../../common/search_strategy';
 import { FormattedStat, StatGroup } from '../types';
 import { StatValue } from '../stat_value';
 
 interface OverviewNetworkProps {
-  data: OverviewNetworkData;
+  data: NetworkOverviewStrategyResponse['overviewNetwork'];
   loading: boolean;
 }
 
-export const getOverviewNetworkStats = (data: OverviewNetworkData): FormattedStat[] => [
+export const getOverviewNetworkStats = (
+  data: NetworkOverviewStrategyResponse['overviewNetwork']
+): FormattedStat[] => [
   {
     count: data.auditbeatSocket ?? 0,
     title: (

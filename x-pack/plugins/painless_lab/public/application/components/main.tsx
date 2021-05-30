@@ -1,13 +1,13 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { useState, useEffect } from 'react';
 import { EuiFlexGroup, EuiFlexItem, EuiTitle } from '@elastic/eui';
 import { i18n } from '@kbn/i18n';
-import { NavType } from 'src/core/public';
 import { formatRequestPayload, formatJson } from '../lib/format';
 import { exampleScript } from '../constants';
 import { PayloadFormat } from '../types';
@@ -22,10 +22,7 @@ export const Main: React.FunctionComponent = () => {
   const {
     store: { payload, validation },
     updatePayload,
-    services: {
-      http,
-      chrome: { getIsNavDrawerLocked$, getNavType$ },
-    },
+    services: { http },
     links,
   } = useAppContext();
 
@@ -43,25 +40,6 @@ export const Main: React.FunctionComponent = () => {
     setRequestFlyoutOpen(!isRequestFlyoutOpen);
   };
 
-  const [isNavDrawerLocked, setIsNavDrawerLocked] = useState(false);
-  const [isNavLegacy, setIsNavLegacy] = useState(false);
-
-  useEffect(() => {
-    const subscription = getIsNavDrawerLocked$().subscribe((newIsNavDrawerLocked: boolean) => {
-      setIsNavDrawerLocked(newIsNavDrawerLocked);
-    });
-
-    return () => subscription.unsubscribe();
-  });
-
-  useEffect(() => {
-    const subscription = getNavType$().subscribe((navType: NavType) => {
-      setIsNavLegacy(navType === 'legacy');
-    });
-
-    return () => subscription.unsubscribe();
-  });
-
   return (
     <div className="painlessLabMainContainer">
       <EuiFlexGroup className="painlessLabPanelsContainer" responsive={false} gutterSize="none">
@@ -74,7 +52,11 @@ export const Main: React.FunctionComponent = () => {
             </h1>
           </EuiTitle>
 
-          <Editor code={payload.code} onChange={(nextCode) => updatePayload({ code: nextCode })} />
+          <Editor
+            context={payload.context}
+            code={payload.code}
+            onChange={(nextCode) => updatePayload({ code: nextCode })}
+          />
         </EuiFlexItem>
 
         <EuiFlexItem>
@@ -87,8 +69,6 @@ export const Main: React.FunctionComponent = () => {
         isLoading={inProgress}
         toggleRequestFlyout={toggleRequestFlyout}
         isRequestFlyoutOpen={isRequestFlyoutOpen}
-        isNavDrawerLocked={isNavDrawerLocked}
-        isNavLegacy={isNavLegacy}
         reset={() => updatePayload({ code: exampleScript })}
       />
 

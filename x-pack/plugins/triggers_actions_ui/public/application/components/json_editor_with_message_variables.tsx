@@ -1,26 +1,37 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import React, { useState } from 'react';
 import { EuiCodeEditor, EuiFormRow } from '@elastic/eui';
+
+import 'brace/theme/github';
+import { XJsonMode } from '@kbn/ace';
+
 import './add_message_variables.scss';
-import { useXJsonMode } from '../../../../../../src/plugins/es_ui_shared/static/ace_x_json/hooks';
+import { XJson } from '../../../../../../src/plugins/es_ui_shared/public';
 
 import { AddMessageVariables } from './add_message_variables';
-import { ActionVariable } from '../../types';
+import { ActionVariable } from '../../../../alerting/common';
+import { templateActionVariable } from '../lib';
 
 interface Props {
   messageVariables?: ActionVariable[];
   paramsProperty: string;
-  inputTargetValue: string;
+  inputTargetValue?: string;
   label: string;
   errors?: string[];
   areaLabel?: string;
   onDocumentsChange: (data: string) => void;
   helpText?: JSX.Element;
+  onBlur?: () => void;
 }
+
+const { useXJsonMode } = XJson;
+const xJsonMode = new XJsonMode();
 
 export const JsonEditorWithMessageVariables: React.FunctionComponent<Props> = ({
   messageVariables,
@@ -31,13 +42,14 @@ export const JsonEditorWithMessageVariables: React.FunctionComponent<Props> = ({
   areaLabel,
   onDocumentsChange,
   helpText,
+  onBlur,
 }) => {
   const [cursorPosition, setCursorPosition] = useState<any>(null);
 
-  const { xJsonMode, convertToJson, setXJson, xJson } = useXJsonMode(inputTargetValue ?? null);
+  const { convertToJson, setXJson, xJson } = useXJsonMode(inputTargetValue ?? null);
 
-  const onSelectMessageVariable = (variable: string) => {
-    const templatedVar = `{{${variable}}}`;
+  const onSelectMessageVariable = (variable: ActionVariable) => {
+    const templatedVar = templateActionVariable(variable);
     let newValue = '';
     if (cursorPosition) {
       const cursor = cursorPosition.getCursor();
@@ -64,7 +76,7 @@ export const JsonEditorWithMessageVariables: React.FunctionComponent<Props> = ({
       labelAppend={
         <AddMessageVariables
           messageVariables={messageVariables}
-          onSelectEventHandler={(variable: string) => onSelectMessageVariable(variable)}
+          onSelectEventHandler={onSelectMessageVariable}
           paramsProperty={paramsProperty}
         />
       }
@@ -84,6 +96,7 @@ export const JsonEditorWithMessageVariables: React.FunctionComponent<Props> = ({
           onDocumentsChange(convertToJson(xjson));
         }}
         onCursorChange={(_value: any) => onClickWithMessageVariable(_value)}
+        onBlur={onBlur}
       />
     </EuiFormRow>
   );

@@ -1,30 +1,24 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
+
+import { throwError, of } from 'rxjs';
 import React from 'react';
 import { act } from 'react-dom/test-utils';
-import { mountWithIntl } from 'test_utils/enzyme_helpers';
+import { mountWithIntl } from '@kbn/test/jest';
 import { ReactWrapper } from 'enzyme';
-// @ts-ignore
 import { findTestSubject } from '@elastic/eui/lib/test';
 import { Doc, DocProps } from './doc';
+import { SEARCH_FIELDS_FROM_SOURCE as mockSearchFieldsFromSource } from '../../../../common';
+
+const mockSearchApi = jest.fn();
 
 jest.mock('../../../kibana_services', () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let registry: any[] = [];
 
   return {
@@ -32,8 +26,28 @@ jest.mock('../../../kibana_services', () => {
       metadata: {
         branch: 'test',
       },
+      data: {
+        search: {
+          search: mockSearchApi,
+        },
+      },
+      docLinks: {
+        links: {
+          apis: {
+            indexExists: 'mockUrl',
+          },
+        },
+      },
+      uiSettings: {
+        get: (key: string) => {
+          if (key === mockSearchFieldsFromSource) {
+            return false;
+          }
+        },
+      },
     }),
     getDocViewsRegistry: () => ({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       addDocView(view: any) {
         registry.push(view);
       },
@@ -60,18 +74,19 @@ const waitForPromises = async () =>
  * this works but logs ugly error messages until we're using React 16.9
  * should be adapted when we upgrade
  */
-async function mountDoc(search: () => void, update = false, indexPatternGetter: any = null) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function mountDoc(update = false, indexPatternGetter: any = null) {
   const indexPattern = {
     getComputedFields: () => [],
   };
   const indexPatternService = {
     get: indexPatternGetter ? indexPatternGetter : jest.fn(() => Promise.resolve(indexPattern)),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any;
 
   const props = {
     id: '1',
     index: 'index1',
-    esClient: { search } as any,
     indexPatternId: 'xyz',
     indexPatternService,
   } as DocProps;
@@ -89,32 +104,33 @@ async function mountDoc(search: () => void, update = false, indexPatternGetter: 
 
 describe('Test of <Doc /> of Discover', () => {
   test('renders loading msg', async () => {
-    const comp = await mountDoc(jest.fn());
+    const comp = await mountDoc();
     expect(findTestSubject(comp, 'doc-msg-loading').length).toBe(1);
   });
 
   test('renders IndexPattern notFound msg', async () => {
     const indexPatternGetter = jest.fn(() => Promise.reject({ savedObjectId: '007' }));
-    const comp = await mountDoc(jest.fn(), true, indexPatternGetter);
+    const comp = await mountDoc(true, indexPatternGetter);
     expect(findTestSubject(comp, 'doc-msg-notFoundIndexPattern').length).toBe(1);
   });
 
   test('renders notFound msg', async () => {
-    const search = jest.fn(() => Promise.reject({ status: 404 }));
-    const comp = await mountDoc(search, true);
+    mockSearchApi.mockImplementation(() => throwError({ status: 404 }));
+    const comp = await mountDoc(true);
     expect(findTestSubject(comp, 'doc-msg-notFound').length).toBe(1);
   });
 
   test('renders error msg', async () => {
-    const search = jest.fn(() => Promise.reject('whatever'));
-    const comp = await mountDoc(search, true);
+    mockSearchApi.mockImplementation(() => throwError({ error: 'something else' }));
+    const comp = await mountDoc(true);
     expect(findTestSubject(comp, 'doc-msg-error').length).toBe(1);
   });
 
   test('renders elasticsearch hit ', async () => {
-    const hit = { hits: { total: 1, hits: [{ _id: 1, _source: { test: 1 } }] } };
-    const search = jest.fn(() => Promise.resolve(hit));
-    const comp = await mountDoc(search, true);
+    mockSearchApi.mockImplementation(() =>
+      of({ rawResponse: { hits: { total: 1, hits: [{ _id: 1, _source: { test: 1 } }] } } })
+    );
+    const comp = await mountDoc(true);
     expect(findTestSubject(comp, 'doc-hit').length).toBe(1);
   });
 });

@@ -1,20 +1,9 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import expect from '@kbn/expect';
@@ -25,22 +14,33 @@ export default function ({ getService }: FtrProviderContext) {
   const supertest = getService('supertest');
   const esArchiver = getService('esArchiver');
 
-  const responseSchema = schema.arrayOf(
-    schema.object({
-      id: schema.string(),
-      type: schema.string(),
-      relationship: schema.oneOf([schema.literal('parent'), schema.literal('child')]),
-      meta: schema.object({
-        title: schema.string(),
-        icon: schema.string(),
-        editUrl: schema.string(),
-        inAppUrl: schema.object({
-          path: schema.string(),
-          uiCapabilitiesPath: schema.string(),
-        }),
+  const relationSchema = schema.object({
+    id: schema.string(),
+    type: schema.string(),
+    relationship: schema.oneOf([schema.literal('parent'), schema.literal('child')]),
+    meta: schema.object({
+      title: schema.string(),
+      icon: schema.string(),
+      editUrl: schema.string(),
+      inAppUrl: schema.object({
+        path: schema.string(),
+        uiCapabilitiesPath: schema.string(),
       }),
-    })
-  );
+      namespaceType: schema.string(),
+      hiddenType: schema.boolean(),
+    }),
+  });
+  const invalidRelationSchema = schema.object({
+    id: schema.string(),
+    type: schema.string(),
+    relationship: schema.oneOf([schema.literal('parent'), schema.literal('child')]),
+    error: schema.string(),
+  });
+
+  const responseSchema = schema.object({
+    relations: schema.arrayOf(relationSchema),
+    invalidRelations: schema.arrayOf(invalidRelationSchema),
+  });
 
   describe('relationships', () => {
     before(async () => {
@@ -74,7 +74,7 @@ export default function ({ getService }: FtrProviderContext) {
           .get(relationshipsUrl('search', '960372e0-3224-11e8-a572-ffca06da1357'))
           .expect(200);
 
-        expect(resp.body).to.eql([
+        expect(resp.body.relations).to.eql([
           {
             id: '8963ca30-3224-11e8-a572-ffca06da1357',
             type: 'index-pattern',
@@ -89,6 +89,8 @@ export default function ({ getService }: FtrProviderContext) {
                   '/app/management/kibana/indexPatterns/patterns/8963ca30-3224-11e8-a572-ffca06da1357',
                 uiCapabilitiesPath: 'management.kibana.indexPatterns',
               },
+              namespaceType: 'single',
+              hiddenType: false,
             },
           },
           {
@@ -104,6 +106,8 @@ export default function ({ getService }: FtrProviderContext) {
                 path: '/app/visualize#/edit/a42c0580-3224-11e8-a572-ffca06da1357',
                 uiCapabilitiesPath: 'visualize.show',
               },
+              namespaceType: 'single',
+              hiddenType: false,
             },
           },
         ]);
@@ -116,7 +120,7 @@ export default function ({ getService }: FtrProviderContext) {
           )
           .expect(200);
 
-        expect(resp.body).to.eql([
+        expect(resp.body.relations).to.eql([
           {
             id: '8963ca30-3224-11e8-a572-ffca06da1357',
             type: 'index-pattern',
@@ -130,6 +134,8 @@ export default function ({ getService }: FtrProviderContext) {
                   '/app/management/kibana/indexPatterns/patterns/8963ca30-3224-11e8-a572-ffca06da1357',
                 uiCapabilitiesPath: 'management.kibana.indexPatterns',
               },
+              namespaceType: 'single',
+              hiddenType: false,
             },
             relationship: 'child',
           },
@@ -145,14 +151,15 @@ export default function ({ getService }: FtrProviderContext) {
                 path: '/app/visualize#/edit/a42c0580-3224-11e8-a572-ffca06da1357',
                 uiCapabilitiesPath: 'visualize.show',
               },
+              namespaceType: 'single',
+              hiddenType: false,
             },
             relationship: 'parent',
           },
         ]);
       });
 
-      // TODO: https://github.com/elastic/kibana/issues/19713 causes this test to fail.
-      it.skip('should return 404 if search finds no results', async () => {
+      it('should return 404 if search finds no results', async () => {
         await supertest
           .get(relationshipsUrl('search', 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'))
           .expect(404);
@@ -175,7 +182,7 @@ export default function ({ getService }: FtrProviderContext) {
           .get(relationshipsUrl('dashboard', 'b70c7ae0-3224-11e8-a572-ffca06da1357'))
           .expect(200);
 
-        expect(resp.body).to.eql([
+        expect(resp.body.relations).to.eql([
           {
             id: 'add810b0-3224-11e8-a572-ffca06da1357',
             type: 'visualization',
@@ -189,6 +196,8 @@ export default function ({ getService }: FtrProviderContext) {
                 path: '/app/visualize#/edit/add810b0-3224-11e8-a572-ffca06da1357',
                 uiCapabilitiesPath: 'visualize.show',
               },
+              namespaceType: 'single',
+              hiddenType: false,
             },
           },
           {
@@ -204,6 +213,8 @@ export default function ({ getService }: FtrProviderContext) {
                 path: '/app/visualize#/edit/a42c0580-3224-11e8-a572-ffca06da1357',
                 uiCapabilitiesPath: 'visualize.show',
               },
+              namespaceType: 'single',
+              hiddenType: false,
             },
           },
         ]);
@@ -214,7 +225,7 @@ export default function ({ getService }: FtrProviderContext) {
           .get(relationshipsUrl('dashboard', 'b70c7ae0-3224-11e8-a572-ffca06da1357', ['search']))
           .expect(200);
 
-        expect(resp.body).to.eql([
+        expect(resp.body.relations).to.eql([
           {
             id: 'add810b0-3224-11e8-a572-ffca06da1357',
             type: 'visualization',
@@ -227,6 +238,8 @@ export default function ({ getService }: FtrProviderContext) {
                 path: '/app/visualize#/edit/add810b0-3224-11e8-a572-ffca06da1357',
                 uiCapabilitiesPath: 'visualize.show',
               },
+              namespaceType: 'single',
+              hiddenType: false,
             },
             relationship: 'child',
           },
@@ -242,14 +255,15 @@ export default function ({ getService }: FtrProviderContext) {
                 path: '/app/visualize#/edit/a42c0580-3224-11e8-a572-ffca06da1357',
                 uiCapabilitiesPath: 'visualize.show',
               },
+              namespaceType: 'single',
+              hiddenType: false,
             },
             relationship: 'child',
           },
         ]);
       });
 
-      // TODO: https://github.com/elastic/kibana/issues/19713 causes this test to fail.
-      it.skip('should return 404 if dashboard finds no results', async () => {
+      it('should return 404 if dashboard finds no results', async () => {
         await supertest
           .get(relationshipsUrl('dashboard', 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'))
           .expect(404);
@@ -272,7 +286,7 @@ export default function ({ getService }: FtrProviderContext) {
           .get(relationshipsUrl('visualization', 'a42c0580-3224-11e8-a572-ffca06da1357'))
           .expect(200);
 
-        expect(resp.body).to.eql([
+        expect(resp.body.relations).to.eql([
           {
             id: '960372e0-3224-11e8-a572-ffca06da1357',
             type: 'search',
@@ -286,6 +300,8 @@ export default function ({ getService }: FtrProviderContext) {
                 path: '/app/discover#/view/960372e0-3224-11e8-a572-ffca06da1357',
                 uiCapabilitiesPath: 'discover.show',
               },
+              namespaceType: 'single',
+              hiddenType: false,
             },
           },
           {
@@ -301,6 +317,8 @@ export default function ({ getService }: FtrProviderContext) {
                 path: '/app/dashboards#/view/b70c7ae0-3224-11e8-a572-ffca06da1357',
                 uiCapabilitiesPath: 'dashboard.show',
               },
+              namespaceType: 'single',
+              hiddenType: false,
             },
           },
         ]);
@@ -313,7 +331,7 @@ export default function ({ getService }: FtrProviderContext) {
           )
           .expect(200);
 
-        expect(resp.body).to.eql([
+        expect(resp.body.relations).to.eql([
           {
             id: '960372e0-3224-11e8-a572-ffca06da1357',
             type: 'search',
@@ -326,6 +344,8 @@ export default function ({ getService }: FtrProviderContext) {
                 path: '/app/discover#/view/960372e0-3224-11e8-a572-ffca06da1357',
                 uiCapabilitiesPath: 'discover.show',
               },
+              namespaceType: 'single',
+              hiddenType: false,
             },
             relationship: 'child',
           },
@@ -355,7 +375,7 @@ export default function ({ getService }: FtrProviderContext) {
           .get(relationshipsUrl('index-pattern', '8963ca30-3224-11e8-a572-ffca06da1357'))
           .expect(200);
 
-        expect(resp.body).to.eql([
+        expect(resp.body.relations).to.eql([
           {
             id: '960372e0-3224-11e8-a572-ffca06da1357',
             type: 'search',
@@ -369,6 +389,8 @@ export default function ({ getService }: FtrProviderContext) {
                 path: '/app/discover#/view/960372e0-3224-11e8-a572-ffca06da1357',
                 uiCapabilitiesPath: 'discover.show',
               },
+              namespaceType: 'single',
+              hiddenType: false,
             },
           },
           {
@@ -384,6 +406,8 @@ export default function ({ getService }: FtrProviderContext) {
                 path: '/app/visualize#/edit/add810b0-3224-11e8-a572-ffca06da1357',
                 uiCapabilitiesPath: 'visualize.show',
               },
+              namespaceType: 'single',
+              hiddenType: false,
             },
           },
         ]);
@@ -396,7 +420,7 @@ export default function ({ getService }: FtrProviderContext) {
           )
           .expect(200);
 
-        expect(resp.body).to.eql([
+        expect(resp.body.relations).to.eql([
           {
             id: '960372e0-3224-11e8-a572-ffca06da1357',
             type: 'search',
@@ -409,6 +433,8 @@ export default function ({ getService }: FtrProviderContext) {
                 path: '/app/discover#/view/960372e0-3224-11e8-a572-ffca06da1357',
                 uiCapabilitiesPath: 'discover.show',
               },
+              namespaceType: 'single',
+              hiddenType: false,
             },
             relationship: 'parent',
           },
@@ -419,6 +445,50 @@ export default function ({ getService }: FtrProviderContext) {
         await supertest
           .get(relationshipsUrl('index-pattern', 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'))
           .expect(404);
+      });
+    });
+
+    describe('invalid references', () => {
+      it('should validate the response schema', async () => {
+        const resp = await supertest.get(relationshipsUrl('dashboard', 'invalid-refs')).expect(200);
+
+        expect(() => {
+          responseSchema.validate(resp.body);
+        }).not.to.throwError();
+      });
+
+      it('should return the invalid relations', async () => {
+        const resp = await supertest.get(relationshipsUrl('dashboard', 'invalid-refs')).expect(200);
+
+        expect(resp.body).to.eql({
+          invalidRelations: [
+            {
+              error: 'Saved object [visualization/invalid-vis] not found',
+              id: 'invalid-vis',
+              relationship: 'child',
+              type: 'visualization',
+            },
+          ],
+          relations: [
+            {
+              id: 'add810b0-3224-11e8-a572-ffca06da1357',
+              meta: {
+                editUrl:
+                  '/management/kibana/objects/savedVisualizations/add810b0-3224-11e8-a572-ffca06da1357',
+                icon: 'visualizeApp',
+                inAppUrl: {
+                  path: '/app/visualize#/edit/add810b0-3224-11e8-a572-ffca06da1357',
+                  uiCapabilitiesPath: 'visualize.show',
+                },
+                namespaceType: 'single',
+                hiddenType: false,
+                title: 'Visualization',
+              },
+              relationship: 'child',
+              type: 'visualization',
+            },
+          ],
+        });
       });
     });
   });

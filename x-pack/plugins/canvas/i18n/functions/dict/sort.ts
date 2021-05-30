@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
@@ -12,12 +13,15 @@ import { DATATABLE } from '../../constants';
 
 export const help: FunctionHelp<FunctionFactory<typeof sort>> = {
   help: i18n.translate('xpack.canvas.functions.sortHelpText', {
-    defaultMessage: 'Sorts a datatable by the specified column.',
+    defaultMessage: 'Sorts a {DATATABLE} by the specified column.',
+    values: {
+      DATATABLE,
+    },
   }),
   args: {
     by: i18n.translate('xpack.canvas.functions.sort.args.byHelpText', {
       defaultMessage:
-        'The column to sort by. When unspecified, the `{DATATABLE}` ' +
+        'The column to sort by. When unspecified, the {DATATABLE} ' +
         'is sorted by the first column.',
       values: {
         DATATABLE,
@@ -25,7 +29,7 @@ export const help: FunctionHelp<FunctionFactory<typeof sort>> = {
     }),
     reverse: i18n.translate('xpack.canvas.functions.sort.args.reverseHelpText', {
       defaultMessage:
-        'Reverses the sorting order. When unspecified, the `{DATATABLE}` ' +
+        'Reverses the sorting order. When unspecified, the {DATATABLE} ' +
         'is sorted in ascending order.',
       values: {
         DATATABLE,

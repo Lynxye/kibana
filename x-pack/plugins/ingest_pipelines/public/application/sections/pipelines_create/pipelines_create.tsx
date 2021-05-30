@@ -1,8 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import React, { useState, useEffect } from 'react';
 import { RouteComponentProps } from 'react-router-dom';
 import { FormattedMessage } from '@kbn/i18n/react';
@@ -16,7 +18,7 @@ import {
   EuiSpacer,
 } from '@elastic/eui';
 
-import { BASE_PATH } from '../../../../common/constants';
+import { getListPath } from '../../services/navigation';
 import { Pipeline } from '../../../../common/types';
 import { useKibana } from '../../../shared_imports';
 import { PipelineForm } from '../../components';
@@ -50,11 +52,11 @@ export const PipelinesCreate: React.FunctionComponent<RouteComponentProps & Prop
       return;
     }
 
-    history.push(BASE_PATH + `?pipeline=${encodeURIComponent(pipeline.name)}`);
+    history.push(getListPath({ inspectedPipelineName: pipeline.name }));
   };
 
   const onCancel = () => {
-    history.push(BASE_PATH);
+    history.push(getListPath());
   };
 
   useEffect(() => {

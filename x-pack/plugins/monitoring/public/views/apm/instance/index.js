@@ -1,13 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
- */
-
-/*
- * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React from 'react';
@@ -37,14 +32,14 @@ uiRoutes.when('/apm/instances/:uuid', {
       $scope.cluster = find($route.current.locals.clusters, {
         cluster_uuid: globalState.cluster_uuid,
       });
-
       super({
         title: i18n.translate('xpack.monitoring.apm.instance.routeTitle', {
           defaultMessage: '{apm} - Instance',
           values: {
-            apm: 'APM',
+            apm: 'APM server',
           },
         }),
+        telemetryPageViewTitle: 'apm_server_instance',
         api: `../api/monitoring/v1/clusters/${globalState.cluster_uuid}/apm/${$route.current.params.uuid}`,
         defaultData: {},
         reactNodeId: 'apmInstanceReact',
@@ -55,22 +50,25 @@ uiRoutes.when('/apm/instances/:uuid', {
       $scope.$watch(
         () => this.data,
         (data) => {
-          title($scope.cluster, `APM - ${get(data, 'apmSummary.name')}`);
-          this.renderReact(data);
+          this.setPageTitle(
+            i18n.translate('xpack.monitoring.apm.instance.pageTitle', {
+              defaultMessage: 'APM server instance: {instanceName}',
+              values: {
+                instanceName: get(data, 'apmSummary.name'),
+              },
+            })
+          );
+          title($scope.cluster, `APM server - ${get(data, 'apmSummary.name')}`);
+          this.renderReact(
+            <ApmServerInstance
+              summary={data.apmSummary || {}}
+              metrics={data.metrics || {}}
+              onBrush={this.onBrush}
+              zoomInfo={this.zoomInfo}
+            />
+          );
         }
       );
-    }
-
-    renderReact(data) {
-      const component = (
-        <ApmServerInstance
-          summary={data.apmSummary || {}}
-          metrics={data.metrics || {}}
-          onBrush={this.onBrush}
-          zoomInfo={this.zoomInfo}
-        />
-      );
-      super.renderReact(component);
     }
   },
 });

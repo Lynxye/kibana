@@ -1,13 +1,14 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { functionWrapper } from '../../../__tests__/helpers/function_wrapper';
+import { functionWrapper } from '../../../test_helpers/function_wrapper';
 import { elasticOutline } from '../../lib/elastic_outline';
 import { elasticLogo } from '../../lib/elastic_logo';
-import { repeatImage } from './repeatImage';
+import { repeatImage } from './repeat_image';
 
 describe('repeatImage', () => {
   const fn = functionWrapper(repeatImage);

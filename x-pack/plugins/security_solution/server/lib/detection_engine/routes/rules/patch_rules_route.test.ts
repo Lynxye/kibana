@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { DETECTION_ENGINE_RULES_URL } from '../../../../../common/constants';
@@ -10,7 +11,7 @@ import { buildMlAuthz } from '../../../machine_learning/authz';
 import {
   getEmptyFindResult,
   getFindResultStatus,
-  getResult,
+  getAlertMock,
   getPatchRequest,
   getFindResultWithSingleHit,
   nonRuleFindResult,
@@ -18,23 +19,24 @@ import {
 } from '../__mocks__/request_responses';
 import { requestContextMock, serverMock, requestMock } from '../__mocks__';
 import { patchRulesRoute } from './patch_rules_route';
-import { getCreateRulesSchemaMock } from '../../../../../common/detection_engine/schemas/request/create_rules_schema.mock';
+import { getPatchRulesSchemaMock } from '../../../../../common/detection_engine/schemas/request/patch_rules_schema.mock';
+import { getQueryRuleParams } from '../../schemas/rule_schemas.mock';
 
 jest.mock('../../../machine_learning/authz', () => mockMlAuthzFactory.create());
 
 describe('patch_rules', () => {
   let server: ReturnType<typeof serverMock.create>;
   let { clients, context } = requestContextMock.createTools();
-  let ml: ReturnType<typeof mlServicesMock.create>;
+  let ml: ReturnType<typeof mlServicesMock.createSetupContract>;
 
   beforeEach(() => {
     server = serverMock.create();
     ({ clients, context } = requestContextMock.createTools());
-    ml = mlServicesMock.create();
+    ml = mlServicesMock.createSetupContract();
 
-    clients.alertsClient.get.mockResolvedValue(getResult()); // existing rule
+    clients.alertsClient.get.mockResolvedValue(getAlertMock(getQueryRuleParams())); // existing rule
     clients.alertsClient.find.mockResolvedValue(getFindResultWithSingleHit()); // existing rule
-    clients.alertsClient.update.mockResolvedValue(getResult()); // successful update
+    clients.alertsClient.update.mockResolvedValue(getAlertMock(getQueryRuleParams())); // successful update
     clients.savedObjectsClient.find.mockResolvedValue(getFindResultStatus()); // successful transform
 
     patchRulesRoute(server.router, ml);
@@ -90,6 +92,7 @@ describe('patch_rules', () => {
         method: 'patch',
         path: DETECTION_ENGINE_RULES_URL,
         body: {
+          type: 'machine_learning',
           rule_id: 'my-rule-id',
           anomaly_threshold: 4,
           machine_learning_job_id: 'some_job_id',
@@ -102,7 +105,7 @@ describe('patch_rules', () => {
           data: expect.objectContaining({
             params: expect.objectContaining({
               anomalyThreshold: 4,
-              machineLearningJobId: 'some_job_id',
+              machineLearningJobId: ['some_job_id'],
             }),
           }),
         })
@@ -156,7 +159,7 @@ describe('patch_rules', () => {
       const request = requestMock.create({
         method: 'patch',
         path: DETECTION_ENGINE_RULES_URL,
-        body: { ...getCreateRulesSchemaMock(), rule_id: undefined },
+        body: { ...getPatchRulesSchemaMock(), rule_id: undefined },
       });
       const response = await server.inject(request, context);
       expect(response.body).toEqual({
@@ -169,7 +172,7 @@ describe('patch_rules', () => {
       const request = requestMock.create({
         method: 'patch',
         path: DETECTION_ENGINE_RULES_URL,
-        body: { ...getCreateRulesSchemaMock(), type: 'query' },
+        body: { ...getPatchRulesSchemaMock(), type: 'query' },
       });
       const result = server.validate(request);
 
@@ -180,13 +183,38 @@ describe('patch_rules', () => {
       const request = requestMock.create({
         method: 'patch',
         path: DETECTION_ENGINE_RULES_URL,
-        body: { ...getCreateRulesSchemaMock(), type: 'unknown_type' },
+        body: { ...getPatchRulesSchemaMock(), type: 'unknown_type' },
       });
       const result = server.validate(request);
 
       expect(result.badRequest).toHaveBeenCalledWith(
         'Invalid value "unknown_type" supplied to "type"'
       );
+    });
+
+    test('allows rule type of query and custom from and interval', async () => {
+      const request = requestMock.create({
+        method: 'patch',
+        path: DETECTION_ENGINE_RULES_URL,
+        body: { from: 'now-7m', interval: '5m', ...getPatchRulesSchemaMock() },
+      });
+      const result = server.validate(request);
+
+      expect(result.ok).toHaveBeenCalled();
+    });
+
+    test('disallows invalid "from" param on rule', async () => {
+      const request = requestMock.create({
+        method: 'patch',
+        path: DETECTION_ENGINE_RULES_URL,
+        body: {
+          from: 'now-3755555555555555.67s',
+          interval: '5m',
+          ...getPatchRulesSchemaMock(),
+        },
+      });
+      const result = server.validate(request);
+      expect(result.badRequest).toHaveBeenCalledWith('Failed to parse "from" on rule param');
     });
   });
 });

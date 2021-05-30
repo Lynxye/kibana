@@ -1,14 +1,20 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
+import {
+  normalizeMachineLearningJobIds,
+  normalizeThresholdObject,
+} from '../../../../common/detection_engine/utils';
 import { transformRuleToAlertAction } from '../../../../common/detection_engine/transform_actions';
-import { Alert } from '../../../../../alerts/common';
+import { SanitizedAlert } from '../../../../../alerting/common';
 import { SERVER_APP_ID, SIGNALS_ID } from '../../../../common/constants';
 import { CreateRulesOptions } from './types';
 import { addTags } from './add_tags';
+import { PartialFilter, RuleTypeParams } from '../types';
 
 export const createRules = async ({
   alertsClient,
@@ -17,6 +23,7 @@ export const createRules = async ({
   buildingBlockType,
   description,
   enabled,
+  eventCategoryOverride,
   falsePositives,
   from,
   query,
@@ -42,6 +49,14 @@ export const createRules = async ({
   severityMapping,
   tags,
   threat,
+  threatFilters,
+  threatIndex,
+  threatIndicatorPath,
+  threatLanguage,
+  concurrentSearches,
+  itemsPerSearch,
+  threatQuery,
+  threatMapping,
   threshold,
   timestampOverride,
   to,
@@ -51,8 +66,8 @@ export const createRules = async ({
   version,
   exceptionsList,
   actions,
-}: CreateRulesOptions): Promise<Alert> => {
-  return alertsClient.create({
+}: CreateRulesOptions): Promise<SanitizedAlert<RuleTypeParams>> => {
+  return alertsClient.create<RuleTypeParams>({
     data: {
       name,
       tags: addTags(tags, ruleId, immutable),
@@ -65,6 +80,7 @@ export const createRules = async ({
         description,
         ruleId,
         index,
+        eventCategoryOverride,
         falsePositives,
         from,
         immutable,
@@ -76,7 +92,9 @@ export const createRules = async ({
         timelineId,
         timelineTitle,
         meta,
-        machineLearningJobId,
+        machineLearningJobId: machineLearningJobId
+          ? normalizeMachineLearningJobIds(machineLearningJobId)
+          : undefined,
         filters,
         maxSignals,
         riskScore,
@@ -85,7 +103,18 @@ export const createRules = async ({
         severity,
         severityMapping,
         threat,
-        threshold,
+        threshold: threshold ? normalizeThresholdObject(threshold) : undefined,
+        /**
+         * TODO: Fix typing inconsistancy between `RuleTypeParams` and `CreateRulesOptions`
+         */
+        threatFilters: threatFilters as PartialFilter[] | undefined,
+        threatIndex,
+        threatIndicatorPath,
+        threatQuery,
+        concurrentSearches,
+        itemsPerSearch,
+        threatMapping,
+        threatLanguage,
         timestampOverride,
         to,
         type,
@@ -98,6 +127,7 @@ export const createRules = async ({
       enabled,
       actions: actions.map(transformRuleToAlertAction),
       throttle: null,
+      notifyWhen: null,
     },
   });
 };

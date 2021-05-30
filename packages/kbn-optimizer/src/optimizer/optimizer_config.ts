@@ -1,24 +1,14 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import Path from 'path';
 import Os from 'os';
+import { getPluginSearchPaths } from '@kbn/config';
 
 import {
   Bundle,
@@ -27,11 +17,20 @@ import {
   ThemeTag,
   ThemeTags,
   parseThemeTags,
+  omit,
 } from '../common';
 
 import { findKibanaPlatformPlugins, KibanaPlatformPlugin } from './kibana_platform_plugins';
 import { getPluginBundles } from './get_plugin_bundles';
 import { filterById } from './filter_by_id';
+import { focusBundles } from './focus_bundles';
+import { readLimits } from '../limits';
+
+export interface Limits {
+  pageLoadAssetSize?: {
+    [id: string]: number | undefined;
+  };
+}
 
 function pickMaxWorkerCount(dist: boolean) {
   // don't break if cpus() returns nothing, or an empty array
@@ -40,16 +39,6 @@ function pickMaxWorkerCount(dist: boolean) {
   const maxWorkers = dist ? cpuCount - 1 : Math.ceil(cpuCount / 3);
   // ensure we always have at least two workers
   return Math.max(maxWorkers, 2);
-}
-
-function omit<T, K extends keyof T>(obj: T, keys: K[]): Omit<T, K> {
-  const result: any = {};
-  for (const [key, value] of Object.entries(obj) as any) {
-    if (!keys.includes(key)) {
-      result[key] = value;
-    }
-  }
-  return result as Omit<T, K>;
 }
 
 interface Options {
@@ -97,6 +86,11 @@ interface Options {
    *  --filter f*r # [foobar], excludes [foo, bar]
    */
   filter?: string[];
+  /**
+   * behaves just like filter, but includes required bundles and plugins of the
+   * listed bundle ids. Filters only apply to bundles selected by focus
+   */
+  focus?: string[];
 
   /** flag that causes the core bundle to be built along with plugins */
   includeCoreBundle?: boolean;
@@ -112,6 +106,9 @@ interface Options {
    *  - "k7light"
    */
   themes?: ThemeTag | '*' | ThemeTag[];
+
+  /** path to a limits.yml file that should be used to inform ci-stats of metric limits */
+  limitsPath?: string;
 }
 
 export interface ParsedOptions {
@@ -125,6 +122,7 @@ export interface ParsedOptions {
   pluginPaths: string[];
   pluginScanDirs: string[];
   filters: string[];
+  focus: string[];
   inspectWorkers: boolean;
   includeCoreBundle: boolean;
   themeTags: ThemeTags;
@@ -141,6 +139,7 @@ export class OptimizerConfig {
     const cache = options.cache !== false && !process.env.KBN_OPTIMIZER_NO_CACHE;
     const includeCoreBundle = !!options.includeCoreBundle;
     const filters = options.filter || [];
+    const focus = options.focus || [];
 
     const repoRoot = options.repoRoot;
     if (!Path.isAbsolute(repoRoot)) {
@@ -152,18 +151,14 @@ export class OptimizerConfig {
       throw new TypeError('outputRoot must be an absolute path');
     }
 
-    /**
-     * BEWARE: this needs to stay roughly synchronized with
-     * `src/core/server/config/env.ts` which determines which paths
-     * should be searched for plugins to load
-     */
-    const pluginScanDirs = options.pluginScanDirs || [
-      Path.resolve(repoRoot, 'src/plugins'),
-      ...(oss ? [] : [Path.resolve(repoRoot, 'x-pack/plugins')]),
-      Path.resolve(repoRoot, 'plugins'),
-      ...(examples ? [Path.resolve('examples'), Path.resolve('x-pack/examples')] : []),
-      Path.resolve(repoRoot, '../kibana-extra'),
-    ];
+    const pluginScanDirs =
+      options.pluginScanDirs ||
+      getPluginSearchPaths({
+        rootDir: repoRoot,
+        oss,
+        examples,
+      });
+
     if (!pluginScanDirs.every((p) => Path.isAbsolute(p))) {
       throw new TypeError('pluginScanDirs must all be absolute paths');
     }
@@ -202,6 +197,7 @@ export class OptimizerConfig {
       pluginScanDirs,
       pluginPaths,
       filters,
+      focus,
       inspectWorkers,
       includeCoreBundle,
       themeTags,
@@ -209,6 +205,7 @@ export class OptimizerConfig {
   }
 
   static create(inputOptions: Options) {
+    const limits = inputOptions.limitsPath ? readLimits(inputOptions.limitsPath) : {};
     const options = OptimizerConfig.parseOptions(inputOptions);
     const plugins = findKibanaPlatformPlugins(options.pluginScanDirs, options.pluginPaths);
     const bundles = [
@@ -221,14 +218,15 @@ export class OptimizerConfig {
               sourceRoot: options.repoRoot,
               contextDir: Path.resolve(options.repoRoot, 'src/core'),
               outputDir: Path.resolve(options.outputRoot, 'src/core/target/public'),
+              pageLoadAssetSizeLimit: limits.pageLoadAssetSize?.core,
             }),
           ]
         : []),
-      ...getPluginBundles(plugins, options.repoRoot, options.outputRoot),
+      ...getPluginBundles(plugins, options.repoRoot, options.outputRoot, limits),
     ];
 
     return new OptimizerConfig(
-      filterById(options.filters, bundles),
+      filterById(options.filters, focusBundles(options.focus, bundles)),
       options.cache,
       options.watch,
       options.inspectWorkers,

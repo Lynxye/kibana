@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 const fs = require('fs');
@@ -34,7 +35,7 @@ const exitIfIncorrectWorkingDir = () => {
 const exitIfTimesToRunIsInvalid = (timesToRun) => {
   if (!timesToRun > 0) {
     console.error(
-      '\nERROR: You must specify a valid number of times to run the SIEM Cypress tests.'
+      '\nERROR: You must specify a valid number of times to run the Security Solution Cypress tests.'
     );
     showUsage();
     process.exit(1);
@@ -44,7 +45,7 @@ const spawnChild = async () => {
   const child = spawn('node', [
     'scripts/functional_tests',
     '--config',
-    'x-pack/test/security_solution_cypress/config.ts',
+    'x-pack/test/security_solution_cypress/cli_config.ts',
   ]);
   for await (const chunk of child.stdout) {
     console.log(chunk.toString());

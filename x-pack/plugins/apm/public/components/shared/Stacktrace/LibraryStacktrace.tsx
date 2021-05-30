@@ -1,24 +1,25 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { EuiAccordion } from '@elastic/eui';
 import { i18n } from '@kbn/i18n';
 import React from 'react';
-import styled from 'styled-components';
-import { IStackframe } from '../../../../typings/es_schemas/raw/fields/stackframe';
-import { Stackframe } from './Stackframe';
-import { px, unit } from '../../../style/variables';
+import { euiStyled } from '../../../../../../../src/plugins/kibana_react/common';
+import { Stackframe } from '../../../../typings/es_schemas/raw/fields/stackframe';
+import { px, units } from '../../../style/variables';
+import { Stackframe as StackframeComponent } from './Stackframe';
 
-const FramesContainer = styled('div')`
-  padding-left: ${px(unit)};
+const LibraryStacktraceAccordion = euiStyled(EuiAccordion)`
+  margin: ${px(units.quarter)} 0;
 `;
 
 interface Props {
   codeLanguage?: string;
-  stackframes: IStackframe[];
+  stackframes: Stackframe[];
   id: string;
 }
 
@@ -28,7 +29,7 @@ export function LibraryStacktrace({ codeLanguage, id, stackframes }: Props) {
   }
 
   return (
-    <EuiAccordion
+    <LibraryStacktraceAccordion
       buttonContent={i18n.translate(
         'xpack.apm.stacktraceTab.libraryFramesToogleButtonLabel',
         {
@@ -37,19 +38,18 @@ export function LibraryStacktrace({ codeLanguage, id, stackframes }: Props) {
           values: { count: stackframes.length },
         }
       )}
+      data-test-subj="LibraryStacktraceAccordion"
       id={id}
     >
-      <FramesContainer>
-        {stackframes.map((stackframe, i) => (
-          <Stackframe
-            key={i}
-            id={i.toString(10)}
-            isLibraryFrame
-            codeLanguage={codeLanguage}
-            stackframe={stackframe}
-          />
-        ))}
-      </FramesContainer>
-    </EuiAccordion>
+      {stackframes.map((stackframe, i) => (
+        <StackframeComponent
+          key={i}
+          id={i.toString(10)}
+          isLibraryFrame
+          codeLanguage={codeLanguage}
+          stackframe={stackframe}
+        />
+      ))}
+    </LibraryStacktraceAccordion>
   );
 }

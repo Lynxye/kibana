@@ -1,13 +1,19 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import expect from '@kbn/expect';
+import {
+  basicValidJobMessages,
+  basicInvalidJobMessages,
+  nonBasicIssuesMessages,
+} from '../../../../../../x-pack/plugins/ml/common/constants/messages.test.mock';
 import { FtrProviderContext } from '../../../ftr_provider_context';
 import { USER } from '../../../../functional/services/ml/security_common';
-import { COMMON_REQUEST_HEADERS } from '../../../../functional/services/ml/common';
-import pkg from '../../../../../../package.json';
+import { COMMON_REQUEST_HEADERS } from '../../../../functional/services/ml/common_api';
 
 export default ({ getService }: FtrProviderContext) => {
   const esArchiver = getService('esArchiver');
@@ -33,7 +39,13 @@ export default ({ getService }: FtrProviderContext) => {
           groups: [],
           analysis_config: {
             bucket_span: '15m',
-            detectors: [{ function: 'mean', field_name: 'products.discount_amount' }],
+            detectors: [
+              {
+                function: 'mean',
+                field_name: 'products.discount_amount',
+                exclude_frequent: 'none',
+              },
+            ],
             influencers: [],
             summary_count_field_name: 'doc_count',
           },
@@ -65,44 +77,7 @@ export default ({ getService }: FtrProviderContext) => {
         .send(requestBody)
         .expect(200);
 
-      expect(body).to.eql([
-        {
-          id: 'job_id_valid',
-          heading: 'Job ID format is valid',
-          text:
-            'Lowercase alphanumeric (a-z and 0-9) characters, hyphens or underscores, starts and ends with an alphanumeric character, and is no more than 64 characters long.',
-          url: `https://www.elastic.co/guide/en/elasticsearch/reference/${pkg.branch}/ml-job-resource.html#ml-job-resource`,
-          status: 'success',
-        },
-        {
-          id: 'detectors_function_not_empty',
-          heading: 'Detector functions',
-          text: 'Presence of detector functions validated in all detectors.',
-          url: `https://www.elastic.co/guide/en/machine-learning/${pkg.branch}/create-jobs.html#detectors`,
-          status: 'success',
-        },
-        {
-          id: 'success_bucket_span',
-          bucketSpan: '15m',
-          heading: 'Bucket span',
-          text: 'Format of "15m" is valid and passed validation checks.',
-          url: `https://www.elastic.co/guide/en/machine-learning/${pkg.branch}/create-jobs.html#bucket-span`,
-          status: 'success',
-        },
-        {
-          id: 'success_time_range',
-          heading: 'Time range',
-          text: 'Valid and long enough to model patterns in the data.',
-          status: 'success',
-        },
-        {
-          id: 'success_mml',
-          heading: 'Model memory limit',
-          text: 'Valid and within the estimated model memory limit.',
-          url: `https://www.elastic.co/guide/en/machine-learning/${pkg.branch}/create-jobs.html#model-memory-limits`,
-          status: 'success',
-        },
-      ]);
+      expect(body).to.eql(basicValidJobMessages);
     });
 
     it('should recognize a basic invalid job configuration and skip advanced checks', async () => {
@@ -146,36 +121,7 @@ export default ({ getService }: FtrProviderContext) => {
         .send(requestBody)
         .expect(200);
 
-      expect(body).to.eql([
-        {
-          id: 'job_id_invalid',
-          text:
-            'Job ID is invalid. It can contain lowercase alphanumeric (a-z and 0-9) characters, hyphens or underscores and must start and end with an alphanumeric character.',
-          url: `https://www.elastic.co/guide/en/elasticsearch/reference/${pkg.branch}/ml-job-resource.html#ml-job-resource`,
-          status: 'error',
-        },
-        {
-          id: 'detectors_function_not_empty',
-          heading: 'Detector functions',
-          text: 'Presence of detector functions validated in all detectors.',
-          url: `https://www.elastic.co/guide/en/machine-learning/${pkg.branch}/create-jobs.html#detectors`,
-          status: 'success',
-        },
-        {
-          id: 'bucket_span_valid',
-          bucketSpan: '15m',
-          heading: 'Bucket span',
-          text: 'Format of "15m" is valid.',
-          url: `https://www.elastic.co/guide/en/elasticsearch/reference/${pkg.branch}/ml-job-resource.html#ml-analysisconfig`,
-          status: 'success',
-        },
-        {
-          id: 'skipped_extended_tests',
-          text:
-            'Skipped additional checks because the basic requirements of the job configuration were not met.',
-          status: 'warning',
-        },
-      ]);
+      expect(body).to.eql(basicInvalidJobMessages);
     });
 
     it('should recognize non-basic issues in job configuration', async () => {
@@ -234,69 +180,26 @@ export default ({ getService }: FtrProviderContext) => {
         }
       });
 
-      expect(body).to.eql([
-        {
-          id: 'job_id_valid',
-          heading: 'Job ID format is valid',
-          text:
-            'Lowercase alphanumeric (a-z and 0-9) characters, hyphens or underscores, starts and ends with an alphanumeric character, and is no more than 64 characters long.',
-          url: `https://www.elastic.co/guide/en/elasticsearch/reference/${pkg.branch}/ml-job-resource.html#ml-job-resource`,
-          status: 'success',
-        },
-        {
-          id: 'detectors_function_not_empty',
-          heading: 'Detector functions',
-          text: 'Presence of detector functions validated in all detectors.',
-          url: `https://www.elastic.co/guide/en/machine-learning/${pkg.branch}/create-jobs.html#detectors`,
-          status: 'success',
-        },
-        {
-          id: 'cardinality_model_plot_high',
-          modelPlotCardinality: 4711,
-          text:
-            'The estimated cardinality of 4711 of fields relevant to creating model plots might result in resource intensive jobs.',
-          status: 'warning',
-        },
-        {
-          id: 'cardinality_partition_field',
-          fieldName: 'order_id',
-          text:
-            'Cardinality of partition_field "order_id" is above 1000 and might result in high memory usage.',
-          url: `https://www.elastic.co/guide/en/machine-learning/${pkg.branch}/create-jobs.html#cardinality`,
-          status: 'warning',
-        },
-        {
-          id: 'bucket_span_high',
-          heading: 'Bucket span',
-          text:
-            'Bucket span is 1 day or more. Be aware that days are considered as UTC days, not local days.',
-          url: `https://www.elastic.co/guide/en/machine-learning/${pkg.branch}/create-jobs.html#bucket-span`,
-          status: 'info',
-        },
-        {
-          bucketSpanCompareFactor: 25,
-          id: 'time_range_short',
-          minTimeSpanReadable: '2 hours',
-          heading: 'Time range',
-          text:
-            'The selected or available time range might be too short. The recommended minimum time range should be at least 2 hours and 25 times the bucket span.',
-          status: 'warning',
-        },
-        {
-          id: 'success_influencers',
-          text: 'Influencer configuration passed the validation checks.',
-          url: `https://www.elastic.co/guide/en/machine-learning/${pkg.branch}/ml-influencers.html`,
-          status: 'success',
-        },
-        {
-          id: 'half_estimated_mml_greater_than_mml',
-          mml: '1MB',
-          text:
-            'The specified model memory limit is less than half of the estimated model memory limit and will likely hit the hard limit.',
-          url: `https://www.elastic.co/guide/en/machine-learning/${pkg.branch}/create-jobs.html#model-memory-limits`,
-          status: 'warning',
-        },
-      ]);
+      const expectedResponse = nonBasicIssuesMessages;
+
+      expect(body.length).to.eql(
+        expectedResponse.length,
+        `Response body should have ${expectedResponse.length} entries (got ${body})`
+      );
+      for (const entry of expectedResponse) {
+        const responseEntry = body.find((obj: any) => obj.id === entry.id);
+        expect(responseEntry).to.not.eql(
+          undefined,
+          `Response entry with id '${entry.id}' should exist`
+        );
+
+        if (entry.id === 'cardinality_model_plot_high') {
+          // don't check the exact value of modelPlotCardinality as this is an approximation
+          expect(responseEntry).to.have.property('modelPlotCardinality');
+        } else {
+          expect(responseEntry).to.eql(entry);
+        }
+      }
     });
 
     it('should not validate configuration in case request payload is invalid', async () => {
@@ -337,7 +240,7 @@ export default ({ getService }: FtrProviderContext) => {
 
       expect(body.error).to.eql('Bad Request');
       expect(body.message).to.eql(
-        '[request body.job.analysis_config.detectors]: expected value of type [array] but got [undefined]'
+        '[request body.job.analysis_config.bucket_span]: expected value of type [string] but got [undefined]'
       );
     });
 
@@ -379,10 +282,10 @@ export default ({ getService }: FtrProviderContext) => {
         .auth(USER.ML_VIEWER, ml.securityCommon.getPasswordForUser(USER.ML_VIEWER))
         .set(COMMON_REQUEST_HEADERS)
         .send(requestBody)
-        .expect(404);
+        .expect(403);
 
-      expect(body.error).to.eql('Not Found');
-      expect(body.message).to.eql('Not Found');
+      expect(body.error).to.eql('Forbidden');
+      expect(body.message).to.eql('Forbidden');
     });
   });
 };

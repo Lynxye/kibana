@@ -1,13 +1,14 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import Fs from 'fs';
 import { resolve } from 'path';
 import { CA_CERT_PATH, KBN_CERT_PATH, KBN_KEY_PATH } from '@kbn/dev-utils';
-import { FtrConfigProviderContext } from '@kbn/test/types/ftr';
+import { FtrConfigProviderContext } from '@kbn/test';
 import { pageObjects } from '../functional/page_objects';
 
 export default async function ({ readConfigFile }: FtrConfigProviderContext) {
@@ -23,12 +24,7 @@ export default async function ({ readConfigFile }: FtrConfigProviderContext) {
     kibana: {
       ...kibanaFunctionalConfig.get('servers.kibana'),
       protocol: 'https',
-      ssl: {
-        enabled: true,
-        key: Fs.readFileSync(KBN_KEY_PATH).toString('utf8'),
-        certificate: Fs.readFileSync(KBN_CERT_PATH).toString('utf8'),
-        certificateAuthorities: Fs.readFileSync(CA_CERT_PATH).toString('utf8'),
-      },
+      certificateAuthorities: [Fs.readFileSync(CA_CERT_PATH)],
     },
   };
 

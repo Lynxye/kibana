@@ -17,13 +17,14 @@ exports[`Storyshots components/Variables/VarConfig default 1`] = `
           aria-controls="accordion-variables"
           aria-expanded={false}
           className="euiAccordion__button"
+          id="generated-id"
           onClick={[Function]}
           type="button"
         >
           <span
             className="euiAccordion__iconWrapper"
           >
-            <div
+            <span
               className="euiAccordion__icon"
               data-euiicon-type="arrowRight"
               size="m"
@@ -58,13 +59,14 @@ exports[`Storyshots components/Variables/VarConfig default 1`] = `
           >
             <button
               aria-label="Add a variable"
-              className="euiButtonIcon euiButtonIcon--primary"
+              className="euiButtonIcon euiButtonIcon--primary euiButtonIcon--empty euiButtonIcon--xSmall"
+              disabled={false}
               onBlur={[Function]}
               onClick={[Function]}
               onFocus={[Function]}
               type="button"
             >
-              <div
+              <span
                 aria-hidden="true"
                 className="euiButtonIcon__icon"
                 data-euiicon-type="plusInCircle"
@@ -75,8 +77,11 @@ exports[`Storyshots components/Variables/VarConfig default 1`] = `
         </div>
       </div>
       <div
+        aria-labelledby="generated-id"
         className="euiAccordion__childWrapper"
         id="accordion-variables"
+        role="region"
+        tabIndex={-1}
       />
     </div>
     <div

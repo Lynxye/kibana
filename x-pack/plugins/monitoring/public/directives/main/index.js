@@ -1,11 +1,13 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import React from 'react';
 import { render, unmountComponentAtNode } from 'react-dom';
-import { EuiSelect, EuiFlexGroup, EuiFlexItem, EuiTitle } from '@elastic/eui';
+import { EuiSelect, EuiFlexGroup, EuiFlexItem } from '@elastic/eui';
 import { i18n } from '@kbn/i18n';
 import { get } from 'lodash';
 import template from './index.html';
@@ -19,6 +21,7 @@ import {
 import { Subscription } from 'rxjs';
 import { getSafeForExternalLink } from '../../lib/get_safe_for_external_link';
 import { SetupModeFeature } from '../../../common/enums';
+import './index.scss';
 
 const setOptions = (controller) => {
   if (
@@ -31,13 +34,6 @@ const setOptions = (controller) => {
 
   render(
     <EuiFlexGroup>
-      <EuiFlexItem grow={false}>
-        <EuiTitle
-          style={{ maxWidth: 400, lineHeight: '40px', overflow: 'hidden', whiteSpace: 'nowrap' }}
-        >
-          <h2>{controller.pipelineId}</h2>
-        </EuiTitle>
-      </EuiFlexItem>
       <EuiFlexItem grow={false}>
         <EuiSelect
           value={controller.pipelineHash}
@@ -188,6 +184,10 @@ export class MonitoringMainController {
       return false;
     }
 
+    if (!setupMode.data) {
+      return false;
+    }
+
     const data = setupMode.data[product] || {};
     if (data.totalUniqueInstanceCount === 0) {
       return true;
@@ -205,6 +205,7 @@ export class MonitoringMainController {
 
 export function monitoringMainProvider(breadcrumbs, license, $injector) {
   const $executor = $injector.get('$executor');
+  const $parse = $injector.get('$parse');
 
   return {
     restrict: 'E',
@@ -221,6 +222,10 @@ export function monitoringMainProvider(breadcrumbs, license, $injector) {
         Object.keys(setupObj.attributes).forEach((key) => {
           attributes.$observe(key, () => controller.setup(getSetupObj()));
         });
+        if (attributes.onLoaded) {
+          const onLoaded = $parse(attributes.onLoaded)(scope);
+          onLoaded();
+        }
       });
 
       initSetupModeState(scope, $injector, () => {

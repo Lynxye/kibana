@@ -1,34 +1,32 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { URL } from 'url';
+
 import { Type } from '@kbn/config-schema';
-import {
+import type {
   HttpResources,
   HttpResourcesRequestHandler,
-  IRouter,
   RequestHandler,
-  kibanaResponseFactory,
   RouteConfig,
-} from '../../../../../../src/core/server';
-import { SecurityLicense } from '../../../common/licensing';
-import { LoginSelectorProvider } from '../../../common/login_state';
-import { ConfigType } from '../../config';
-import { defineLoginRoutes } from './login';
+} from 'src/core/server';
+import { kibanaResponseFactory } from 'src/core/server';
+import { coreMock, httpResourcesMock, httpServerMock } from 'src/core/server/mocks';
 
-import {
-  coreMock,
-  httpServerMock,
-  httpResourcesMock,
-} from '../../../../../../src/core/server/mocks';
+import type { SecurityLicense } from '../../../common/licensing';
+import type { LoginSelectorProvider } from '../../../common/login_state';
+import type { ConfigType } from '../../config';
+import type { SecurityRequestHandlerContext, SecurityRouter } from '../../types';
 import { routeDefinitionParamsMock } from '../index.mock';
+import { defineLoginRoutes } from './login';
 
 describe('Login view routes', () => {
   let httpResources: jest.Mocked<HttpResources>;
-  let router: jest.Mocked<IRouter>;
+  let router: jest.Mocked<SecurityRouter>;
   let license: jest.Mocked<SecurityLicense>;
   let config: ConfigType;
   beforeEach(() => {
@@ -100,7 +98,7 @@ describe('Login view routes', () => {
           auth: { isAuthenticated: true },
         });
         (request as any).url = new URL(
-          `${request.url.path}${request.url.search}`,
+          `${request.url.pathname}${request.url.search}`,
           'https://kibana.co'
         );
         license.getFeatures.mockReturnValue({ showLogin: true } as any);
@@ -114,7 +112,7 @@ describe('Login view routes', () => {
         // Redirect if `showLogin` is `false` even if user is not authenticated.
         request = httpServerMock.createKibanaRequest({ query, auth: { isAuthenticated: false } });
         (request as any).url = new URL(
-          `${request.url.path}${request.url.search}`,
+          `${request.url.pathname}${request.url.search}`,
           'https://kibana.co'
         );
         license.getFeatures.mockReturnValue({ showLogin: false } as any);
@@ -145,7 +143,7 @@ describe('Login view routes', () => {
       return routeDefinitionParamsMock.create({ authc: { ...authcConfig } }).config.authc;
     }
 
-    let routeHandler: RequestHandler<any, any, any, 'get'>;
+    let routeHandler: RequestHandler<any, any, any, SecurityRequestHandlerContext, 'get'>;
     let routeConfig: RouteConfig<any, any, any, 'get'>;
     beforeEach(() => {
       const [loginStateRouteConfig, loginStateRouteHandler] = router.get.mock.calls.find(
@@ -173,6 +171,7 @@ describe('Login view routes', () => {
         showRoleMappingsManagement: true,
         allowSubFeaturePrivileges: true,
         allowAuditLogging: true,
+        allowLegacyAuditLogging: true,
         showLogin: true,
       });
 
@@ -185,7 +184,7 @@ describe('Login view routes', () => {
         requiresSecureConnection: false,
         selector: {
           enabled: false,
-          providers: [{ name: 'basic', type: 'basic', usesLoginForm: true }],
+          providers: [{ name: 'basic', type: 'basic', usesLoginForm: true, showInSelector: true }],
         },
       };
       await expect(
@@ -209,7 +208,7 @@ describe('Login view routes', () => {
         requiresSecureConnection: false,
         selector: {
           enabled: false,
-          providers: [{ name: 'basic', type: 'basic', usesLoginForm: true }],
+          providers: [{ name: 'basic', type: 'basic', usesLoginForm: true, showInSelector: true }],
         },
       };
       await expect(
@@ -253,6 +252,7 @@ describe('Login view routes', () => {
               name: 'basic1',
               type: 'basic',
               usesLoginForm: true,
+              showInSelector: true,
               icon: 'logoElasticsearch',
               description: 'Log in with Elasticsearch',
             },
@@ -265,6 +265,7 @@ describe('Login view routes', () => {
               name: 'token1',
               type: 'token',
               usesLoginForm: true,
+              showInSelector: true,
               icon: 'logoElasticsearch',
               description: 'Log in with Elasticsearch',
             },
@@ -296,7 +297,7 @@ describe('Login view routes', () => {
       const contextMock = coreMock.createRequestHandlerContext();
 
       const cases: Array<[ConfigType['authc'], LoginSelectorProvider[]]> = [
-        // selector is disabled, multiple providers, but only basic provider should be returned.
+        // selector is disabled, multiple providers, all providers should be returned.
         [
           getAuthcConfig({
             selector: { enabled: false },
@@ -310,8 +311,15 @@ describe('Login view routes', () => {
               name: 'basic1',
               type: 'basic',
               usesLoginForm: true,
+              showInSelector: true,
               icon: 'logoElasticsearch',
               description: 'Log in with Elasticsearch',
+            },
+            {
+              type: 'saml',
+              name: 'saml1',
+              usesLoginForm: false,
+              showInSelector: false,
             },
           ],
         ],
@@ -326,12 +334,13 @@ describe('Login view routes', () => {
               name: 'basic1',
               type: 'basic',
               usesLoginForm: true,
+              showInSelector: true,
               icon: 'logoElasticsearch',
               description: 'Log in with Elasticsearch',
             },
           ],
         ],
-        // selector is enabled, all providers should be returned
+        // selector is enabled
         [
           getAuthcConfig({
             selector: { enabled: true },
@@ -345,7 +354,13 @@ describe('Login view routes', () => {
                 },
               },
               saml: {
-                saml1: { order: 1, description: 'some-desc2', realm: 'realm1', icon: 'some-icon2' },
+                saml1: {
+                  order: 1,
+                  description: 'some-desc2',
+                  realm: 'realm1',
+                  icon: 'some-icon2',
+                  showInSelector: false,
+                },
                 saml2: { order: 2, description: 'some-desc3', hint: 'some-hint3', realm: 'realm2' },
               },
             },
@@ -358,6 +373,7 @@ describe('Login view routes', () => {
               hint: 'some-hint1',
               icon: 'logoElasticsearch',
               usesLoginForm: true,
+              showInSelector: true,
             },
             {
               type: 'saml',
@@ -365,6 +381,7 @@ describe('Login view routes', () => {
               description: 'some-desc2',
               icon: 'some-icon2',
               usesLoginForm: false,
+              showInSelector: false,
             },
             {
               type: 'saml',
@@ -372,55 +389,7 @@ describe('Login view routes', () => {
               description: 'some-desc3',
               hint: 'some-hint3',
               usesLoginForm: false,
-            },
-          ],
-        ],
-        // selector is enabled, only providers that are enabled should be returned.
-        [
-          getAuthcConfig({
-            selector: { enabled: true },
-            providers: {
-              basic: {
-                basic1: {
-                  order: 0,
-                  description: 'some-desc1',
-                  hint: 'some-hint1',
-                  icon: 'some-icon1',
-                },
-              },
-              saml: {
-                saml1: {
-                  order: 1,
-                  description: 'some-desc2',
-                  realm: 'realm1',
-                  showInSelector: false,
-                },
-                saml2: {
-                  order: 2,
-                  description: 'some-desc3',
-                  hint: 'some-hint3',
-                  icon: 'some-icon3',
-                  realm: 'realm2',
-                },
-              },
-            },
-          }),
-          [
-            {
-              type: 'basic',
-              name: 'basic1',
-              description: 'some-desc1',
-              hint: 'some-hint1',
-              icon: 'some-icon1',
-              usesLoginForm: true,
-            },
-            {
-              type: 'saml',
-              name: 'saml2',
-              description: 'some-desc3',
-              hint: 'some-hint3',
-              icon: 'some-icon3',
-              usesLoginForm: false,
+              showInSelector: true,
             },
           ],
         ],

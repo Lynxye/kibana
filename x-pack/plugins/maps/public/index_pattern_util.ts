@@ -1,14 +1,16 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { IFieldType, IndexPattern } from 'src/plugins/data/public';
 import { i18n } from '@kbn/i18n';
-import { getIndexPatternService, getIsGoldPlus } from './kibana_services';
+import { getIndexPatternService } from './kibana_services';
 import { indexPatterns } from '../../../../src/plugins/data/public';
 import { ES_GEO_FIELD_TYPE, ES_GEO_FIELD_TYPES } from '../common/constants';
+import { getIsGoldPlus } from './licensed_features';
 
 export function getGeoTileAggNotSupportedReason(field: IFieldType): string | null {
   if (!field.aggregatable) {
@@ -54,6 +56,12 @@ export function getTermsFields(fields: IFieldType[]): IFieldType[] {
   });
 }
 
+export function getSortFields(fields: IFieldType[]): IFieldType[] {
+  return fields.filter((field) => {
+    return field.sortable && !indexPatterns.isNestedField(field);
+  });
+}
+
 export function getAggregatableGeoFieldTypes(): string[] {
   const aggregatableFieldTypes = [ES_GEO_FIELD_TYPE.GEO_POINT];
   if (getIsGoldPlus()) {
@@ -65,6 +73,12 @@ export function getAggregatableGeoFieldTypes(): string[] {
 export function getGeoFields(fields: IFieldType[]): IFieldType[] {
   return fields.filter((field) => {
     return !indexPatterns.isNestedField(field) && ES_GEO_FIELD_TYPES.includes(field.type);
+  });
+}
+
+export function getGeoPointFields(fields: IFieldType[]): IFieldType[] {
+  return fields.filter((field) => {
+    return !indexPatterns.isNestedField(field) && ES_GEO_FIELD_TYPE.GEO_POINT === field.type;
   });
 }
 
@@ -81,7 +95,6 @@ export function supportsGeoTileAgg(field?: IFieldType): boolean {
   );
 }
 
-// Returns filtered fields list containing only fields that exist in _source.
 export function getSourceFields(fields: IFieldType[]): IFieldType[] {
   return fields.filter((field) => {
     // Multi fields are not stored in _source and only exist in index.

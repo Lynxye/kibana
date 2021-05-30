@@ -1,16 +1,18 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React from 'react';
-import { EuiLink } from '@elastic/eui';
 import { detectorToString } from '../../../../util/string_utils';
 import { formatValues, filterObjects } from './format_values';
 import { i18n } from '@kbn/i18n';
+import { EuiLink } from '@elastic/eui';
+import { EditAlertRule } from '../../../../../alerting/ml_alerting_flyout';
 
-export function extractJobDetails(job) {
+export function extractJobDetails(job, basePath, refreshJobList) {
   if (Object.keys(job).length === 0) {
     return {};
   }
@@ -61,7 +63,9 @@ export function extractJobDetails(job) {
   if (job.calendars) {
     calendars.items = job.calendars.map((c) => [
       '',
-      <EuiLink href={`#/settings/calendars_list/edit_calendar/${c}?_g=()`}>{c}</EuiLink>,
+      <EuiLink href={basePath.prepend(`/app/ml/settings/calendars_list/edit_calendar/${c}?_g=()`)}>
+        {c}
+      </EuiLink>,
     ]);
     // remove the calendars list from the general section
     // so not to show it twice.
@@ -70,6 +74,17 @@ export function extractJobDetails(job) {
       general.items.splice(i, 1);
     }
   }
+
+  const alertRules = {
+    id: 'alertRules',
+    title: i18n.translate('xpack.ml.jobsList.jobDetails.alertRulesTitle', {
+      defaultMessage: 'Alert rules',
+    }),
+    position: 'right',
+    items: (job.alerting_rules ?? []).map((v) => {
+      return ['', <EditAlertRule initialAlert={v} onSave={refreshJobList} />];
+    }),
+  };
 
   const detectors = {
     id: 'detectors',
@@ -203,5 +218,6 @@ export function extractJobDetails(job) {
     modelSizeStats,
     jobTimingStats,
     datafeedTimingStats,
+    alertRules,
   };
 }

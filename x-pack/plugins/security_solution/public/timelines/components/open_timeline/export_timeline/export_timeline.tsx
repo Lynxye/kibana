@@ -1,17 +1,20 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { useCallback } from 'react';
-import uuid from 'uuid';
+import { useParams } from 'react-router-dom';
+
 import {
   GenericDownloader,
   ExportSelectedData,
 } from '../../../../common/components/generic_downloader';
 import * as i18n from '../translations';
-import { useStateToaster } from '../../../../common/components/toasters';
+import { TimelineType } from '../../../../../common/types/timeline';
+import { useAppToasts } from '../../../../common/hooks/use_app_toasts';
 
 const ExportTimeline: React.FC<{
   exportedIds: string[] | undefined;
@@ -19,23 +22,24 @@ const ExportTimeline: React.FC<{
   isEnableDownloader: boolean;
   onComplete?: () => void;
 }> = ({ onComplete, isEnableDownloader, exportedIds, getExportedData }) => {
-  const [, dispatchToaster] = useStateToaster();
+  const { tabName: timelineType } = useParams<{ tabName: TimelineType }>();
+  const { addSuccess } = useAppToasts();
+
   const onExportSuccess = useCallback(
     (exportCount) => {
       if (onComplete != null) {
         onComplete();
       }
-      dispatchToaster({
-        type: 'addToaster',
-        toast: {
-          id: uuid.v4(),
-          title: i18n.SUCCESSFULLY_EXPORTED_TIMELINES(exportCount),
-          color: 'success',
-          iconType: 'check',
-        },
+
+      addSuccess({
+        title:
+          timelineType === TimelineType.template
+            ? i18n.SUCCESSFULLY_EXPORTED_TIMELINE_TEMPLATES(exportCount)
+            : i18n.SUCCESSFULLY_EXPORTED_TIMELINES(exportCount),
+        'data-test-subj': 'addObjectToContainerSuccess',
       });
     },
-    [dispatchToaster, onComplete]
+    [addSuccess, onComplete, timelineType]
   );
   const onExportFailure = useCallback(() => {
     if (onComplete != null) {

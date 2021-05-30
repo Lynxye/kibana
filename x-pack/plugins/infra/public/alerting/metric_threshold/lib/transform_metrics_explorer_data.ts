@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { first } from 'lodash';
@@ -13,9 +14,9 @@ export const transformMetricsExplorerData = (
   data: MetricsExplorerResponse | null
 ) => {
   const { criteria } = params;
-  if (criteria && data) {
-    const firstSeries = first(data.series) as any;
-    const series = firstSeries.rows.reduce((acc: any, row: any) => {
+  const firstSeries = first(data?.series);
+  if (criteria && firstSeries) {
+    const series = firstSeries.rows.reduce((acc, row) => {
       const { timestamp } = row;
       criteria.forEach((item, index) => {
         if (!acc[index]) {

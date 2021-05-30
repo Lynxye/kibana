@@ -1,10 +1,11 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { mockLogger } from '../../routes/__mocks__';
+import { mockLogger } from '../../__mocks__';
 
 import { registerTelemetryUsageCollector } from './telemetry';
 
@@ -22,6 +23,7 @@ describe('Workplace Search Telemetry Usage Collector', () => {
         'ui_viewed.setup_guide': 10,
         'ui_viewed.overview': 20,
         'ui_error.cannot_connect': 3,
+        'ui_error.not_found': 7,
         'ui_clicked.header_launch_button': 30,
         'ui_clicked.org_name_change_button': 40,
         'ui_clicked.onboarding_card_button': 50,
@@ -61,6 +63,7 @@ describe('Workplace Search Telemetry Usage Collector', () => {
         },
         ui_error: {
           cannot_connect: 3,
+          not_found: 7,
         },
         ui_clicked: {
           header_launch_button: 30,
@@ -88,6 +91,7 @@ describe('Workplace Search Telemetry Usage Collector', () => {
         },
         ui_error: {
           cannot_connect: 0,
+          not_found: 0,
         },
         ui_clicked: {
           header_launch_button: 0,

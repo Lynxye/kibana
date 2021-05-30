@@ -1,13 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import expect from '@kbn/expect';
 import { FtrProviderContext } from '../../ftr_provider_context';
 
 export default function ({ getService, getPageObjects }: FtrProviderContext) {
+  const es = getService('es');
   const esArchiver = getService('esArchiver');
   const browser = getService('browser');
   const log = getService('log');
@@ -19,7 +21,7 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
     'visEditor',
   ]);
 
-  describe('Visualize', () => {
+  describe('Visualize Reporting Screenshots', () => {
     before('initialize tests', async () => {
       log.debug('ReportingPage:initTests');
       await esArchiver.loadIfNeeded('reporting/ecommerce');
@@ -29,11 +31,17 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
     after('clean up archives', async () => {
       await esArchiver.unload('reporting/ecommerce');
       await esArchiver.unload('reporting/ecommerce_kibana');
+      await es.deleteByQuery({
+        index: '.reporting-*',
+        refresh: true,
+        body: { query: { match_all: {} } },
+      });
     });
 
     describe('Print PDF button', () => {
       it('is not available if new', async () => {
         await PageObjects.common.navigateToUrl('visualize', 'new', { useActualUrl: true });
+        await PageObjects.visualize.clickAggBasedVisualizations();
         await PageObjects.visualize.clickAreaChart();
         await PageObjects.visualize.clickNewSearch('ecommerce');
         await PageObjects.reporting.openPdfReportingPanel();
@@ -62,8 +70,8 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
         const url = await PageObjects.reporting.getReportURL(60000);
         const res = await PageObjects.reporting.getResponse(url);
 
-        expect(res.statusCode).to.equal(200);
-        expect(res.headers['content-type']).to.equal('application/pdf');
+        expect(res.status).to.equal(200);
+        expect(res.get('content-type')).to.equal('application/pdf');
       });
     });
   });

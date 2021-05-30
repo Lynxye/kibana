@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { calculateInterval, calculateVersion, calculateName } from './utils';
@@ -31,6 +32,7 @@ describe('utils', () => {
           author: [],
           buildingBlockType: undefined,
           description: 'some description change',
+          eventCategoryOverride: undefined,
           falsePositives: undefined,
           query: undefined,
           language: undefined,
@@ -54,6 +56,13 @@ describe('utils', () => {
           tags: undefined,
           threat: undefined,
           threshold: undefined,
+          threatFilters: undefined,
+          threatIndex: undefined,
+          threatQuery: undefined,
+          threatMapping: undefined,
+          threatLanguage: undefined,
+          concurrentSearches: undefined,
+          itemsPerSearch: undefined,
           to: undefined,
           timestampOverride: undefined,
           type: undefined,
@@ -73,6 +82,7 @@ describe('utils', () => {
           author: [],
           buildingBlockType: undefined,
           description: 'some description change',
+          eventCategoryOverride: undefined,
           falsePositives: undefined,
           query: undefined,
           language: undefined,
@@ -96,6 +106,13 @@ describe('utils', () => {
           tags: undefined,
           threat: undefined,
           threshold: undefined,
+          threatFilters: undefined,
+          threatIndex: undefined,
+          threatQuery: undefined,
+          threatMapping: undefined,
+          threatLanguage: undefined,
+          concurrentSearches: undefined,
+          itemsPerSearch: undefined,
           to: undefined,
           timestampOverride: undefined,
           type: undefined,
@@ -115,6 +132,7 @@ describe('utils', () => {
           author: [],
           buildingBlockType: undefined,
           description: 'some description change',
+          eventCategoryOverride: undefined,
           falsePositives: undefined,
           query: undefined,
           language: undefined,
@@ -138,8 +156,15 @@ describe('utils', () => {
           tags: undefined,
           threat: undefined,
           threshold: undefined,
+          threatFilters: undefined,
+          threatIndex: undefined,
+          threatQuery: undefined,
+          threatMapping: undefined,
+          threatLanguage: undefined,
           to: undefined,
           timestampOverride: undefined,
+          concurrentSearches: undefined,
+          itemsPerSearch: undefined,
           type: undefined,
           references: undefined,
           version: undefined,

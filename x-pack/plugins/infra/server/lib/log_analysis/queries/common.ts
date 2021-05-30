@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 export const defaultRequestParameters = {
@@ -40,7 +41,20 @@ export const createTimeRangeFilters = (startTime: number, endTime: number) => [
   },
 ];
 
-export const createResultTypeFilters = (resultTypes: Array<'model_plot' | 'record'>) => [
+export const createLogTimeRangeFilters = (startTime: number, endTime: number) => [
+  {
+    range: {
+      log_time: {
+        gte: startTime,
+        lte: endTime,
+      },
+    },
+  },
+];
+
+export const createResultTypeFilters = (
+  resultTypes: Array<'categorizer_stats' | 'model_plot' | 'record'>
+) => [
   {
     terms: {
       result_type: resultTypes,

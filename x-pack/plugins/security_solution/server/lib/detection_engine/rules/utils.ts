@@ -1,47 +1,58 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { pickBy, isEmpty } from 'lodash/fp';
+import type {
+  FromOrUndefined,
+  MachineLearningJobIdOrUndefined,
+  RiskScoreMappingOrUndefined,
+  RiskScoreOrUndefined,
+  ConcurrentSearchesOrUndefined,
+  ItemsPerSearchOrUndefined,
+  ThreatFiltersOrUndefined,
+  ThreatIndexOrUndefined,
+  ThreatLanguageOrUndefined,
+  ThreatMappingOrUndefined,
+  ThreatQueryOrUndefined,
+  ThreatsOrUndefined,
+  TypeOrUndefined,
+  LanguageOrUndefined,
+  SeverityOrUndefined,
+  SeverityMappingOrUndefined,
+  MaxSignalsOrUndefined,
+} from '@kbn/securitysolution-io-ts-alerting-types';
+import type { ListArrayOrUndefined } from '@kbn/securitysolution-io-ts-list-types';
+import type { VersionOrUndefined } from '@kbn/securitysolution-io-ts-types';
 import {
   DescriptionOrUndefined,
   AnomalyThresholdOrUndefined,
   QueryOrUndefined,
-  LanguageOrUndefined,
   SavedIdOrUndefined,
   TimelineIdOrUndefined,
   TimelineTitleOrUndefined,
-  MachineLearningJobIdOrUndefined,
   IndexOrUndefined,
   NoteOrUndefined,
   MetaOrUndefined,
-  VersionOrUndefined,
   FalsePositivesOrUndefined,
-  FromOrUndefined,
   OutputIndexOrUndefined,
   IntervalOrUndefined,
-  MaxSignalsOrUndefined,
-  RiskScoreOrUndefined,
   NameOrUndefined,
-  SeverityOrUndefined,
   TagsOrUndefined,
   ToOrUndefined,
-  ThreatOrUndefined,
   ThresholdOrUndefined,
-  TypeOrUndefined,
   ReferencesOrUndefined,
   AuthorOrUndefined,
   BuildingBlockTypeOrUndefined,
   LicenseOrUndefined,
-  RiskScoreMappingOrUndefined,
   RuleNameOverrideOrUndefined,
-  SeverityMappingOrUndefined,
   TimestampOverrideOrUndefined,
+  EventCategoryOverrideOrUndefined,
 } from '../../../../common/detection_engine/schemas/common/schemas';
 import { PartialFilter } from '../types';
-import { ListArrayOrUndefined } from '../../../../common/detection_engine/schemas/types';
 
 export const calculateInterval = (
   interval: string | undefined,
@@ -60,6 +71,7 @@ export interface UpdateProperties {
   author: AuthorOrUndefined;
   buildingBlockType: BuildingBlockTypeOrUndefined;
   description: DescriptionOrUndefined;
+  eventCategoryOverride: EventCategoryOverrideOrUndefined;
   falsePositives: FalsePositivesOrUndefined;
   from: FromOrUndefined;
   query: QueryOrUndefined;
@@ -82,8 +94,15 @@ export interface UpdateProperties {
   severity: SeverityOrUndefined;
   severityMapping: SeverityMappingOrUndefined;
   tags: TagsOrUndefined;
-  threat: ThreatOrUndefined;
+  threat: ThreatsOrUndefined;
   threshold: ThresholdOrUndefined;
+  threatFilters: ThreatFiltersOrUndefined;
+  threatIndex: ThreatIndexOrUndefined;
+  threatQuery: ThreatQueryOrUndefined;
+  threatMapping: ThreatMappingOrUndefined;
+  threatLanguage: ThreatLanguageOrUndefined;
+  concurrentSearches: ConcurrentSearchesOrUndefined;
+  itemsPerSearch: ItemsPerSearchOrUndefined;
   timestampOverride: TimestampOverrideOrUndefined;
   to: ToOrUndefined;
   type: TypeOrUndefined;
@@ -118,15 +137,16 @@ export const calculateVersion = (
   // the version number if only the enabled/disabled flag is being set. Likewise if we get other
   // properties we are not expecting such as updatedAt we do not to cause a version number bump
   // on that either.
-  const removedNullValues = pickBy<UpdateProperties>(
-    (value: unknown) => value != null,
-    updateProperties
-  );
+  const removedNullValues = removeUndefined(updateProperties);
   if (isEmpty(removedNullValues)) {
     return currentVersion;
   } else {
     return currentVersion + 1;
   }
+};
+
+export const removeUndefined = (obj: object) => {
+  return pickBy((value: unknown) => value != null, obj);
 };
 
 export const calculateName = ({

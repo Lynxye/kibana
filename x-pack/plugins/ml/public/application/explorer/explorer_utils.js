@@ -1,14 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 /*
  * utils for Anomaly Explorer.
  */
 
-import { chain, get, union, uniq } from 'lodash';
+import { get, union, sortBy, uniq } from 'lodash';
 import moment from 'moment-timezone';
 
 import {
@@ -16,6 +17,7 @@ import {
   ANOMALIES_TABLE_DEFAULT_QUERY_SIZE,
 } from '../../../common/constants/search';
 import { getEntityFieldList } from '../../../common/util/anomaly_utils';
+import { extractErrorMessage } from '../../../common/util/errors';
 import {
   isSourceDataChartableForDetector,
   isModelPlotChartableForDetector,
@@ -24,7 +26,6 @@ import {
 import { parseInterval } from '../../../common/util/parse_interval';
 import { ml } from '../services/ml_api_service';
 import { mlJobService } from '../services/job_service';
-import { mlResultsService } from '../services/results_service';
 import { getTimeBucketsFromCache } from '../util/time_buckets';
 import { getTimefilter, getUiSettings } from '../util/dependency_cache';
 
@@ -63,6 +64,7 @@ export function getDefaultSwimlaneData() {
 }
 
 export async function loadFilteredTopInfluencers(
+  mlResultsService,
   jobIds,
   earliestMs,
   latestMs,
@@ -123,6 +125,7 @@ export async function loadFilteredTopInfluencers(
   });
 
   return await loadTopInfluencers(
+    mlResultsService,
     jobIds,
     earliestMs,
     latestMs,
@@ -197,7 +200,7 @@ export function getSelectionTimeRange(selectedCells, interval, bounds) {
     latestMs = bounds.max.valueOf();
     if (selectedCells.times[1] !== undefined) {
       // Subtract 1 ms so search does not include start of next bucket.
-      latestMs = (selectedCells.times[1] + interval) * 1000 - 1;
+      latestMs = selectedCells.times[1] * 1000 - 1;
     }
   }
 
@@ -278,17 +281,17 @@ export function getViewBySwimlaneOptions({
   const selectedJobIds = selectedJobs.map((d) => d.id);
 
   // Unique influencers for the selected job(s).
-  const viewByOptions = chain(
-    mlJobService.jobs.reduce((reducedViewByOptions, job) => {
-      if (selectedJobIds.some((jobId) => jobId === job.job_id)) {
-        return reducedViewByOptions.concat(job.analysis_config.influencers || []);
-      }
-      return reducedViewByOptions;
-    }, [])
-  )
-    .uniq()
-    .sortBy((fieldName) => fieldName.toLowerCase())
-    .value();
+  const viewByOptions = sortBy(
+    uniq(
+      mlJobService.jobs.reduce((reducedViewByOptions, job) => {
+        if (selectedJobIds.some((jobId) => jobId === job.job_id)) {
+          return reducedViewByOptions.concat(job.analysis_config.influencers || []);
+        }
+        return reducedViewByOptions;
+      }, [])
+    ),
+    (fieldName) => fieldName.toLowerCase()
+  );
 
   viewByOptions.push(VIEW_BY_JOB_LABEL);
   let viewBySwimlaneOptions = viewByOptions;
@@ -382,6 +385,57 @@ export function getViewBySwimlaneOptions({
   };
 }
 
+export function loadOverallAnnotations(selectedJobs, interval, bounds) {
+  const jobIds = selectedJobs.map((d) => d.id);
+  const timeRange = getSelectionTimeRange(undefined, interval, bounds);
+
+  return new Promise((resolve) => {
+    ml.annotations
+      .getAnnotations$({
+        jobIds,
+        earliestMs: timeRange.earliestMs,
+        latestMs: timeRange.latestMs,
+        maxAnnotations: ANNOTATIONS_TABLE_DEFAULT_QUERY_SIZE,
+      })
+      .toPromise()
+      .then((resp) => {
+        if (resp.error !== undefined || resp.annotations === undefined) {
+          const errorMessage = extractErrorMessage(resp.error);
+          return resolve({
+            annotationsData: [],
+            error: errorMessage !== '' ? errorMessage : undefined,
+          });
+        }
+
+        const annotationsData = [];
+        jobIds.forEach((jobId) => {
+          const jobAnnotations = resp.annotations[jobId];
+          if (jobAnnotations !== undefined) {
+            annotationsData.push(...jobAnnotations);
+          }
+        });
+
+        return resolve({
+          annotationsData: annotationsData
+            .sort((a, b) => {
+              return a.timestamp - b.timestamp;
+            })
+            .map((d, i) => {
+              d.key = (i + 1).toString();
+              return d;
+            }),
+        });
+      })
+      .catch((resp) => {
+        const errorMessage = extractErrorMessage(resp);
+        return resolve({
+          annotationsData: [],
+          error: errorMessage !== '' ? errorMessage : undefined,
+        });
+      });
+  });
+}
+
 export function loadAnnotationsTableData(selectedCells, selectedJobs, interval, bounds) {
   const jobIds =
     selectedCells !== undefined && selectedCells.viewByFieldName === VIEW_BY_JOB_LABEL
@@ -391,7 +445,7 @@ export function loadAnnotationsTableData(selectedCells, selectedJobs, interval, 
 
   return new Promise((resolve) => {
     ml.annotations
-      .getAnnotations({
+      .getAnnotations$({
         jobIds,
         earliestMs: timeRange.earliestMs,
         latestMs: timeRange.latestMs,
@@ -406,7 +460,12 @@ export function loadAnnotationsTableData(selectedCells, selectedJobs, interval, 
       .toPromise()
       .then((resp) => {
         if (resp.error !== undefined || resp.annotations === undefined) {
-          return resolve([]);
+          const errorMessage = extractErrorMessage(resp.error);
+          return resolve({
+            annotationsData: [],
+            aggregations: {},
+            error: errorMessage !== '' ? errorMessage : undefined,
+          });
         }
 
         const annotationsData = [];
@@ -430,9 +489,12 @@ export function loadAnnotationsTableData(selectedCells, selectedJobs, interval, 
         });
       })
       .catch((resp) => {
-        console.log('Error loading list of annotations for jobs list:', resp);
-        // Silently fail and just return an empty array for annotations to not break the UI.
-        return resolve([]);
+        const errorMessage = extractErrorMessage(resp);
+        return resolve({
+          annotationsData: [],
+          aggregations: {},
+          error: errorMessage !== '' ? errorMessage : undefined,
+        });
       });
   });
 }
@@ -502,6 +564,7 @@ export async function loadAnomaliesTableData(
             const entityFields = getEntityFieldList(anomaly.source);
             isChartable = isModelPlotEnabled(job, anomaly.detectorIndex, entityFields);
           }
+
           anomaly.isTimeSeriesViewRecord = isChartable;
 
           if (mlJobService.customUrlsByJob[jobId] !== undefined) {
@@ -524,61 +587,8 @@ export async function loadAnomaliesTableData(
   });
 }
 
-// track the request to be able to ignore out of date requests
-// and avoid race conditions ending up with the wrong charts.
-let requestCount = 0;
-export async function loadDataForCharts(
-  jobIds,
-  earliestMs,
-  latestMs,
-  influencers = [],
-  selectedCells,
-  influencersFilterQuery
-) {
-  return new Promise((resolve) => {
-    // Just skip doing the request when this function
-    // is called without the minimum required data.
-    if (
-      selectedCells === undefined &&
-      influencers.length === 0 &&
-      influencersFilterQuery === undefined
-    ) {
-      resolve([]);
-    }
-
-    const newRequestCount = ++requestCount;
-    requestCount = newRequestCount;
-
-    // Load the top anomalies (by record_score) which will be displayed in the charts.
-    mlResultsService
-      .getRecordsForInfluencer(
-        jobIds,
-        influencers,
-        0,
-        earliestMs,
-        latestMs,
-        500,
-        influencersFilterQuery
-      )
-      .then((resp) => {
-        // Ignore this response if it's returned by an out of date promise
-        if (newRequestCount < requestCount) {
-          resolve([]);
-        }
-
-        if (
-          (selectedCells !== undefined && Object.keys(selectedCells).length > 0) ||
-          influencersFilterQuery !== undefined
-        ) {
-          resolve(resp.records);
-        }
-
-        resolve([]);
-      });
-  });
-}
-
 export async function loadTopInfluencers(
+  mlResultsService,
   selectedJobIds,
   earliestMs,
   latestMs,
@@ -620,7 +630,7 @@ export function escapeParens(string) {
 }
 
 export function escapeDoubleQuotes(string) {
-  return string.replace(/\"/g, '\\$&');
+  return string.replace(/[\\"]/g, '\\$&');
 }
 
 export function getQueryPattern(fieldName, fieldValue) {

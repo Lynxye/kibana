@@ -4,6 +4,11 @@
 
 ## IIndexPattern interface
 
+> Warning: This API is now obsolete.
+> 
+> IIndexPattern allows for an IndexPattern OR an index pattern saved object Use IndexPattern or IndexPatternSpec instead
+> 
+
 <b>Signature:</b>
 
 ```typescript
@@ -14,12 +19,13 @@ export interface IIndexPattern
 
 |  Property | Type | Description |
 |  --- | --- | --- |
-|  [fieldFormatMap](./kibana-plugin-plugins-data-public.iindexpattern.fieldformatmap.md) | <code>Record&lt;string, {</code><br/><code>        id: string;</code><br/><code>        params: unknown;</code><br/><code>    }&gt;</code> |  |
+|  [fieldFormatMap](./kibana-plugin-plugins-data-public.iindexpattern.fieldformatmap.md) | <code>Record&lt;string, SerializedFieldFormat&lt;unknown&gt; &#124; undefined&gt;</code> |  |
 |  [fields](./kibana-plugin-plugins-data-public.iindexpattern.fields.md) | <code>IFieldType[]</code> |  |
+|  [getFormatterForField](./kibana-plugin-plugins-data-public.iindexpattern.getformatterforfield.md) | <code>(field: IndexPatternField &#124; IndexPatternField['spec'] &#124; IFieldType) =&gt; FieldFormat</code> | Look up a formatter for a given field |
 |  [id](./kibana-plugin-plugins-data-public.iindexpattern.id.md) | <code>string</code> |  |
 |  [timeFieldName](./kibana-plugin-plugins-data-public.iindexpattern.timefieldname.md) | <code>string</code> |  |
 |  [title](./kibana-plugin-plugins-data-public.iindexpattern.title.md) | <code>string</code> |  |
-|  [type](./kibana-plugin-plugins-data-public.iindexpattern.type.md) | <code>string</code> |  |
+|  [type](./kibana-plugin-plugins-data-public.iindexpattern.type.md) | <code>string</code> | Type is used for identifying rollup indices, otherwise left undefined |
 
 ## Methods
 

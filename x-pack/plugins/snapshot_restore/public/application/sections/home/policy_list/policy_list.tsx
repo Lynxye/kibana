@@ -1,13 +1,16 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { Fragment, useEffect } from 'react';
 import { FormattedMessage } from '@kbn/i18n/react';
 import { RouteComponentProps } from 'react-router-dom';
 import { EuiEmptyPrompt, EuiButton, EuiCallOut, EuiSpacer } from '@elastic/eui';
+
+import { reactRouterNavigate } from '../../../../../../../../src/plugins/kibana_react/public';
 
 import {
   SectionError,
@@ -20,6 +23,7 @@ import { SlmPolicy } from '../../../../../common/types';
 import { APP_SLM_CLUSTER_PRIVILEGES } from '../../../../../common';
 import { SectionLoading } from '../../../components';
 import { BASE_PATH, UIM_POLICY_LIST_LOAD } from '../../../constants';
+import { useDecodedParams } from '../../../lib';
 import { useLoadPolicies, useLoadRetentionSettings } from '../../../services/http';
 import { linkToAddPolicy, linkToPolicy } from '../../../services/navigation';
 import { useServices } from '../../../app_context';
@@ -28,25 +32,21 @@ import { PolicyDetails } from './policy_details';
 import { PolicyTable } from './policy_table';
 import { PolicyRetentionSchedule } from './policy_retention_schedule';
 
-import { reactRouterNavigate } from '../../../../../../../../src/plugins/kibana_react/public';
-
 interface MatchParams {
   policyName?: SlmPolicy['name'];
 }
 
 export const PolicyList: React.FunctionComponent<RouteComponentProps<MatchParams>> = ({
-  match: {
-    params: { policyName },
-  },
   history,
 }) => {
+  const { policyName } = useDecodedParams<MatchParams>();
   const {
     error,
     isLoading,
     data: { policies } = {
       policies: undefined,
     },
-    sendRequest: reload,
+    resendRequest: reload,
   } = useLoadPolicies();
 
   const { uiMetricService } = useServices();
@@ -56,7 +56,7 @@ export const PolicyList: React.FunctionComponent<RouteComponentProps<MatchParams
     isLoading: isLoadingRetentionSettings,
     error: retentionSettingsError,
     data: retentionSettings,
-    sendRequest: reloadRetentionSettings,
+    resendRequest: reloadRetentionSettings,
   } = useLoadRetentionSettings();
 
   const openPolicyDetailsUrl = (newPolicyName: SlmPolicy['name']): string => {

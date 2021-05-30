@@ -1,14 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { get, isEmpty } from 'lodash/fp';
 import { Dispatch } from 'redux';
 
 import { Query, Filter } from '../../../../../../../src/plugins/data/public';
-import { inputsActions } from '../../store/actions';
+import { inputsActions, sourcererActions } from '../../store/actions';
 import { InputsModelId, TimeRangeKinds } from '../../store/inputs/constants';
 import {
   UrlInputsModel,
@@ -22,11 +23,12 @@ import { decodeRisonUrlState } from './helpers';
 import { normalizeTimeRange } from './normalize_time_range';
 import { DispatchSetInitialStateFromUrl, SetInitialStateFromUrl } from './types';
 import { queryTimelineById } from '../../../timelines/components/open_timeline/helpers';
+import { SourcererScopeName, SourcererScopePatterns } from '../../store/sourcerer/model';
+import { SecurityPageName } from '../../../../common/constants';
 
 export const dispatchSetInitialStateFromUrl = (
   dispatch: Dispatch
 ): DispatchSetInitialStateFromUrl => ({
-  apolloClient,
   detailName,
   filterManager,
   indexPattern,
@@ -39,6 +41,22 @@ export const dispatchSetInitialStateFromUrl = (
   urlStateToUpdate.forEach(({ urlKey, newUrlStateString }) => {
     if (urlKey === CONSTANTS.timerange) {
       updateTimerange(newUrlStateString, dispatch);
+    }
+    if (urlKey === CONSTANTS.sourcerer) {
+      const sourcererState = decodeRisonUrlState<SourcererScopePatterns>(newUrlStateString);
+      if (sourcererState != null) {
+        const activeScopes: SourcererScopeName[] = Object.keys(sourcererState).filter(
+          (key) => !(key === SourcererScopeName.default && pageName === SecurityPageName.detections)
+        ) as SourcererScopeName[];
+        activeScopes.forEach((scope) =>
+          dispatch(
+            sourcererActions.setSelectedIndexPatterns({
+              id: scope,
+              selectedPatterns: sourcererState[scope] ?? [],
+            })
+          )
+        );
+      }
     }
 
     if (urlKey === CONSTANTS.appQuery && indexPattern != null) {
@@ -79,7 +97,7 @@ export const dispatchSetInitialStateFromUrl = (
       const timeline = decodeRisonUrlState<TimelineUrl>(newUrlStateString);
       if (timeline != null && timeline.id !== '') {
         queryTimelineById({
-          apolloClient,
+          activeTimelineTab: timeline.activeTab,
           duplicate: false,
           graphEventId: timeline.graphEventId,
           timelineId: timeline.id,

@@ -1,273 +1,217 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import React, { useCallback, useMemo, useState } from 'react';
-import uuid from 'uuid';
+import React, { useMemo } from 'react';
 
-import {
-  EuiButtonIcon,
-  EuiToolTip,
-  EuiContextMenuPanel,
-  EuiPopover,
-  EuiContextMenuItem,
-} from '@elastic/eui';
-import styled from 'styled-components';
-import { TimelineNonEcsData, Ecs } from '../../../../../graphql/types';
-import { DEFAULT_ICON_BUTTON_WIDTH } from '../../helpers';
-import { Note } from '../../../../../common/lib/note';
+import { CellValueElementProps } from '../../cell_rendering';
+import { ControlColumnProps, RowCellRender } from '../control_columns';
+import { Ecs } from '../../../../../../common/ecs';
+import { TimelineNonEcsData } from '../../../../../../common/search_strategy/timeline';
 import { ColumnHeaderOptions } from '../../../../../timelines/store/timeline/model';
-import { AssociateNote, UpdateNote } from '../../../notes/helpers';
-import { OnColumnResized, OnPinEvent, OnRowSelected, OnUnPinEvent } from '../../events';
-import { EventsTd, EventsTdContent, EventsTrData } from '../../styles';
-import { Actions } from '../actions';
-import { DataDrivenColumns } from '../data_driven_columns';
-import { eventHasNotes, getPinOnClick } from '../helpers';
-import { ColumnRenderer } from '../renderers/column_renderer';
-import { useManageTimeline } from '../../../manage_timeline';
+import { OnPinEvent, OnRowSelected, OnUnPinEvent } from '../../events';
+import { EventsTrData, EventsTdGroupActions } from '../../styles';
+import { DataDrivenColumns, getMappedNonEcsValue } from '../data_driven_columns';
+import { inputsModel } from '../../../../../common/store';
+import { TimelineTabs } from '../../../../../../common/types/timeline';
 
 interface Props {
   id: string;
   actionsColumnWidth: number;
-  associateNote: AssociateNote;
+  ariaRowindex: number;
   columnHeaders: ColumnHeaderOptions[];
-  columnRenderers: ColumnRenderer[];
   data: TimelineNonEcsData[];
   ecsData: Ecs;
   eventIdToNoteIds: Readonly<Record<string, string[]>>;
-  expanded: boolean;
-  getNotesByIds: (noteIds: string[]) => Note[];
   isEventPinned: boolean;
   isEventViewer?: boolean;
-  loading: boolean;
   loadingEventIds: Readonly<string[]>;
-  onColumnResized: OnColumnResized;
-  onEventToggled: () => void;
+  notesCount: number;
+  onEventDetailsPanelOpened: () => void;
   onPinEvent: OnPinEvent;
   onRowSelected: OnRowSelected;
   onUnPinEvent: OnUnPinEvent;
+  refetch: inputsModel.Refetch;
+  renderCellValue: (props: CellValueElementProps) => React.ReactNode;
+  onRuleChange?: () => void;
+  hasRowRenderers: boolean;
   selectedEventIds: Readonly<Record<string, TimelineNonEcsData[]>>;
   showCheckboxes: boolean;
   showNotes: boolean;
+  tabType?: TimelineTabs;
   timelineId: string;
   toggleShowNotes: () => void;
-  updateNote: UpdateNote;
+  leadingControlColumns: ControlColumnProps[];
+  trailingControlColumns: ControlColumnProps[];
 }
-
-export const getNewNoteId = (): string => uuid.v4();
-
-const emptyNotes: string[] = [];
 
 export const EventColumnView = React.memo<Props>(
   ({
     id,
     actionsColumnWidth,
-    associateNote,
+    ariaRowindex,
     columnHeaders,
-    columnRenderers,
     data,
     ecsData,
     eventIdToNoteIds,
-    expanded,
-    getNotesByIds,
     isEventPinned = false,
     isEventViewer = false,
-    loading,
     loadingEventIds,
-    onColumnResized,
-    onEventToggled,
+    notesCount,
+    onEventDetailsPanelOpened,
     onPinEvent,
     onRowSelected,
     onUnPinEvent,
+    refetch,
+    hasRowRenderers,
+    onRuleChange,
+    renderCellValue,
     selectedEventIds,
     showCheckboxes,
     showNotes,
+    tabType,
     timelineId,
     toggleShowNotes,
-    updateNote,
+    leadingControlColumns,
+    trailingControlColumns,
   }) => {
-    const { getManageTimelineById } = useManageTimeline();
-    const timelineActions = useMemo(
-      () => getManageTimelineById(timelineId).timelineRowActions({ nonEcsData: data, ecsData }),
-      [data, ecsData, getManageTimelineById, timelineId]
-    );
-    const [isPopoverOpen, setPopover] = useState(false);
-
-    const onButtonClick = useCallback(() => {
-      setPopover(!isPopoverOpen);
-    }, [isPopoverOpen]);
-
-    const closePopover = useCallback(() => {
-      setPopover(false);
-    }, []);
-
-    const button = (
-      <EuiButtonIcon
-        aria-label="context menu"
-        data-test-subj="timeline-context-menu-button"
-        size="s"
-        iconType="boxesHorizontal"
-        onClick={onButtonClick}
-      />
-    );
-
-    const onClickCb = useCallback((cb: () => void) => {
-      cb();
-      closePopover();
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    const additionalActions = useMemo<JSX.Element[]>(() => {
-      const grouped = timelineActions.reduce(
-        (
-          acc: {
-            contextMenu: JSX.Element[];
-            icon: JSX.Element[];
-          },
-          action
-        ) => {
-          if (action.displayType === 'icon') {
-            return {
-              ...acc,
-              icon: [
-                ...acc.icon,
-                <EventsTd key={action.id}>
-                  <EventsTdContent textAlign="center" width={action.width}>
-                    <EuiToolTip
-                      data-test-subj={`${action.dataTestSubj}-tool-tip`}
-                      content={action.content}
-                    >
-                      <EuiButtonIcon
-                        aria-label={action.ariaLabel}
-                        data-test-subj={`${action.dataTestSubj}-button`}
-                        iconType={action.iconType}
-                        isDisabled={
-                          action.isActionDisabled != null ? action.isActionDisabled(ecsData) : false
-                        }
-                        onClick={() => action.onClick({ eventId: id, ecsData, data })}
-                      />
-                    </EuiToolTip>
-                  </EventsTdContent>
-                </EventsTd>,
-              ],
-            };
-          }
-          return {
-            ...acc,
-            contextMenu: [
-              ...acc.contextMenu,
-              <EuiContextMenuItem
-                aria-label={action.ariaLabel}
-                data-test-subj={action.dataTestSubj}
-                disabled={
-                  action.isActionDisabled != null ? action.isActionDisabled(ecsData) : false
-                }
-                icon={action.iconType}
-                key={action.id}
-                onClick={() => onClickCb(() => action.onClick({ eventId: id, ecsData, data }))}
-              >
-                {action.content}
-              </EuiContextMenuItem>,
-            ],
-          };
-        },
-        { icon: [], contextMenu: [] }
-      );
-      return grouped.contextMenu.length > 0
-        ? [
-            ...grouped.icon,
-            <EventsTd key="actions-context-menu">
-              <EventsTdContent textAlign="center" width={DEFAULT_ICON_BUTTON_WIDTH}>
-                <EuiPopover
-                  id="singlePanel"
-                  button={button}
-                  isOpen={isPopoverOpen}
-                  closePopover={closePopover}
-                  panelPaddingSize="none"
-                  anchorPosition="downLeft"
-                  repositionOnScroll
-                >
-                  <ContextMenuPanel items={grouped.contextMenu} />
-                </EuiPopover>
-              </EventsTdContent>
-            </EventsTd>,
-          ]
-        : grouped.icon;
-    }, [button, closePopover, id, onClickCb, data, ecsData, timelineActions, isPopoverOpen]);
-
-    const handlePinClicked = useCallback(
+    // Each action button shall announce itself to screen readers via an `aria-label`
+    // in the following format:
+    // "button description, for the event in row {ariaRowindex}, with columns {columnValues}",
+    // so we combine the column values here:
+    const columnValues = useMemo(
       () =>
-        getPinOnClick({
-          allowUnpinning: !eventHasNotes(eventIdToNoteIds[id]),
-          eventId: id,
-          onPinEvent,
-          onUnPinEvent,
-          isEventPinned,
-        }),
-      [eventIdToNoteIds, id, isEventPinned, onPinEvent, onUnPinEvent]
+        columnHeaders
+          .map(
+            (header) =>
+              getMappedNonEcsValue({
+                data,
+                fieldName: header.id,
+              }) ?? []
+          )
+          .join(' '),
+      [columnHeaders, data]
     );
 
+    const leadingActionCells = useMemo(
+      () =>
+        leadingControlColumns ? leadingControlColumns.map((column) => column.rowCellRender) : [],
+      [leadingControlColumns]
+    );
+    const LeadingActions = useMemo(
+      () =>
+        leadingActionCells.map((Action: RowCellRender | undefined, index) => {
+          const width = leadingControlColumns[index].width
+            ? leadingControlColumns[index].width
+            : actionsColumnWidth;
+          return (
+            <EventsTdGroupActions
+              width={width}
+              data-test-subj="event-actions-container"
+              tabIndex={0}
+              key={index}
+            >
+              {Action && (
+                <Action
+                  width={width}
+                  rowIndex={ariaRowindex}
+                  ariaRowindex={ariaRowindex}
+                  checked={Object.keys(selectedEventIds).includes(id)}
+                  columnId={leadingControlColumns[index].id || ''}
+                  columnValues={columnValues}
+                  onRowSelected={onRowSelected}
+                  data-test-subj="actions"
+                  eventId={id}
+                  data={data}
+                  index={index}
+                  ecsData={ecsData}
+                  loadingEventIds={loadingEventIds}
+                  onEventDetailsPanelOpened={onEventDetailsPanelOpened}
+                  showCheckboxes={showCheckboxes}
+                  eventIdToNoteIds={eventIdToNoteIds}
+                  isEventPinned={isEventPinned}
+                  isEventViewer={isEventViewer}
+                  onPinEvent={onPinEvent}
+                  onUnPinEvent={onUnPinEvent}
+                  refetch={refetch}
+                  onRuleChange={onRuleChange}
+                  showNotes={showNotes}
+                  tabType={tabType}
+                  timelineId={timelineId}
+                  toggleShowNotes={toggleShowNotes}
+                />
+              )}
+            </EventsTdGroupActions>
+          );
+        }),
+      [
+        actionsColumnWidth,
+        ariaRowindex,
+        columnValues,
+        data,
+        ecsData,
+        eventIdToNoteIds,
+        id,
+        isEventPinned,
+        isEventViewer,
+        leadingActionCells,
+        leadingControlColumns,
+        loadingEventIds,
+        onEventDetailsPanelOpened,
+        onPinEvent,
+        onRowSelected,
+        onRuleChange,
+        onUnPinEvent,
+        refetch,
+        selectedEventIds,
+        showCheckboxes,
+        showNotes,
+        tabType,
+        timelineId,
+        toggleShowNotes,
+      ]
+    );
     return (
       <EventsTrData data-test-subj="event-column-view">
-        <Actions
-          actionsColumnWidth={actionsColumnWidth}
-          additionalActions={additionalActions}
-          associateNote={associateNote}
-          checked={Object.keys(selectedEventIds).includes(id)}
-          onRowSelected={onRowSelected}
-          expanded={expanded}
-          data-test-subj="actions"
-          eventId={id}
-          eventIsPinned={isEventPinned}
-          getNotesByIds={getNotesByIds}
-          isEventViewer={isEventViewer}
-          loading={loading}
-          loadingEventIds={loadingEventIds}
-          noteIds={eventIdToNoteIds[id] || emptyNotes}
-          onEventToggled={onEventToggled}
-          onPinClicked={handlePinClicked}
-          showCheckboxes={showCheckboxes}
-          showNotes={showNotes}
-          toggleShowNotes={toggleShowNotes}
-          updateNote={updateNote}
-        />
-
+        {LeadingActions}
         <DataDrivenColumns
-          _id={id}
+          id={id}
+          actionsColumnWidth={actionsColumnWidth}
+          ariaRowindex={ariaRowindex}
           columnHeaders={columnHeaders}
-          columnRenderers={columnRenderers}
           data={data}
           ecsData={ecsData}
-          onColumnResized={onColumnResized}
+          hasRowRenderers={hasRowRenderers}
+          notesCount={notesCount}
+          renderCellValue={renderCellValue}
+          tabType={tabType}
           timelineId={timelineId}
+          trailingControlColumns={trailingControlColumns}
+          leadingControlColumns={leadingControlColumns}
+          checked={Object.keys(selectedEventIds).includes(id)}
+          columnValues={columnValues}
+          onRowSelected={onRowSelected}
+          data-test-subj="actions"
+          loadingEventIds={loadingEventIds}
+          onEventDetailsPanelOpened={onEventDetailsPanelOpened}
+          showCheckboxes={showCheckboxes}
+          eventIdToNoteIds={eventIdToNoteIds}
+          isEventPinned={isEventPinned}
+          isEventViewer={isEventViewer}
+          onPinEvent={onPinEvent}
+          onUnPinEvent={onUnPinEvent}
+          refetch={refetch}
+          onRuleChange={onRuleChange}
+          selectedEventIds={selectedEventIds}
+          showNotes={showNotes}
+          toggleShowNotes={toggleShowNotes}
         />
       </EventsTrData>
     );
-  },
-  (prevProps, nextProps) => {
-    return (
-      prevProps.id === nextProps.id &&
-      prevProps.actionsColumnWidth === nextProps.actionsColumnWidth &&
-      prevProps.columnHeaders === nextProps.columnHeaders &&
-      prevProps.columnRenderers === nextProps.columnRenderers &&
-      prevProps.data === nextProps.data &&
-      prevProps.eventIdToNoteIds === nextProps.eventIdToNoteIds &&
-      prevProps.expanded === nextProps.expanded &&
-      prevProps.loading === nextProps.loading &&
-      prevProps.loadingEventIds === nextProps.loadingEventIds &&
-      prevProps.isEventPinned === nextProps.isEventPinned &&
-      prevProps.onRowSelected === nextProps.onRowSelected &&
-      prevProps.selectedEventIds === nextProps.selectedEventIds &&
-      prevProps.showCheckboxes === nextProps.showCheckboxes &&
-      prevProps.showNotes === nextProps.showNotes &&
-      prevProps.timelineId === nextProps.timelineId
-    );
   }
 );
-const ContextMenuPanel = styled(EuiContextMenuPanel)`
-  font-size: ${({ theme }) => theme.eui.euiFontSizeS};
-`;
 
-ContextMenuPanel.displayName = 'ContextMenuPanel';
+EventColumnView.displayName = 'EventColumnView';

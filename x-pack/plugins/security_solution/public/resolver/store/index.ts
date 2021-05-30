@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { createStore, applyMiddleware, Store } from 'redux';
@@ -11,7 +12,7 @@ import { resolverReducer } from './reducer';
 import { resolverMiddlewareFactory } from './middleware';
 import { ResolverAction } from './actions';
 
-export const storeFactory = (
+export const resolverStoreFactory = (
   dataAccessLayer: DataAccessLayer
 ): Store<ResolverState, ResolverAction> => {
   const actionsDenylist: Array<ResolverAction['type']> = ['userMovedPointer'];

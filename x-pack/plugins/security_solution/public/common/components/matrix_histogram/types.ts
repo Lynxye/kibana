@@ -1,17 +1,21 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
+import type React from 'react';
 import { EuiTitleSize } from '@elastic/eui';
 import { ScaleType, Position, TickFormatter } from '@elastic/charts';
 import { ActionCreator } from 'redux';
 import { ESQuery } from '../../../../common/typed_json';
 import { InputsModelId } from '../../store/inputs/constants';
-import { HistogramType } from '../../../graphql/types';
+import { MatrixHistogramType } from '../../../../common/search_strategy/security_solution';
 import { UpdateDateRange } from '../charts/common';
 import { GlobalTimeArgs } from '../../containers/use_global_time';
+import { DocValueFields } from '../../../../common/search_strategy';
+import { Threshold } from '../../../detections/components/rules/query_preview';
 
 export type MatrixHistogramMappingTypes = Record<
   string,
@@ -25,11 +29,11 @@ export interface MatrixHistogramOption {
 export type GetSubTitle = (count: number) => string;
 export type GetTitle = (matrixHistogramOption: MatrixHistogramOption) => string;
 
-export interface MatrixHisrogramConfigs {
+export interface MatrixHistogramConfigs {
   defaultStackByOption: MatrixHistogramOption;
   errorMessage: string;
   hideHistogramIfEmpty?: boolean;
-  histogramType: HistogramType;
+  histogramType: MatrixHistogramType;
   legendPosition?: Position;
   mapping?: MatrixHistogramMappingTypes;
   stackByOptions: MatrixHistogramOption[];
@@ -40,13 +44,7 @@ export interface MatrixHisrogramConfigs {
 
 interface MatrixHistogramBasicProps {
   chartHeight?: number;
-  defaultIndex: string[];
   defaultStackByOption: MatrixHistogramOption;
-  dispatchSetAbsoluteRangeDatePicker: ActionCreator<{
-    id: InputsModelId;
-    from: string;
-    to: string;
-  }>;
   endDate: GlobalTimeArgs['to'];
   headerChildren?: React.ReactNode;
   hideHistogramIfEmpty?: boolean;
@@ -63,9 +61,12 @@ interface MatrixHistogramBasicProps {
 }
 
 export interface MatrixHistogramQueryProps {
+  docValueFields?: DocValueFields[];
   endDate: string;
   errorMessage: string;
+  indexNames: string[];
   filterQuery?: ESQuery | string | undefined;
+  onError?: () => void;
   setAbsoluteRangeDatePicker?: ActionCreator<{
     id: InputsModelId;
     from: string;
@@ -74,9 +75,11 @@ export interface MatrixHistogramQueryProps {
   setAbsoluteRangeDatePickerTarget?: InputsModelId;
   stackByField: string;
   startDate: string;
-  indexToAdd?: string[] | null;
-  isInspected: boolean;
-  histogramType: HistogramType;
+  histogramType: MatrixHistogramType;
+  threshold?: Threshold;
+  skip?: boolean;
+  isPtrIncluded?: boolean;
+  includeMissingData?: boolean;
 }
 
 export interface MatrixHistogramProps extends MatrixHistogramBasicProps {

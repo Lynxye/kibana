@@ -1,22 +1,27 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { useEffect, useState } from 'react';
+import { DEFAULT_ALERTS_INDEX } from '../../../../../common/constants';
 
-import { errorToToaster, useStateToaster } from '../../../../common/components/toasters';
+import { useAppToasts } from '../../../../common/hooks/use_app_toasts';
+import { useIsExperimentalFeatureEnabled } from '../../../../common/hooks/use_experimental_features';
 import { createSignalIndex, getSignalIndex } from './api';
 import * as i18n from './translations';
 import { isSecurityAppError } from '../../../../common/utils/api';
+import { useAlertsPrivileges } from './use_alerts_privileges';
 
-type Func = () => void;
+type Func = () => Promise<void>;
 
 export interface ReturnSignalIndex {
   loading: boolean;
   signalIndexExists: boolean | null;
   signalIndexName: string | null;
+  signalIndexMappingOutdated: boolean | null;
   createDeSignalIndex: Func | null;
 }
 
@@ -27,14 +32,16 @@ export interface ReturnSignalIndex {
  */
 export const useSignalIndex = (): ReturnSignalIndex => {
   const [loading, setLoading] = useState(true);
-  const [signalIndex, setSignalIndex] = useState<
-    Pick<ReturnSignalIndex, 'signalIndexExists' | 'signalIndexName' | 'createDeSignalIndex'>
-  >({
+  const [signalIndex, setSignalIndex] = useState<Omit<ReturnSignalIndex, 'loading'>>({
     signalIndexExists: null,
     signalIndexName: null,
+    signalIndexMappingOutdated: null,
     createDeSignalIndex: null,
   });
-  const [, dispatchToaster] = useStateToaster();
+  const { addError } = useAppToasts();
+  const { hasIndexRead } = useAlertsPrivileges();
+  // TODO: Once we are past experimental phase this code should be removed
+  const ruleRegistryEnabled = useIsExperimentalFeatureEnabled('ruleRegistryEnabled');
 
   useEffect(() => {
     let isSubscribed = true;
@@ -45,10 +52,16 @@ export const useSignalIndex = (): ReturnSignalIndex => {
         setLoading(true);
         const signal = await getSignalIndex({ signal: abortCtrl.signal });
 
+        // TODO: Once we are past experimental phase we can update `getSignalIndex` to return the space-aware DEFAULT_ALERTS_INDEX
+        const signalIndices = ruleRegistryEnabled
+          ? `${DEFAULT_ALERTS_INDEX},${signal.name}`
+          : signal.name;
+
         if (isSubscribed && signal != null) {
           setSignalIndex({
             signalIndexExists: true,
-            signalIndexName: signal.name,
+            signalIndexName: signalIndices,
+            signalIndexMappingOutdated: signal.index_mapping_outdated,
             createDeSignalIndex: createIndex,
           });
         }
@@ -57,10 +70,11 @@ export const useSignalIndex = (): ReturnSignalIndex => {
           setSignalIndex({
             signalIndexExists: false,
             signalIndexName: null,
+            signalIndexMappingOutdated: null,
             createDeSignalIndex: createIndex,
           });
           if (isSecurityAppError(error) && error.body.status_code !== 404) {
-            errorToToaster({ title: i18n.SIGNAL_GET_NAME_FAILURE, error, dispatchToaster });
+            addError(error, { title: i18n.SIGNAL_GET_NAME_FAILURE });
           }
         }
       }
@@ -87,9 +101,10 @@ export const useSignalIndex = (): ReturnSignalIndex => {
             setSignalIndex({
               signalIndexExists: false,
               signalIndexName: null,
+              signalIndexMappingOutdated: null,
               createDeSignalIndex: createIndex,
             });
-            errorToToaster({ title: i18n.SIGNAL_POST_FAILURE, error, dispatchToaster });
+            addError(error, { title: i18n.SIGNAL_POST_FAILURE });
           }
         }
       }
@@ -98,13 +113,18 @@ export const useSignalIndex = (): ReturnSignalIndex => {
       }
     };
 
-    fetchData();
+    if (hasIndexRead) {
+      fetchData();
+    } else {
+      // Skip data fetching as the current user doesn't have enough priviliges.
+      // Attempt to get the signal index will result in 500 error.
+      setLoading(false);
+    }
     return () => {
       isSubscribed = false;
       abortCtrl.abort();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [addError, hasIndexRead, ruleRegistryEnabled]);
 
   return { loading, ...signalIndex };
 };

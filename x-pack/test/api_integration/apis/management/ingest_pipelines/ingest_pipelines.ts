@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import expect from '@kbn/expect';
@@ -14,7 +15,13 @@ const API_BASE_PATH = '/api/ingest_pipelines';
 export default function ({ getService }: FtrProviderContext) {
   const supertest = getService('supertest');
 
-  const { createPipeline, deletePipeline, cleanupPipelines } = registerEsHelpers(getService);
+  const {
+    createPipeline,
+    deletePipeline,
+    cleanupPipelines,
+    createIndex,
+    deleteIndex,
+  } = registerEsHelpers(getService);
 
   describe('Pipelines', function () {
     after(async () => {
@@ -197,7 +204,8 @@ export default function ({ getService }: FtrProviderContext) {
         expect(body).to.eql({
           statusCode: 404,
           error: 'Not Found',
-          message: 'Not Found',
+          message: 'Response Error',
+          attributes: {},
         });
       });
     });
@@ -332,24 +340,16 @@ export default function ({ getService }: FtrProviderContext) {
             {
               name: PIPELINE_DOES_NOT_EXIST,
               error: {
-                msg: '[resource_not_found_exception] pipeline [pipeline_does_not_exist] is missing',
-                path: '/_ingest/pipeline/pipeline_does_not_exist',
-                query: {},
-                statusCode: 404,
-                response: JSON.stringify({
-                  error: {
-                    root_cause: [
-                      {
-                        type: 'resource_not_found_exception',
-                        reason: 'pipeline [pipeline_does_not_exist] is missing',
-                      },
-                    ],
+                root_cause: [
+                  {
                     type: 'resource_not_found_exception',
                     reason: 'pipeline [pipeline_does_not_exist] is missing',
                   },
-                  status: 404,
-                }),
+                ],
+                type: 'resource_not_found_exception',
+                reason: 'pipeline [pipeline_does_not_exist] is missing',
               },
+              status: 404,
             },
           ],
         });
@@ -443,6 +443,61 @@ export default function ({ getService }: FtrProviderContext) {
         // The simulate ES response is quite long and includes timestamps
         // so for now, we just confirm the docs array is returned with the correct length
         expect(body.docs?.length).to.eql(2);
+      });
+    });
+
+    describe('Fetch documents', () => {
+      const INDEX = 'test_index';
+      const DOCUMENT_ID = '1';
+      const DOCUMENT = {
+        name: 'John Doe',
+      };
+
+      before(async () => {
+        // Create an index with a document that can be used to test GET request
+        try {
+          await createIndex({ id: DOCUMENT_ID, index: INDEX, body: DOCUMENT });
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.log('[Setup error] Error creating index');
+          throw err;
+        }
+      });
+
+      after(async () => {
+        // Clean up index created
+        try {
+          await deleteIndex(INDEX);
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.log('[Cleanup error] Error deleting index');
+          throw err;
+        }
+      });
+
+      it('should return a document', async () => {
+        const uri = `${API_BASE_PATH}/documents/${INDEX}/${DOCUMENT_ID}`;
+
+        const { body } = await supertest.get(uri).set('kbn-xsrf', 'xxx').expect(200);
+
+        expect(body).to.eql({
+          _index: INDEX,
+          _id: DOCUMENT_ID,
+          _source: DOCUMENT,
+        });
+      });
+
+      it('should return an error if the document does not exist', async () => {
+        const uri = `${API_BASE_PATH}/documents/${INDEX}/2`; // Document 2 does not exist
+
+        const { body } = await supertest.get(uri).set('kbn-xsrf', 'xxx').expect(404);
+
+        expect(body).to.eql({
+          error: 'Not Found',
+          message: 'Response Error',
+          statusCode: 404,
+          attributes: {},
+        });
       });
     });
   });

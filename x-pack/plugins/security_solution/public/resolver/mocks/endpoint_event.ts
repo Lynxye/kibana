@@ -1,32 +1,40 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { EndpointEvent } from '../../../common/endpoint/types';
+import { SafeResolverEvent } from '../../../common/endpoint/types';
 
 /**
  * Simple mock endpoint event that works for tree layouts.
  */
 export function mockEndpointEvent({
   entityID,
-  name,
-  parentEntityId,
-  timestamp,
-  lifecycleType,
+  processName = 'process name',
+  parentEntityID,
+  timestamp = 0,
+  eventType = 'start',
+  eventCategory = 'process',
+  pid = 0,
+  eventID = 'event id',
 }: {
   entityID: string;
-  name: string;
-  parentEntityId?: string;
-  timestamp: number;
-  lifecycleType?: string;
-}): EndpointEvent {
+  processName?: string;
+  parentEntityID?: string;
+  timestamp?: number;
+  eventType?: string;
+  eventCategory?: string;
+  pid?: number;
+  eventID?: string | number;
+}): SafeResolverEvent {
   return {
     '@timestamp': timestamp,
     event: {
-      type: lifecycleType ? lifecycleType : 'start',
-      category: 'process',
+      type: eventType,
+      category: eventCategory,
+      id: String(eventID),
     },
     agent: {
       id: 'agent.id',
@@ -43,16 +51,16 @@ export function mockEndpointEvent({
     process: {
       entity_id: entityID,
       executable: 'executable',
-      args: 'args',
-      name,
-      pid: 0,
+      args: ['args0', 'args1', 'args2'],
+      name: processName,
+      pid,
       hash: {
         md5: 'hash.md5',
       },
       parent: {
         pid: 0,
-        entity_id: parentEntityId,
+        entity_id: parentEntityID,
       },
     },
-  } as EndpointEvent;
+  };
 }

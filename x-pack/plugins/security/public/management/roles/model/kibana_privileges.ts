@@ -1,15 +1,16 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { RawKibanaPrivileges, RoleKibanaPrivilege } from '../../../../common/model';
+import type { KibanaFeature } from '../../../../../features/common';
+import type { RawKibanaPrivileges, RoleKibanaPrivilege } from '../../../../common/model';
+import { isGlobalPrivilegeDefinition } from '../edit_role/privilege_utils';
 import { KibanaPrivilege } from './kibana_privilege';
 import { PrivilegeCollection } from './privilege_collection';
 import { SecuredFeature } from './secured_feature';
-import { Feature } from '../../../../../features/common';
-import { isGlobalPrivilegeDefinition } from '../edit_role/privilege_utils';
 
 function toBasePrivilege(entry: [string, string[]]): [string, KibanaPrivilege] {
   const [privilegeId, actions] = entry;
@@ -29,7 +30,7 @@ export class KibanaPrivileges {
 
   private feature: ReadonlyMap<string, SecuredFeature>;
 
-  constructor(rawKibanaPrivileges: RawKibanaPrivileges, features: Feature[]) {
+  constructor(rawKibanaPrivileges: RawKibanaPrivileges, features: KibanaFeature[]) {
     this.global = recordsToBasePrivilegeMap(rawKibanaPrivileges.global);
     this.spaces = recordsToBasePrivilegeMap(rawKibanaPrivileges.space);
     this.feature = new Map(

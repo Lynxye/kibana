@@ -1,38 +1,42 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import React, { useEffect } from 'react';
+import React, { lazy, useEffect } from 'react';
 import { Route, RouteComponentProps, Switch } from 'react-router-dom';
 import { FormattedMessage } from '@kbn/i18n/react';
 import {
   EuiPageBody,
   EuiPageContent,
-  EuiPageContentHeader,
-  EuiPageContentHeaderSection,
   EuiSpacer,
   EuiTab,
   EuiTabs,
   EuiTitle,
-  EuiBetaBadge,
   EuiText,
+  EuiButtonEmpty,
+  EuiFlexGroup,
+  EuiFlexItem,
 } from '@elastic/eui';
 
-import { i18n } from '@kbn/i18n';
-import { Section, routeToConnectors, routeToAlerts } from './constants';
+import { Section, routeToConnectors, routeToRules } from './constants';
 import { getAlertingSectionBreadcrumb } from './lib/breadcrumb';
 import { getCurrentDocTitle } from './lib/doc_title';
-import { useAppDependencies } from './app_context';
 import { hasShowActionsCapability } from './lib/capabilities';
 
-import { ActionsConnectorsList } from './sections/actions_connectors_list/components/actions_connectors_list';
-import { AlertsList } from './sections/alerts_list/components/alerts_list';
-import { PLUGIN } from './constants/plugin';
 import { HealthCheck } from './components/health_check';
+import { HealthContextProvider } from './context/health_context';
+import { useKibana } from '../common/lib/kibana';
+import { suspendedComponentWithProps } from './lib/suspended_component_with_props';
 
-interface MatchParams {
+const ActionsConnectorsList = lazy(
+  () => import('./sections/actions_connectors_list/components/actions_connectors_list')
+);
+const AlertsList = lazy(() => import('./sections/alerts_list/components/alerts_list'));
+
+export interface MatchParams {
   section: Section;
 }
 
@@ -42,7 +46,12 @@ export const TriggersActionsUIHome: React.FunctionComponent<RouteComponentProps<
   },
   history,
 }) => {
-  const { chrome, capabilities, setBreadcrumbs, docLinks, http } = useAppDependencies();
+  const {
+    chrome,
+    application: { capabilities },
+    setBreadcrumbs,
+    docLinks,
+  } = useKibana().services;
 
   const canShowActions = hasShowActionsCapability(capabilities);
   const tabs: Array<{
@@ -51,9 +60,9 @@ export const TriggersActionsUIHome: React.FunctionComponent<RouteComponentProps<
   }> = [];
 
   tabs.push({
-    id: 'alerts',
+    id: 'rules',
     name: (
-      <FormattedMessage id="xpack.triggersActionsUI.home.alertsTabTitle" defaultMessage="Alerts" />
+      <FormattedMessage id="xpack.triggersActionsUI.home.rulesTabTitle" defaultMessage="Rules" />
     ),
   });
 
@@ -82,41 +91,40 @@ export const TriggersActionsUIHome: React.FunctionComponent<RouteComponentProps<
   return (
     <EuiPageBody>
       <EuiPageContent>
-        <EuiPageContentHeader>
-          <EuiPageContentHeaderSection>
-            <EuiTitle size="m">
+        <EuiTitle size="m">
+          <EuiFlexGroup>
+            <EuiFlexItem>
               <h1 data-test-subj="appTitle">
                 <FormattedMessage
                   id="xpack.triggersActionsUI.home.appTitle"
-                  defaultMessage="Alerts and Actions"
-                />
-                &emsp;
-                <EuiBetaBadge
-                  label="Beta"
-                  tooltipContent={i18n.translate(
-                    'xpack.triggersActionsUI.home.betaBadgeTooltipContent',
-                    {
-                      defaultMessage:
-                        '{pluginName} is in beta and is subject to change. The design and code is less mature than official GA features and is being provided as-is with no warranties. Beta features are not subject to the support SLA of official GA features.',
-                      values: {
-                        pluginName: PLUGIN.getI18nName(i18n),
-                      },
-                    }
-                  )}
+                  defaultMessage="Rules and Connectors"
                 />
               </h1>
-            </EuiTitle>
-            <EuiSpacer size="s" />
-            <EuiText>
-              <p>
+            </EuiFlexItem>
+            <EuiFlexItem grow={false}>
+              <EuiButtonEmpty
+                href={docLinks.links.alerting.guide}
+                target="_blank"
+                iconType="help"
+                data-test-subj="documentationLink"
+              >
                 <FormattedMessage
-                  id="xpack.triggersActionsUI.home.sectionDescription"
-                  defaultMessage="Detect conditions using alerts, and take actions using connectors."
+                  id="xpack.triggersActionsUI.home.docsLinkText"
+                  defaultMessage="Documentation"
                 />
-              </p>
-            </EuiText>
-          </EuiPageContentHeaderSection>
-        </EuiPageContentHeader>
+              </EuiButtonEmpty>
+            </EuiFlexItem>
+          </EuiFlexGroup>
+        </EuiTitle>
+        <EuiSpacer size="s" />
+        <EuiText>
+          <p>
+            <FormattedMessage
+              id="xpack.triggersActionsUI.home.sectionDescription"
+              defaultMessage="Detect conditions using rules, and take actions using connectors."
+            />
+          </p>
+        </EuiText>
 
         <EuiTabs>
           {tabs.map((tab) => (
@@ -133,28 +141,24 @@ export const TriggersActionsUIHome: React.FunctionComponent<RouteComponentProps<
 
         <EuiSpacer size="s" />
 
-        <Switch>
-          {canShowActions && (
-            <Route
-              exact
-              path={routeToConnectors}
-              component={() => (
-                <HealthCheck docLinks={docLinks} http={http}>
-                  <ActionsConnectorsList />
-                </HealthCheck>
+        <HealthContextProvider>
+          <HealthCheck waitForCheck={true}>
+            <Switch>
+              {canShowActions && (
+                <Route
+                  exact
+                  path={routeToConnectors}
+                  component={suspendedComponentWithProps(ActionsConnectorsList, 'xl')}
+                />
               )}
-            />
-          )}
-          <Route
-            exact
-            path={routeToAlerts}
-            component={() => (
-              <HealthCheck docLinks={docLinks} http={http}>
-                <AlertsList />
-              </HealthCheck>
-            )}
-          />
-        </Switch>
+              <Route
+                exact
+                path={routeToRules}
+                component={suspendedComponentWithProps(AlertsList, 'xl')}
+              />
+            </Switch>
+          </HealthCheck>
+        </HealthContextProvider>
       </EuiPageContent>
     </EuiPageBody>
   );

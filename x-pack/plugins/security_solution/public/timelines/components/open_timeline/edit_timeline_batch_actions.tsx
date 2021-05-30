@@ -1,13 +1,14 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { EuiContextMenuPanel, EuiContextMenuItem, EuiBasicTable } from '@elastic/eui';
 import React, { useCallback, useMemo } from 'react';
 
-import { TimelineType, TimelineStatus } from '../../../../common/types/timeline';
+import { TimelineType } from '../../../../common/types/timeline';
 
 import * as i18n from './translations';
 import { DeleteTimelines, OpenTimelineResult } from './types';
@@ -66,7 +67,7 @@ export const useEditTimelineBatchActions = ({
 
   const getBatchItemsPopoverContent = useCallback(
     (closePopover: () => void) => {
-      const disabled = selectedItems?.some((item) => item.status === TimelineStatus.immutable);
+      const disabled = selectedItems == null || selectedItems.length === 0;
       return (
         <>
           <EditTimelineActions
@@ -87,6 +88,7 @@ export const useEditTimelineBatchActions = ({
           <EuiContextMenuPanel
             items={[
               <EuiContextMenuItem
+                data-test-subj="export-timeline-action"
                 disabled={disabled}
                 icon="exportAction"
                 key="ExportItemKey"
@@ -95,6 +97,7 @@ export const useEditTimelineBatchActions = ({
                 {i18n.EXPORT_SELECTED}
               </EuiContextMenuItem>,
               <EuiContextMenuItem
+                data-test-subj="delete-timeline-action"
                 disabled={disabled}
                 icon="trash"
                 key="DeleteItemKey"
@@ -107,7 +110,6 @@ export const useEditTimelineBatchActions = ({
         </>
       );
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       selectedItems,
       deleteTimelines,

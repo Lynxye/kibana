@@ -1,41 +1,46 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
-
 /* eslint-disable complexity */
 
-import { Logger, KibanaRequest } from 'src/core/server';
+import { Logger, SavedObject } from 'src/core/server';
+import isEmpty from 'lodash/isEmpty';
+import { chain, tryCatch } from 'fp-ts/lib/TaskEither';
+import { flow } from 'fp-ts/lib/function';
+
+import * as t from 'io-ts';
+import { validateNonExact, parseScheduleDates } from '@kbn/securitysolution-io-ts-utils';
+import { toError, toPromise } from '@kbn/securitysolution-list-api';
 
 import {
   SIGNALS_ID,
   DEFAULT_SEARCH_AFTER_PAGE_SIZE,
   SERVER_APP_ID,
 } from '../../../../common/constants';
-import { isJobStarted, isMlRule } from '../../../../common/machine_learning/helpers';
+import { isMlRule } from '../../../../common/machine_learning/helpers';
+import {
+  isThresholdRule,
+  isEqlRule,
+  isThreatMatchRule,
+  isQueryRule,
+} from '../../../../common/detection_engine/utils';
 import { SetupPlugins } from '../../../plugin';
 import { getInputIndex } from './get_input_output_index';
+import { AlertAttributes, SignalRuleAlertTypeDefinition } from './types';
 import {
-  searchAfterAndBulkCreate,
-  SearchAfterAndBulkCreateReturnType,
-} from './search_after_bulk_create';
-import { getFilter } from './get_filter';
-import { SignalRuleAlertTypeDefinition, RuleAlertAttributes } from './types';
-import {
-  getGapBetweenRuns,
-  parseScheduleDates,
   getListsClient,
   getExceptions,
-  getGapMaxCatchupRatio,
-  MAX_RULE_GAP_RATIO,
+  createSearchAfterReturnType,
+  checkPrivileges,
+  hasTimestampFields,
+  hasReadIndexPrivileges,
+  getRuleRangeTuples,
+  isMachineLearningParams,
 } from './utils';
-import { signalParamsSchema } from './signal_params_schema';
 import { siemRuleActionGroups } from './siem_rule_action_groups';
-import { findMlSignals } from './find_ml_signals';
-import { findThresholdSignals } from './find_threshold_signals';
-import { bulkCreateMlSignals } from './bulk_create_ml_signals';
-import { bulkCreateThresholdSignals } from './bulk_create_threshold_signals';
 import {
   scheduleNotificationActions,
   NotificationRuleTypeParams,
@@ -44,14 +49,32 @@ import { ruleStatusServiceFactory } from './rule_status_service';
 import { buildRuleMessageFactory } from './rule_messages';
 import { ruleStatusSavedObjectsClientFactory } from './rule_status_saved_objects_client';
 import { getNotificationResultsLink } from '../notifications/utils';
+import { TelemetryEventsSender } from '../../telemetry/sender';
+import { eqlExecutor } from './executors/eql';
+import { queryExecutor } from './executors/query';
+import { threatMatchExecutor } from './executors/threat_match';
+import { thresholdExecutor } from './executors/threshold';
+import { mlExecutor } from './executors/ml';
+import {
+  eqlRuleParams,
+  machineLearningRuleParams,
+  queryRuleParams,
+  threatRuleParams,
+  thresholdRuleParams,
+  ruleParams,
+  RuleParams,
+  savedQueryRuleParams,
+} from '../schemas/rule_schemas';
 
 export const signalRulesAlertType = ({
   logger,
+  eventsTelemetry,
   version,
   ml,
   lists,
 }: {
   logger: Logger;
+  eventsTelemetry: TelemetryEventsSender | undefined;
   version: string;
   ml: SetupPlugins['ml'];
   lists: SetupPlugins['lists'] | undefined;
@@ -62,9 +85,21 @@ export const signalRulesAlertType = ({
     actionGroups: siemRuleActionGroups,
     defaultActionGroupId: 'default',
     validate: {
-      params: signalParamsSchema(),
+      params: {
+        validate: (object: unknown): RuleParams => {
+          const [validated, errors] = validateNonExact(object, ruleParams);
+          if (errors != null) {
+            throw new Error(errors);
+          }
+          if (validated == null) {
+            throw new Error('Validation of rule params failed');
+          }
+          return validated;
+        },
+      },
     },
     producer: SERVER_APP_ID,
+    minimumLicenseRequired: 'basic',
     async executor({
       previousStartedAt,
       startedAt,
@@ -74,55 +109,23 @@ export const signalRulesAlertType = ({
       spaceId,
       updatedBy: updatedByUser,
     }) {
-      const {
-        anomalyThreshold,
-        from,
-        ruleId,
-        index,
-        filters,
-        language,
-        maxSignals,
-        meta,
-        machineLearningJobId,
-        outputIndex,
-        savedId,
-        query,
-        to,
-        threshold,
-        type,
-        exceptionsList,
-      } = params;
+      const { ruleId, maxSignals, meta, outputIndex, timestampOverride, type } = params;
+
       const searchAfterSize = Math.min(maxSignals, DEFAULT_SEARCH_AFTER_PAGE_SIZE);
       let hasError: boolean = false;
-      let result: SearchAfterAndBulkCreateReturnType = {
-        success: false,
-        bulkCreateTimes: [],
-        searchAfterTimes: [],
-        lastLookBackDate: null,
-        createdSignalsCount: 0,
-      };
+      let result = createSearchAfterReturnType();
       const ruleStatusClient = ruleStatusSavedObjectsClientFactory(services.savedObjectsClient);
       const ruleStatusService = await ruleStatusServiceFactory({
         alertId,
         ruleStatusClient,
       });
-      const savedObject = await services.savedObjectsClient.get<RuleAlertAttributes>(
-        'alert',
-        alertId
-      );
+
+      const savedObject = await services.savedObjectsClient.get<AlertAttributes>('alert', alertId);
       const {
         actions,
         name,
-        tags,
-        createdAt,
-        createdBy,
-        updatedBy,
-        enabled,
         schedule: { interval },
-        throttle,
-        params: ruleParams,
       } = savedObject.attributes;
-      const updatedAt = savedObject.updated_at ?? '';
       const refresh = actions.length ? 'wait_for' : false;
       const buildRuleMessage = buildRuleMessageFactory({
         id: alertId,
@@ -133,33 +136,78 @@ export const signalRulesAlertType = ({
 
       logger.debug(buildRuleMessage('[+] Starting Signal Rule execution'));
       logger.debug(buildRuleMessage(`interval: ${interval}`));
+      let wroteWarningStatus = false;
       await ruleStatusService.goingToRun();
 
-      const gap = getGapBetweenRuns({ previousStartedAt, interval, from, to });
-      if (gap != null && gap.asMilliseconds() > 0) {
-        const fromUnit = from[from.length - 1];
-        const { ratio } = getGapMaxCatchupRatio({
-          logger,
-          buildRuleMessage,
-          previousStartedAt,
-          ruleParamsFrom: from,
-          interval,
-          unit: fromUnit,
-        });
-        if (ratio && ratio >= MAX_RULE_GAP_RATIO) {
-          const gapString = gap.humanize();
-          const gapMessage = buildRuleMessage(
-            `${gapString} (${gap.asMilliseconds()}ms) has passed since last rule execution, and signals may have been missed.`,
-            'Consider increasing your look behind time or adding more Kibana instances.'
-          );
-          logger.warn(gapMessage);
+      // check if rule has permissions to access given index pattern
+      // move this collection of lines into a function in utils
+      // so that we can use it in create rules route, bulk, etc.
+      try {
+        if (!isMachineLearningParams(params)) {
+          const index = params.index;
+          const hasTimestampOverride = timestampOverride != null && !isEmpty(timestampOverride);
+          const inputIndices = await getInputIndex(services, version, index);
+          const [privileges, timestampFieldCaps] = await Promise.all([
+            checkPrivileges(services, inputIndices),
+            services.scopedClusterClient.asCurrentUser.fieldCaps({
+              index,
+              fields: hasTimestampOverride
+                ? ['@timestamp', timestampOverride as string]
+                : ['@timestamp'],
+              include_unmapped: true,
+            }),
+          ]);
 
-          hasError = true;
-          await ruleStatusService.error(gapMessage, { gap: gapString });
+          wroteWarningStatus = await flow(
+            () =>
+              tryCatch(
+                () =>
+                  hasReadIndexPrivileges(privileges, logger, buildRuleMessage, ruleStatusService),
+                toError
+              ),
+            chain((wroteStatus) =>
+              tryCatch(
+                () =>
+                  hasTimestampFields(
+                    wroteStatus,
+                    hasTimestampOverride ? (timestampOverride as string) : '@timestamp',
+                    name,
+                    timestampFieldCaps,
+                    inputIndices,
+                    ruleStatusService,
+                    logger,
+                    buildRuleMessage
+                  ),
+                toError
+              )
+            ),
+            toPromise
+          )();
         }
+      } catch (exc) {
+        logger.error(buildRuleMessage(`Check privileges failed to execute ${exc}`));
+      }
+      const { tuples, remainingGap } = getRuleRangeTuples({
+        logger,
+        previousStartedAt,
+        from: params.from,
+        to: params.to,
+        interval,
+        maxSignals,
+        buildRuleMessage,
+      });
+      if (remainingGap.asMilliseconds() > 0) {
+        const gapString = remainingGap.humanize();
+        const gapMessage = buildRuleMessage(
+          `${gapString} (${remainingGap.asMilliseconds()}ms) were not queried between this rule execution and the last execution, so signals may have been missed.`,
+          'Consider increasing your look behind time or adding more Kibana instances.'
+        );
+        logger.warn(gapMessage);
+        hasError = true;
+        await ruleStatusService.error(gapMessage, { gap: gapString });
       }
       try {
-        const { listClient, exceptionsClient } = await getListsClient({
+        const { listClient, exceptionsClient } = getListsClient({
           services,
           updatedByUser,
           spaceId,
@@ -168,195 +216,96 @@ export const signalRulesAlertType = ({
         });
         const exceptionItems = await getExceptions({
           client: exceptionsClient,
-          lists: exceptionsList,
+          lists: params.exceptionsList ?? [],
         });
-
         if (isMlRule(type)) {
-          if (ml == null) {
-            throw new Error('ML plugin unavailable during rule execution');
-          }
-          if (machineLearningJobId == null || anomalyThreshold == null) {
-            throw new Error(
-              [
-                'Machine learning rule is missing job id and/or anomaly threshold:',
-                `job id: "${machineLearningJobId}"`,
-                `anomaly threshold: "${anomalyThreshold}"`,
-              ].join(' ')
-            );
-          }
-
-          const scopedClusterClient = services.getLegacyScopedClusterClient(ml.mlClient);
-          // Using fake KibanaRequest as it is needed to satisfy the ML Services API, but can be empty as it is
-          // currently unused by the jobsSummary function.
-          const summaryJobs = await (
-            await ml.jobServiceProvider(scopedClusterClient, ({} as unknown) as KibanaRequest)
-          ).jobsSummary([machineLearningJobId]);
-          const jobSummary = summaryJobs.find((job) => job.id === machineLearningJobId);
-
-          if (jobSummary == null || !isJobStarted(jobSummary.jobState, jobSummary.datafeedState)) {
-            const errorMessage = buildRuleMessage(
-              'Machine learning job is not started:',
-              `job id: "${machineLearningJobId}"`,
-              `job status: "${jobSummary?.jobState}"`,
-              `datafeed status: "${jobSummary?.datafeedState}"`
-            );
-            logger.warn(errorMessage);
-            hasError = true;
-            await ruleStatusService.error(errorMessage);
-          }
-
-          const anomalyResults = await findMlSignals({
+          const mlRuleSO = asTypeSpecificSO(savedObject, machineLearningRuleParams);
+          result = await mlExecutor({
+            rule: mlRuleSO,
             ml,
-            clusterClient: scopedClusterClient,
-            // Using fake KibanaRequest as it is needed to satisfy the ML Services API, but can be empty as it is
-            // currently unused by the mlAnomalySearch function.
-            request: ({} as unknown) as KibanaRequest,
-            jobId: machineLearningJobId,
-            anomalyThreshold,
-            from,
-            to,
-          });
-
-          const anomalyCount = anomalyResults.hits.hits.length;
-          if (anomalyCount) {
-            logger.info(buildRuleMessage(`Found ${anomalyCount} signals from ML anomalies.`));
-          }
-
-          const { success, bulkCreateDuration, createdItemsCount } = await bulkCreateMlSignals({
-            actions,
-            throttle,
-            someResult: anomalyResults,
-            ruleParams: params,
-            services,
-            logger,
-            id: alertId,
-            signalsIndex: outputIndex,
-            name,
-            createdBy,
-            createdAt,
-            updatedBy,
-            updatedAt,
-            interval,
-            enabled,
-            refresh,
-            tags,
-          });
-          result.success = success;
-          result.createdSignalsCount = createdItemsCount;
-          if (bulkCreateDuration) {
-            result.bulkCreateTimes.push(bulkCreateDuration);
-          }
-        } else if (type === 'threshold' && threshold) {
-          const inputIndex = await getInputIndex(services, version, index);
-          const esFilter = await getFilter({
-            type,
-            filters,
-            language,
-            query,
-            savedId,
-            services,
-            index: inputIndex,
-            lists: exceptionItems ?? [],
-          });
-
-          const { searchResult: thresholdResults } = await findThresholdSignals({
-            inputIndexPattern: inputIndex,
-            from,
-            to,
-            services,
-            logger,
-            filter: esFilter,
-            threshold,
-          });
-
-          const {
-            success,
-            bulkCreateDuration,
-            createdItemsCount,
-          } = await bulkCreateThresholdSignals({
-            actions,
-            throttle,
-            someResult: thresholdResults,
-            ruleParams: params,
-            filter: esFilter,
-            services,
-            logger,
-            id: alertId,
-            inputIndexPattern: inputIndex,
-            signalsIndex: outputIndex,
-            startedAt,
-            name,
-            createdBy,
-            createdAt,
-            updatedBy,
-            updatedAt,
-            interval,
-            enabled,
-            refresh,
-            tags,
-          });
-          result.success = success;
-          result.createdSignalsCount = createdItemsCount;
-          if (bulkCreateDuration) {
-            result.bulkCreateTimes.push(bulkCreateDuration);
-          }
-        } else {
-          const inputIndex = await getInputIndex(services, version, index);
-          const esFilter = await getFilter({
-            type,
-            filters,
-            language,
-            query,
-            savedId,
-            services,
-            index: inputIndex,
-            lists: exceptionItems ?? [],
-          });
-
-          result = await searchAfterAndBulkCreate({
-            gap,
-            previousStartedAt,
             listClient,
-            exceptionsList: exceptionItems ?? [],
-            ruleParams: params,
+            exceptionItems,
+            ruleStatusService,
             services,
             logger,
-            id: alertId,
-            inputIndexPattern: inputIndex,
-            signalsIndex: outputIndex,
-            filter: esFilter,
-            actions,
-            name,
-            createdBy,
-            createdAt,
-            updatedBy,
-            updatedAt,
-            interval,
-            enabled,
-            pageSize: searchAfterSize,
             refresh,
-            tags,
-            throttle,
             buildRuleMessage,
           });
+        } else if (isThresholdRule(type)) {
+          const thresholdRuleSO = asTypeSpecificSO(savedObject, thresholdRuleParams);
+          result = await thresholdExecutor({
+            rule: thresholdRuleSO,
+            tuples,
+            exceptionItems,
+            ruleStatusService,
+            services,
+            version,
+            logger,
+            refresh,
+            buildRuleMessage,
+            startedAt,
+          });
+        } else if (isThreatMatchRule(type)) {
+          const threatRuleSO = asTypeSpecificSO(savedObject, threatRuleParams);
+          result = await threatMatchExecutor({
+            rule: threatRuleSO,
+            tuples,
+            listClient,
+            exceptionItems,
+            services,
+            version,
+            searchAfterSize,
+            logger,
+            refresh,
+            eventsTelemetry,
+            buildRuleMessage,
+          });
+        } else if (isQueryRule(type)) {
+          const queryRuleSO = validateQueryRuleTypes(savedObject);
+          result = await queryExecutor({
+            rule: queryRuleSO,
+            tuples,
+            listClient,
+            exceptionItems,
+            services,
+            version,
+            searchAfterSize,
+            logger,
+            refresh,
+            eventsTelemetry,
+            buildRuleMessage,
+          });
+        } else if (isEqlRule(type)) {
+          const eqlRuleSO = asTypeSpecificSO(savedObject, eqlRuleParams);
+          result = await eqlExecutor({
+            rule: eqlRuleSO,
+            exceptionItems,
+            ruleStatusService,
+            services,
+            version,
+            searchAfterSize,
+            logger,
+            refresh,
+          });
+        } else {
+          throw new Error(`unknown rule type ${type}`);
         }
-
         if (result.success) {
           if (actions.length) {
             const notificationRuleParams: NotificationRuleTypeParams = {
-              ...ruleParams,
+              ...params,
               name,
               id: savedObject.id,
             };
 
             const fromInMs = parseScheduleDates(`now-${interval}`)?.format('x');
             const toInMs = parseScheduleDates('now')?.format('x');
-
             const resultsLink = getNotificationResultsLink({
               from: fromInMs,
               to: toInMs,
               id: savedObject.id,
-              kibanaSiemAppUrl: (meta as { kibana_siem_app_url?: string }).kibana_siem_app_url,
+              kibanaSiemAppUrl: (meta as { kibana_siem_app_url?: string } | undefined)
+                ?.kibana_siem_app_url,
             });
 
             logger.info(
@@ -368,6 +317,7 @@ export const signalRulesAlertType = ({
               scheduleNotificationActions({
                 alertInstance,
                 signalsCount: result.createdSignalsCount,
+                signals: result.createdSignals,
                 resultsLink,
                 ruleParams: notificationRuleParams,
               });
@@ -380,16 +330,32 @@ export const signalRulesAlertType = ({
               `[+] Finished indexing ${result.createdSignalsCount} signals into ${outputIndex}`
             )
           );
-          if (!hasError) {
+          if (!hasError && !wroteWarningStatus && !result.warning) {
             await ruleStatusService.success('succeeded', {
               bulkCreateTimeDurations: result.bulkCreateTimes,
               searchAfterTimeDurations: result.searchAfterTimes,
               lastLookBackDate: result.lastLookBackDate?.toISOString(),
             });
           }
+
+          // adding this log line so we can get some information from cloud
+          logger.info(
+            buildRuleMessage(
+              `[+] Finished indexing ${result.createdSignalsCount}  ${
+                !isEmpty(result.totalToFromTuples)
+                  ? `signals searched between date ranges ${JSON.stringify(
+                      result.totalToFromTuples,
+                      null,
+                      2
+                    )}`
+                  : ''
+              }`
+            )
+          );
         } else {
           const errorMessage = buildRuleMessage(
-            'Bulk Indexing of signals failed. Check logs for further details.'
+            'Bulk Indexing of signals failed:',
+            result.errors.join()
           );
           logger.error(errorMessage);
           await ruleStatusService.error(errorMessage, {
@@ -412,6 +378,41 @@ export const signalRulesAlertType = ({
           lastLookBackDate: result.lastLookBackDate?.toISOString(),
         });
       }
+    },
+  };
+};
+
+const validateQueryRuleTypes = (ruleSO: SavedObject<AlertAttributes>) => {
+  if (ruleSO.attributes.params.type === 'query') {
+    return asTypeSpecificSO(ruleSO, queryRuleParams);
+  } else {
+    return asTypeSpecificSO(ruleSO, savedQueryRuleParams);
+  }
+};
+
+/**
+ * This function takes a generic rule SavedObject and a type-specific schema for the rule params
+ * and validates the SavedObject params against the schema. If they validate, it returns a SavedObject
+ * where the params have been replaced with the validated params. This eliminates the need for logic that
+ * checks if the required type specific fields actually exist on the SO and prevents rule executors from
+ * accessing fields that only exist on other rule types.
+ *
+ * @param ruleSO SavedObject typed as an object with all fields from all different rule types
+ * @param schema io-ts schema for the specific rule type the SavedObject claims to be
+ */
+export const asTypeSpecificSO = <T extends t.Mixed>(
+  ruleSO: SavedObject<AlertAttributes>,
+  schema: T
+) => {
+  const [validated, errors] = validateNonExact(ruleSO.attributes.params, schema);
+  if (validated == null || errors != null) {
+    throw new Error(`Rule attempted to execute with invalid params: ${errors}`);
+  }
+  return {
+    ...ruleSO,
+    attributes: {
+      ...ruleSO.attributes,
+      params: validated,
     },
   };
 };

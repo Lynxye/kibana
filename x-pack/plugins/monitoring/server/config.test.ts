@@ -1,16 +1,27 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
-import { createConfig, configSchema } from './config';
-jest.mock('fs', () => {
-  const original = jest.requireActual('fs');
 
-  return {
-    ...original,
-    readFileSync: jest.fn().mockImplementation((path: string) => `contents-of-${path}`),
-  };
+import fs from 'fs';
+import { when } from 'jest-when';
+
+import { createConfig, configSchema } from './config';
+
+const MOCKED_PATHS = [
+  '/proc/self/cgroup',
+  'packages/kbn-dev-utils/certs/ca.crt',
+  'packages/kbn-dev-utils/certs/elasticsearch.crt',
+  'packages/kbn-dev-utils/certs/elasticsearch.key',
+];
+
+beforeEach(() => {
+  const spy = jest.spyOn(fs, 'readFileSync').mockImplementation();
+  MOCKED_PATHS.forEach((file) =>
+    when(spy).calledWith(file, 'utf8').mockReturnValue(`contents-of-${file}`)
+  );
 });
 
 describe('config schema', () => {
@@ -21,6 +32,9 @@ describe('config schema', () => {
           "interval": "10s",
         },
         "cluster_alerts": Object {
+          "allowedSpaces": Array [
+            "default",
+          ],
           "email_notifications": Object {
             "email_address": "",
             "enabled": true,
@@ -47,6 +61,9 @@ describe('config schema', () => {
             "enabled": true,
           },
           "container": Object {
+            "apm": Object {
+              "enabled": false,
+            },
             "elasticsearch": Object {
               "enabled": false,
             },
@@ -64,7 +81,6 @@ describe('config schema', () => {
             "logFetchCount": 10,
             "logQueries": false,
             "pingTimeout": "PT30S",
-            "preserveHost": true,
             "requestHeadersWhitelist": Array [
               "authorization",
             ],
@@ -79,13 +95,15 @@ describe('config schema', () => {
               "truststore": Object {},
               "verificationMode": "full",
             },
-            "startupTimeout": "PT5S",
           },
           "enabled": true,
           "logs": Object {
             "index": "filebeat-*",
           },
           "max_bucket_size": 10000,
+          "metricbeat": Object {
+            "index": "metricbeat-*",
+          },
           "min_interval_seconds": 10,
           "show_license_expiration": true,
         },

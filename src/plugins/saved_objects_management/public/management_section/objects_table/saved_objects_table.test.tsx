@@ -1,20 +1,9 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import {
@@ -30,7 +19,7 @@ import {
 import React from 'react';
 import { Query } from '@elastic/eui';
 import { ShallowWrapper } from 'enzyme';
-import { shallowWithI18nProvider } from 'test_utils/enzyme_helpers';
+import { shallowWithI18nProvider } from '@kbn/test/jest';
 import {
   httpServiceMock,
   overlayServiceMock,
@@ -41,6 +30,7 @@ import {
 import { dataPluginMock } from '../../../../data/public/mocks';
 import { serviceRegistryMock } from '../../services/service_registry.mock';
 import { actionServiceMock } from '../../services/action_service.mock';
+import { columnServiceMock } from '../../services/column_service.mock';
 import {
   SavedObjectsTable,
   SavedObjectsTableProps,
@@ -134,6 +124,7 @@ describe('SavedObjectsTable', () => {
       allowedTypes,
       serviceRegistry: serviceRegistryMock.create(),
       actionRegistry: actionServiceMock.createStart(),
+      columnRegistry: columnServiceMock.createStart(),
       savedObjectsClient: savedObjects.client,
       indexPatterns: dataPluginMock.createStartContract().indexPatterns,
       http,
@@ -323,7 +314,7 @@ describe('SavedObjectsTable', () => {
       (component.find('Header') as any).prop('onExportAll')();
       component.update();
 
-      expect(component.find('EuiModal')).toMatchSnapshot();
+      expect(component.find('ExportModal')).toMatchSnapshot();
     });
 
     it('should export all', async () => {
@@ -340,12 +331,11 @@ describe('SavedObjectsTable', () => {
 
       await component.instance().onExportAll();
 
-      expect(fetchExportByTypeAndSearchMock).toHaveBeenCalledWith(
+      expect(fetchExportByTypeAndSearchMock).toHaveBeenCalledWith({
         http,
-        allowedTypes,
-        undefined,
-        true
-      );
+        types: allowedTypes,
+        includeReferencesDeep: true,
+      });
       expect(saveAsMock).toHaveBeenCalledWith(blob, 'export.ndjson');
       expect(notifications.toasts.addSuccess).toHaveBeenCalledWith({
         title: 'Your file is downloading in the background',
@@ -370,12 +360,12 @@ describe('SavedObjectsTable', () => {
 
       await component.instance().onExportAll();
 
-      expect(fetchExportByTypeAndSearchMock).toHaveBeenCalledWith(
+      expect(fetchExportByTypeAndSearchMock).toHaveBeenCalledWith({
         http,
-        allowedTypes,
-        'test*',
-        true
-      );
+        types: allowedTypes,
+        search: 'test*',
+        includeReferencesDeep: true,
+      });
       expect(saveAsMock).toHaveBeenCalledWith(blob, 'export.ndjson');
       expect(notifications.toasts.addSuccess).toHaveBeenCalledWith({
         title: 'Your file is downloading in the background',
@@ -489,8 +479,8 @@ describe('SavedObjectsTable', () => {
       const component = shallowRender();
 
       const mockSelectedSavedObjects = [
-        { id: '1', type: 'index-pattern' },
-        { id: '3', type: 'dashboard' },
+        { id: '1', type: 'index-pattern', meta: {} },
+        { id: '3', type: 'dashboard', meta: {} },
       ] as SavedObjectWithMetadata[];
 
       // Ensure all promises resolve
@@ -503,13 +493,13 @@ describe('SavedObjectsTable', () => {
       await component.instance().onDelete();
       component.update();
 
-      expect(component.find('EuiConfirmModal')).toMatchSnapshot();
+      expect(component.find('DeleteConfirmModal')).toMatchSnapshot();
     });
 
     it('should delete selected objects', async () => {
       const mockSelectedSavedObjects = [
-        { id: '1', type: 'index-pattern' },
-        { id: '3', type: 'dashboard' },
+        { id: '1', type: 'index-pattern', meta: {} },
+        { id: '3', type: 'dashboard', meta: {} },
       ] as SavedObjectWithMetadata[];
 
       const mockSavedObjects = mockSelectedSavedObjects.map((obj) => ({
@@ -539,16 +529,56 @@ describe('SavedObjectsTable', () => {
       await component.instance().delete();
 
       expect(defaultProps.indexPatterns.clearCache).toHaveBeenCalled();
-      expect(mockSavedObjectsClient.bulkGet).toHaveBeenCalledWith(mockSelectedSavedObjects);
       expect(mockSavedObjectsClient.delete).toHaveBeenCalledWith(
         mockSavedObjects[0].type,
-        mockSavedObjects[0].id
+        mockSavedObjects[0].id,
+        { force: true }
       );
       expect(mockSavedObjectsClient.delete).toHaveBeenCalledWith(
         mockSavedObjects[1].type,
-        mockSavedObjects[1].id
+        mockSavedObjects[1].id,
+        { force: true }
       );
       expect(component.state('selectedSavedObjects').length).toBe(0);
+    });
+
+    it('should not delete hidden selected objects', async () => {
+      const mockSelectedSavedObjects = [
+        { id: '1', type: 'index-pattern', meta: {} },
+        { id: '3', type: 'hidden-type', meta: { hiddenType: true } },
+      ] as SavedObjectWithMetadata[];
+
+      const mockSavedObjects = mockSelectedSavedObjects.map((obj) => ({
+        id: obj.id,
+        type: obj.type,
+        source: {},
+      }));
+
+      const mockSavedObjectsClient = {
+        ...defaultProps.savedObjectsClient,
+        bulkGet: jest.fn().mockImplementation(() => ({
+          savedObjects: mockSavedObjects,
+        })),
+        delete: jest.fn(),
+      };
+
+      const component = shallowRender({ savedObjectsClient: mockSavedObjectsClient });
+
+      // Ensure all promises resolve
+      await new Promise((resolve) => process.nextTick(resolve));
+      // Ensure the state changes are reflected
+      component.update();
+
+      // Set some as selected
+      component.instance().onSelectionChanged(mockSelectedSavedObjects);
+
+      await component.instance().delete();
+
+      expect(defaultProps.indexPatterns.clearCache).toHaveBeenCalled();
+      expect(mockSavedObjectsClient.delete).toHaveBeenCalledTimes(1);
+      expect(mockSavedObjectsClient.delete).toHaveBeenCalledWith('index-pattern', '1', {
+        force: true,
+      });
     });
   });
 });

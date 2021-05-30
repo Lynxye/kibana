@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React from 'react';
@@ -27,6 +28,7 @@ export const LinkToLogsPage: React.FC<LinkToPageProps> = (props) => {
         path={`${props.match.url}/:sourceId?/:nodeType(${ITEM_TYPES})-logs/:nodeId`}
         component={RedirectToNodeLogs}
       />
+      <Route path={`${props.match.url}/:sourceId?/logs`} component={RedirectToLogs} />
       <Route path={`${props.match.url}/:sourceId?`} component={RedirectToLogs} />
       <Redirect to="/" />
     </Switch>

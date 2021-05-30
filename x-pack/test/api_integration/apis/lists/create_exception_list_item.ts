@@ -1,12 +1,13 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import expect from '@kbn/expect/expect.js';
+import { ENDPOINT_LIST_ID } from '@kbn/securitysolution-list-constants';
 import { FtrProviderContext } from '../../ftr_provider_context';
-import { ENDPOINT_LIST_ID } from '../../../../plugins/lists/common';
 
 export default function ({ getService }: FtrProviderContext) {
   const esArchiver = getService('esArchiver');
@@ -40,9 +41,11 @@ export default function ({ getService }: FtrProviderContext) {
         .set('kbn-xsrf', 'xxx')
         .send(badItem)
         .expect(400);
-      expect(body.message).to.eql(
-        'cannot add exception item with entry of type "list" to endpoint exception list'
-      );
+      expect(body.message).to.eql([
+        'Invalid value "list" supplied to "type"',
+        'Invalid value "undefined" supplied to "value"',
+        'Invalid value "undefined" supplied to "entries"',
+      ]);
     });
 
     it('should return a 400 if endpoint exception entry has disallowed field', async () => {

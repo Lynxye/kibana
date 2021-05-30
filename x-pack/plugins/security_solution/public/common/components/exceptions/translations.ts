@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
@@ -45,6 +46,18 @@ export const CREATED_BY = i18n.translate('xpack.securitySolution.exceptions.crea
   defaultMessage: 'Created by',
 });
 
+export const NAME = i18n.translate('xpack.securitySolution.exceptions.nameLabel', {
+  defaultMessage: 'Name',
+});
+
+export const DATE_MODIFIED = i18n.translate('xpack.securitySolution.exceptions.dateModifiedLabel', {
+  defaultMessage: 'Date modified',
+});
+
+export const MODIFIED_BY = i18n.translate('xpack.securitySolution.exceptions.modifiedByLabel', {
+  defaultMessage: 'Modified by',
+});
+
 export const COMMENT = i18n.translate('xpack.securitySolution.exceptions.commentLabel', {
   defaultMessage: 'Comment',
 });
@@ -57,6 +70,13 @@ export const OPERATING_SYSTEM = i18n.translate(
   'xpack.securitySolution.exceptions.operatingSystemLabel',
   {
     defaultMessage: 'OS',
+  }
+);
+
+export const OPERATING_SYSTEM_LABEL = i18n.translate(
+  'xpack.securitySolution.exceptions.operatingSystemFullLabel',
+  {
+    defaultMessage: 'Operating System',
   }
 );
 
@@ -188,5 +208,75 @@ export const TOTAL_ITEMS_FETCH_ERROR = i18n.translate(
   'xpack.securitySolution.exceptions.viewer.fetchTotalsError',
   {
     defaultMessage: 'Error getting exception item totals',
+  }
+);
+
+export const CLEAR_EXCEPTIONS_LABEL = i18n.translate(
+  'xpack.securitySolution.exceptions.clearExceptionsLabel',
+  {
+    defaultMessage: 'Remove Exception List',
+  }
+);
+
+export const ADD_EXCEPTION_FETCH_404_ERROR = (listId: string) =>
+  i18n.translate('xpack.securitySolution.exceptions.fetch404Error', {
+    values: { listId },
+    defaultMessage:
+      'The associated exception list ({listId}) no longer exists. Please remove the missing exception list to add additional exceptions to the detection rule.',
+  });
+
+export const ADD_EXCEPTION_FETCH_ERROR = i18n.translate(
+  'xpack.securitySolution.exceptions.fetchError',
+  {
+    defaultMessage: 'Error fetching exception list',
+  }
+);
+
+export const ERROR = i18n.translate('xpack.securitySolution.exceptions.errorLabel', {
+  defaultMessage: 'Error',
+});
+
+export const CANCEL = i18n.translate('xpack.securitySolution.exceptions.cancelLabel', {
+  defaultMessage: 'Cancel',
+});
+
+export const MODAL_ERROR_ACCORDION_TEXT = i18n.translate(
+  'xpack.securitySolution.exceptions.modalErrorAccordionText',
+  {
+    defaultMessage: 'Show rule reference information:',
+  }
+);
+
+export const DISSASOCIATE_LIST_SUCCESS = (id: string) =>
+  i18n.translate('xpack.securitySolution.exceptions.dissasociateListSuccessText', {
+    values: { id },
+    defaultMessage: 'Exception list ({id}) has successfully been removed',
+  });
+
+export const DISSASOCIATE_EXCEPTION_LIST_ERROR = i18n.translate(
+  'xpack.securitySolution.exceptions.dissasociateExceptionListError',
+  {
+    defaultMessage: 'Failed to remove exception list',
+  }
+);
+
+export const OPERATING_SYSTEM_WINDOWS = i18n.translate(
+  'xpack.securitySolution.exceptions.operatingSystemWindows',
+  {
+    defaultMessage: 'Windows',
+  }
+);
+
+export const OPERATING_SYSTEM_MAC = i18n.translate(
+  'xpack.securitySolution.exceptions.operatingSystemMac',
+  {
+    defaultMessage: 'macOS',
+  }
+);
+
+export const OPERATING_SYSTEM_LINUX = i18n.translate(
+  'xpack.securitySolution.exceptions.operatingSystemLinux',
+  {
+    defaultMessage: 'Linux',
   }
 );

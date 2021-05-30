@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { Position } from '@elastic/charts';
@@ -12,9 +13,9 @@ import uuid from 'uuid';
 import { DEFAULT_NUMBER_FORMAT, APP_ID } from '../../../../common/constants';
 import { SHOWING, UNIT } from '../../../common/components/events_viewer/translations';
 import { getTabsOnHostsUrl } from '../../../common/components/link_to/redirect_to_hosts';
-import { MatrixHistogramContainer } from '../../../common/components/matrix_histogram';
+import { MatrixHistogram } from '../../../common/components/matrix_histogram';
 import {
-  MatrixHisrogramConfigs,
+  MatrixHistogramConfigs,
   MatrixHistogramOption,
 } from '../../../common/components/matrix_histogram/types';
 import { eventsStackByOptions } from '../../../hosts/pages/navigation';
@@ -27,7 +28,7 @@ import {
   IIndexPattern,
   Query,
 } from '../../../../../../../src/plugins/data/public';
-import { HostsTableType, HostsType } from '../../../hosts/store/model';
+import { HostsTableType } from '../../../hosts/store/model';
 import { InputsModelId } from '../../../common/store/inputs/constants';
 import { GlobalTimeArgs } from '../../../common/containers/use_global_time';
 
@@ -36,23 +37,22 @@ import { SecurityPageName } from '../../../app/types';
 import { useFormatUrl } from '../../../common/components/link_to';
 import { LinkButton } from '../../../common/components/links';
 
-const NO_FILTERS: Filter[] = [];
-const DEFAULT_QUERY: Query = { query: '', language: 'kuery' };
 const DEFAULT_STACK_BY = 'event.dataset';
 
 const ID = 'eventsByDatasetOverview';
 
 interface Props extends Pick<GlobalTimeArgs, 'from' | 'to' | 'deleteQuery' | 'setQuery'> {
   combinedQueries?: string;
-  filters?: Filter[];
+  filters: Filter[];
   headerChildren?: React.ReactNode;
   indexPattern: IIndexPattern;
-  indexToAdd?: string[] | null;
+  indexNames: string[];
   onlyField?: string;
-  query?: Query;
+  query: Query;
   setAbsoluteRangeDatePickerTarget?: InputsModelId;
   showSpacer?: boolean;
   timelineId?: string;
+  toggleTopN?: () => void;
 }
 
 const getHistogramOption = (fieldName: string): MatrixHistogramOption => ({
@@ -63,18 +63,19 @@ const getHistogramOption = (fieldName: string): MatrixHistogramOption => ({
 const EventsByDatasetComponent: React.FC<Props> = ({
   combinedQueries,
   deleteQuery,
-  filters = NO_FILTERS,
+  filters,
   from,
   headerChildren,
   indexPattern,
-  indexToAdd,
+  indexNames,
   onlyField,
-  query = DEFAULT_QUERY,
+  query,
   setAbsoluteRangeDatePickerTarget,
   setQuery,
   showSpacer = true,
   timelineId,
   to,
+  toggleTopN,
 }) => {
   // create a unique, but stable (across re-renders) query id
   const uniqueQueryId = useMemo(() => `${ID}-${uuid.v4()}`, []);
@@ -127,7 +128,7 @@ const EventsByDatasetComponent: React.FC<Props> = ({
     [combinedQueries, kibana, indexPattern, query, filters]
   );
 
-  const eventsByDatasetHistogramConfigs: MatrixHisrogramConfigs = useMemo(
+  const eventsByDatasetHistogramConfigs: MatrixHistogramConfigs = useMemo(
     () => ({
       ...histogramConfigs,
       stackByOptions:
@@ -159,19 +160,18 @@ const EventsByDatasetComponent: React.FC<Props> = ({
   }, [onlyField, headerChildren, eventsCountViewEventsButton]);
 
   return (
-    <MatrixHistogramContainer
+    <MatrixHistogram
       endDate={to}
       filterQuery={filterQuery}
       headerChildren={headerContent}
       id={uniqueQueryId}
-      indexToAdd={indexToAdd}
+      indexNames={indexNames}
+      onError={toggleTopN}
       setAbsoluteRangeDatePickerTarget={setAbsoluteRangeDatePickerTarget}
       setQuery={setQuery}
       showSpacer={showSpacer}
-      sourceId="default"
       startDate={from}
       timelineId={timelineId}
-      type={HostsType.page}
       {...eventsByDatasetHistogramConfigs}
       title={onlyField != null ? i18n.TOP(onlyField) : eventsByDatasetHistogramConfigs.title}
     />

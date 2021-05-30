@@ -1,20 +1,9 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import { BehaviorSubject } from 'rxjs';
@@ -31,6 +20,7 @@ import {
   ScopedHistory,
 } from 'kibana/public';
 
+import { PresentationUtilPluginStart } from '../../../../src/plugins/presentation_util/public';
 import {
   Storage,
   createKbnUrlTracker,
@@ -39,8 +29,8 @@ import {
 } from '../../kibana_utils/public';
 import { DataPublicPluginStart, DataPublicPluginSetup, esFilters } from '../../data/public';
 import { NavigationPublicPluginStart as NavigationStart } from '../../navigation/public';
-import { SharePluginStart } from '../../share/public';
-import { KibanaLegacySetup, KibanaLegacyStart } from '../../kibana_legacy/public';
+import { SharePluginStart, SharePluginSetup } from '../../share/public';
+import { UrlForwardingSetup, UrlForwardingStart } from '../../url_forwarding/public';
 import { VisualizationsStart } from '../../visualizations/public';
 import { VisualizeConstants } from './application/visualize_constants';
 import { FeatureCatalogueCategory, HomePublicPluginSetup } from '../../home/public';
@@ -48,6 +38,10 @@ import { VisualizeServices } from './application/types';
 import { DEFAULT_APP_CATEGORIES } from '../../../core/public';
 import { SavedObjectsStart } from '../../saved_objects/public';
 import { EmbeddableStart } from '../../embeddable/public';
+import { DashboardStart } from '../../dashboard/public';
+import type { SavedObjectTaggingOssPluginStart } from '../../saved_objects_tagging_oss/public';
+import { setVisEditorsRegistry, setUISettings } from './services';
+import { createVisEditorsRegistry, VisEditorsRegistry } from './vis_editors_registry';
 
 export interface VisualizePluginStartDependencies {
   data: DataPublicPluginStart;
@@ -55,32 +49,44 @@ export interface VisualizePluginStartDependencies {
   share?: SharePluginStart;
   visualizations: VisualizationsStart;
   embeddable: EmbeddableStart;
-  kibanaLegacy: KibanaLegacyStart;
+  urlForwarding: UrlForwardingStart;
   savedObjects: SavedObjectsStart;
+  dashboard: DashboardStart;
+  savedObjectsTaggingOss?: SavedObjectTaggingOssPluginStart;
+  presentationUtil: PresentationUtilPluginStart;
 }
 
 export interface VisualizePluginSetupDependencies {
   home?: HomePublicPluginSetup;
-  kibanaLegacy: KibanaLegacySetup;
+  urlForwarding: UrlForwardingSetup;
   data: DataPublicPluginSetup;
+  share?: SharePluginSetup;
 }
 
-export interface FeatureFlagConfig {
-  showNewVisualizeFlow: boolean;
+export interface VisualizePluginSetup {
+  visEditorsRegistry: VisEditorsRegistry;
 }
 
 export class VisualizePlugin
   implements
-    Plugin<void, void, VisualizePluginSetupDependencies, VisualizePluginStartDependencies> {
+    Plugin<
+      VisualizePluginSetup,
+      void,
+      VisualizePluginSetupDependencies,
+      VisualizePluginStartDependencies
+    > {
   private appStateUpdater = new BehaviorSubject<AppUpdater>(() => ({}));
   private stopUrlTracking: (() => void) | undefined = undefined;
   private currentHistory: ScopedHistory | undefined = undefined;
+  private isLinkedToOriginatingApp: (() => boolean) | undefined = undefined;
+
+  private readonly visEditorsRegistry = createVisEditorsRegistry();
 
   constructor(private initializerContext: PluginInitializerContext) {}
 
-  public async setup(
+  public setup(
     core: CoreSetup<VisualizePluginStartDependencies>,
-    { home, kibanaLegacy, data }: VisualizePluginSetupDependencies
+    { home, urlForwarding, data }: VisualizePluginSetupDependencies
   ) {
     const {
       appMounted,
@@ -89,7 +95,7 @@ export class VisualizePlugin
       setActiveUrl,
       restorePreviousUrl,
     } = createKbnUrlTracker({
-      baseUrl: core.http.basePath.prepend('/app/visualize'),
+      baseUrl: core.http.basePath.prepend(VisualizeConstants.VISUALIZE_BASE_PATH),
       defaultSubUrl: '#/',
       storageKey: `lastUrl:${core.http.basePath.get()}:visualize`,
       navLinkUpdater$: this.appStateUpdater,
@@ -109,16 +115,24 @@ export class VisualizePlugin
         },
       ],
       getHistory: () => this.currentHistory!,
+      onBeforeNavLinkSaved: (urlToSave: string) => {
+        if (this.isLinkedToOriginatingApp?.()) {
+          return core.http.basePath.prepend(VisualizeConstants.VISUALIZE_BASE_PATH);
+        }
+        return urlToSave;
+      },
     });
     this.stopUrlTracking = () => {
       stopUrlTracker();
     };
 
+    setUISettings(core.uiSettings);
+
     core.application.register({
-      id: 'visualize',
-      title: 'Visualize',
+      id: VisualizeConstants.APP_ID,
+      title: 'Visualize Library',
       order: 8000,
-      euiIconType: 'visualizeApp',
+      euiIconType: 'logoKibana',
       defaultPath: '#/',
       category: DEFAULT_APP_CATEGORIES.kibana,
       updater$: this.appStateUpdater.asObservable(),
@@ -126,6 +140,15 @@ export class VisualizePlugin
       mount: async (params: AppMountParameters) => {
         const [coreStart, pluginsStart] = await core.getStartServices();
         this.currentHistory = params.history;
+
+        // allows the urlTracker to only save URLs that are not linked to an originatingApp
+        this.isLinkedToOriginatingApp = () => {
+          return Boolean(
+            pluginsStart.embeddable
+              .getStateTransfer()
+              .getIncomingEditorState(VisualizeConstants.APP_ID)?.originatingApp
+          );
+        };
 
         // make sure the index pattern list is up to date
         pluginsStart.data.indexPatterns.clearCache();
@@ -140,7 +163,6 @@ export class VisualizePlugin
         const unlistenParentHistory = params.history.listen(() => {
           window.dispatchEvent(new HashChangeEvent('hashchange'));
         });
-
         /**
          * current implementation uses 2 history objects:
          * 1. the hash history (used for the react hash router)
@@ -148,7 +170,6 @@ export class VisualizePlugin
          * this should be replaced to use only scoped history after moving legacy apps to browser routing
          */
         const history = createHashHistory();
-
         const services: VisualizeServices = {
           ...coreStart,
           history,
@@ -157,7 +178,7 @@ export class VisualizePlugin
             useHash: coreStart.uiSettings.get('state:storeInSessionStorage'),
             ...withNotifyOnErrors(coreStart.notifications.toasts),
           }),
-          kibanaLegacy: pluginsStart.kibanaLegacy,
+          urlForwarding: pluginsStart.urlForwarding,
           pluginInitializerContext: this.initializerContext,
           chrome: coreStart.chrome,
           data: pluginsStart.data,
@@ -167,21 +188,27 @@ export class VisualizePlugin
           share: pluginsStart.share,
           toastNotifications: coreStart.notifications.toasts,
           visualizeCapabilities: coreStart.application.capabilities.visualize,
+          dashboardCapabilities: coreStart.application.capabilities.dashboard,
           visualizations: pluginsStart.visualizations,
           embeddable: pluginsStart.embeddable,
+          stateTransferService: pluginsStart.embeddable.getStateTransfer(),
           setActiveUrl,
           createVisEmbeddableFromObject:
             pluginsStart.visualizations.__LEGACY.createVisEmbeddableFromObject,
           savedObjectsPublic: pluginsStart.savedObjects,
           scopedHistory: params.history,
           restorePreviousUrl,
-          featureFlagConfig: this.initializerContext.config.get<FeatureFlagConfig>(),
+          dashboard: pluginsStart.dashboard,
+          setHeaderActionMenu: params.setHeaderActionMenu,
+          savedObjectsTagging: pluginsStart.savedObjectsTaggingOss?.getTaggingApi(),
+          presentationUtil: pluginsStart.presentationUtil,
         };
 
         params.element.classList.add('visAppWrapper');
         const { renderApp } = await import('./application');
         const unmount = renderApp(params, services);
         return () => {
+          params.element.classList.remove('visAppWrapper');
           unlistenParentHistory();
           unmount();
           appUnMounted();
@@ -189,25 +216,31 @@ export class VisualizePlugin
       },
     });
 
-    kibanaLegacy.forwardApp('visualize', 'visualize');
+    urlForwarding.forwardApp('visualize', 'visualize');
 
     if (home) {
       home.featureCatalogue.register({
         id: 'visualize',
-        title: 'Visualize',
+        title: 'Visualize Library',
         description: i18n.translate('visualize.visualizeDescription', {
           defaultMessage:
             'Create visualizations and aggregate data stores in your Elasticsearch indices.',
         }),
         icon: 'visualizeApp',
         path: `/app/visualize#${VisualizeConstants.LANDING_PAGE_PATH}`,
-        showOnHomePage: true,
+        showOnHomePage: false,
         category: FeatureCatalogueCategory.DATA,
       });
     }
+
+    return {
+      visEditorsRegistry: this.visEditorsRegistry,
+    } as VisualizePluginSetup;
   }
 
-  public start(core: CoreStart, plugins: VisualizePluginStartDependencies) {}
+  public start(core: CoreStart, plugins: VisualizePluginStartDependencies) {
+    setVisEditorsRegistry(this.visEditorsRegistry);
+  }
 
   stop() {
     if (this.stopUrlTracking) {

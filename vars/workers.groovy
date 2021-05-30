@@ -9,6 +9,10 @@ def label(size) {
       return 'docker && linux && immutable'
     case 's-highmem':
       return 'docker && tests-s'
+    case 'm':
+      return 'docker && linux && immutable && gobld/machineType:n2-standard-8'
+    case 'm-highmem':
+      return 'docker && linux && immutable && gobld/machineType:n1-highmem-8'
     case 'l':
       return 'docker && tests-l'
     case 'xl':
@@ -16,7 +20,9 @@ def label(size) {
     case 'xl-highmem':
       return 'docker && tests-xl-highmem'
     case 'xxl':
-      return 'docker && tests-xxl'
+      return 'docker && tests-xxl && gobld/machineType:custom-64-270336'
+    case 'n2-standard-16':
+      return 'docker && linux && immutable && gobld/machineType:n2-standard-16'
   }
 
   error "unknown size '${size}'"
@@ -67,16 +73,18 @@ def base(Map params, Closure closure) {
     if (config.scm) {
       // Try to clone from Github up to 8 times, waiting 15 secs between attempts
       retryWithDelay(8, 15) {
-        checkout scm
+        kibanaCheckout()
       }
 
       dir("kibana") {
         checkoutInfo = getCheckoutInfo()
 
-        // use `checkoutInfo` as a flag to indicate that we've already reported the pending commit status
-        if (buildState.get('shouldSetCommitStatus') && !buildState.has('checkoutInfo')) {
+        if (!buildState.has('checkoutInfo')) {
           buildState.set('checkoutInfo', checkoutInfo)
-          githubCommitStatus.onStart()
+
+          if (buildState.get('shouldSetCommitStatus')) {
+            githubCommitStatus.onStart()
+          }
         }
       }
 
@@ -95,8 +103,10 @@ def base(Map params, Closure closure) {
       "PR_TARGET_BRANCH=${env.ghprbTargetBranch ?: ''}",
       "PR_AUTHOR=${env.ghprbPullAuthorLogin ?: ''}",
       "TEST_BROWSER_HEADLESS=1",
+      "GIT_COMMIT=${checkoutInfo.commit}",
       "GIT_BRANCH=${checkoutInfo.branch}",
       "TMPDIR=${env.WORKSPACE}/tmp", // For Chrome and anything else that respects it
+      "BUILD_TS_REFS_DISABLE=true", // no need to build ts refs in bootstrap
     ]) {
       withCredentials([
         string(credentialsId: 'vault-addr', variable: 'VAULT_ADDR'),
@@ -118,11 +128,11 @@ def base(Map params, Closure closure) {
 
 // Worker for ci processes. Extends the base worker and adds GCS artifact upload, error reporting, junit processing
 def ci(Map params, Closure closure) {
-  def config = [ramDisk: true, bootstrapped: true] + params
+  def config = [ramDisk: true, bootstrapped: true, runErrorReporter: true] + params
 
   return base(config) {
     kibanaPipeline.withGcsArtifactUpload(config.name) {
-      kibanaPipeline.withPostBuildReporting {
+      kibanaPipeline.withPostBuildReporting(config) {
         closure()
       }
     }
@@ -132,7 +142,7 @@ def ci(Map params, Closure closure) {
 // Worker for running the current intake jobs. Just runs a single script after bootstrap.
 def intake(jobName, String script) {
   return {
-    ci(name: jobName, size: 's-highmem', ramDisk: true) {
+    ci(name: jobName, size: 'm-highmem', ramDisk: true) {
       withEnv(["JOB=${jobName}"]) {
         kibanaPipeline.notifyOnError {
           runbld(script, "Execute ${jobName}")

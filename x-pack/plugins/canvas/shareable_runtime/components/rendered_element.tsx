@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { FC, PureComponent } from 'react';
@@ -12,7 +13,7 @@ import { Positionable } from '../../public/components/positionable/positionable'
 import { elementToShape } from '../../public/components/workpad_page/utils';
 import { CanvasRenderedElement } from '../types';
 import { CanvasShareableContext, useCanvasShareableState } from '../context';
-import { RendererSpec } from '../../types';
+import { AnyRendererSpec } from '../../types';
 import { createHandlers } from '../../public/lib/create_handlers';
 
 import css from './rendered_element.module.scss';
@@ -33,7 +34,7 @@ export interface Props {
    * The Expression function that evaluates the state of the Element and renders
    * it to the Page.
    */
-  fn: RendererSpec;
+  fn: AnyRendererSpec;
 }
 
 /**

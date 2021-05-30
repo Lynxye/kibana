@@ -1,10 +1,13 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { BehaviorSubject } from 'rxjs';
+import { ChartsPluginSetup, ChartsPluginStart } from 'src/plugins/charts/public';
+import { ReportingStart } from '../../reporting/public';
 import {
   CoreSetup,
   CoreStart,
@@ -19,14 +22,13 @@ import { getSessionStorage } from './lib/storage';
 import { SESSIONSTORAGE_LASTPATH } from '../common/lib/constants';
 import { featureCatalogueEntry } from './feature_catalogue_entry';
 import { ExpressionsSetup, ExpressionsStart } from '../../../../src/plugins/expressions/public';
-import { DataPublicPluginSetup } from '../../../../src/plugins/data/public';
+import { DataPublicPluginSetup, DataPublicPluginStart } from '../../../../src/plugins/data/public';
 import { UiActionsStart } from '../../../../src/plugins/ui_actions/public';
 import { EmbeddableStart } from '../../../../src/plugins/embeddable/public';
 import { UsageCollectionSetup } from '../../../../src/plugins/usage_collection/public';
 import { Start as InspectorStart } from '../../../../src/plugins/inspector/public';
-// @ts-expect-error untyped local
-import { argTypeSpecs } from './expression_types/arg_types';
-import { transitions } from './transitions';
+import { BfetchPublicSetup } from '../../../../src/plugins/bfetch/public';
+import { PresentationUtilPluginStart } from '../../../../src/plugins/presentation_util/public';
 import { getPluginApi, CanvasApi } from './plugin_api';
 import { CanvasSrcPlugin } from '../canvas_plugin_src/plugin';
 export { CoreStart, CoreSetup };
@@ -39,15 +41,21 @@ export { CoreStart, CoreSetup };
 export interface CanvasSetupDeps {
   data: DataPublicPluginSetup;
   expressions: ExpressionsSetup;
-  home: HomePublicPluginSetup;
+  home?: HomePublicPluginSetup;
   usageCollection?: UsageCollectionSetup;
+  bfetch: BfetchPublicSetup;
+  charts: ChartsPluginSetup;
 }
 
 export interface CanvasStartDeps {
   embeddable: EmbeddableStart;
   expressions: ExpressionsStart;
+  reporting?: ReportingStart;
   inspector: InspectorStart;
   uiActions: UiActionsStart;
+  charts: ChartsPluginStart;
+  data: DataPublicPluginStart;
+  presentationUtil: PresentationUtilPluginStart;
 }
 
 /**
@@ -86,7 +94,7 @@ export class CanvasPlugin
       category: DEFAULT_APP_CATEGORIES.kibana,
       id: 'canvas',
       title: 'Canvas',
-      euiIconType: 'canvasApp',
+      euiIconType: 'logoKibana',
       order: 3000,
       updater$: this.appUpdater,
       mount: async (params: AppMountParameters) => {
@@ -114,10 +122,19 @@ export class CanvasPlugin
       },
     });
 
-    plugins.home.featureCatalogue.register(featureCatalogueEntry);
+    if (plugins.home) {
+      plugins.home.featureCatalogue.register(featureCatalogueEntry);
+    }
 
-    canvasApi.addArgumentUIs(argTypeSpecs);
-    canvasApi.addTransitions(transitions);
+    canvasApi.addArgumentUIs(async () => {
+      // @ts-expect-error
+      const { argTypeSpecs } = await import('./expression_types/arg_types');
+      return argTypeSpecs;
+    });
+    canvasApi.addTransitions(async () => {
+      const { transitions } = await import('./transitions');
+      return transitions;
+    });
 
     return {
       ...canvasApi,

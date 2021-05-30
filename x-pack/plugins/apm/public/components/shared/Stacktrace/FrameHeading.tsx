@@ -1,53 +1,73 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import React, { Fragment } from 'react';
-import styled from 'styled-components';
-import { IStackframe } from '../../../../typings/es_schemas/raw/fields/stackframe';
+import React, { ComponentType } from 'react';
+import { euiStyled } from '../../../../../../../src/plugins/kibana_react/common';
+import { Stackframe } from '../../../../typings/es_schemas/raw/fields/stackframe';
 import { fontFamilyCode, fontSize, px, units } from '../../../style/variables';
+import {
+  CSharpFrameHeadingRenderer,
+  DefaultFrameHeadingRenderer,
+  FrameHeadingRendererProps,
+  JavaFrameHeadingRenderer,
+  JavaScriptFrameHeadingRenderer,
+  RubyFrameHeadingRenderer,
+} from './frame_heading_renderers';
 
-const FileDetails = styled.div`
+const FileDetails = euiStyled.div`
   color: ${({ theme }) => theme.eui.euiColorDarkShade};
-  padding: ${px(units.half)} 0;
+  line-height: 1.5; /* matches the line-hight of the accordion container button */
+  padding: ${px(units.eighth)} 0;
   font-family: ${fontFamilyCode};
   font-size: ${fontSize};
 `;
 
-const LibraryFrameFileDetail = styled.span`
+const LibraryFrameFileDetail = euiStyled.span`
   color: ${({ theme }) => theme.eui.euiColorDarkShade};
+  word-break: break-word;
 `;
 
-const AppFrameFileDetail = styled.span`
+const AppFrameFileDetail = euiStyled.span`
   color: ${({ theme }) => theme.eui.euiColorFullShade};
+  word-break: break-word;
 `;
 
 interface Props {
-  stackframe: IStackframe;
+  codeLanguage?: string;
+  stackframe: Stackframe;
   isLibraryFrame: boolean;
 }
 
-function FrameHeading({ stackframe, isLibraryFrame }: Props) {
-  const FileDetail = isLibraryFrame
+function FrameHeading({ codeLanguage, stackframe, isLibraryFrame }: Props) {
+  const FileDetail: ComponentType = isLibraryFrame
     ? LibraryFrameFileDetail
     : AppFrameFileDetail;
-  const lineNumber = stackframe.line?.number ?? 0;
-
-  const name =
-    'filename' in stackframe ? stackframe.filename : stackframe.classname;
+  let Renderer: ComponentType<FrameHeadingRendererProps>;
+  switch (codeLanguage?.toString().toLowerCase()) {
+    case 'c#':
+      Renderer = CSharpFrameHeadingRenderer;
+      break;
+    case 'java':
+      Renderer = JavaFrameHeadingRenderer;
+      break;
+    case 'javascript':
+      Renderer = JavaScriptFrameHeadingRenderer;
+      break;
+    case 'ruby':
+      Renderer = RubyFrameHeadingRenderer;
+      break;
+    default:
+      Renderer = DefaultFrameHeadingRenderer;
+      break;
+  }
 
   return (
-    <FileDetails>
-      <FileDetail>{name}</FileDetail> in{' '}
-      <FileDetail>{stackframe.function}</FileDetail>
-      {lineNumber > 0 && (
-        <Fragment>
-          {' at '}
-          <FileDetail>line {lineNumber}</FileDetail>
-        </Fragment>
-      )}
+    <FileDetails data-test-subj="FrameHeading">
+      <Renderer fileDetailComponent={FileDetail} stackframe={stackframe} />
     </FileDetails>
   );
 }

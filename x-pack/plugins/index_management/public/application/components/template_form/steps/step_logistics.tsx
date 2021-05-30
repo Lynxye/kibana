@@ -1,8 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import React, { useEffect, useCallback } from 'react';
 import {
   EuiFlexGroup,
@@ -17,13 +19,13 @@ import { i18n } from '@kbn/i18n';
 
 import {
   useForm,
+  useFormData,
   Form,
   getUseField,
   getFormRow,
   Field,
   Forms,
   JsonEditorField,
-  FormDataProvider,
 } from '../../../../shared_imports';
 import { documentationService } from '../../../services/documentation';
 import { schemas, nameConfig, nameConfigWithoutValidations } from '../template_form_schemas';
@@ -55,7 +57,7 @@ function getFieldsMeta(esDocsBase: string) {
       ),
       testSubject: 'indexPatternsField',
     },
-    dataStream: {
+    createDataStream: {
       title: i18n.translate('xpack.idxMgmt.templateForm.stepLogistics.dataStreamTitle', {
         defaultMessage: 'Data stream',
       }),
@@ -118,9 +120,8 @@ interface LogisticsForm {
 }
 
 interface LogisticsFormInternal extends LogisticsForm {
-  __internal__: {
-    addMeta: boolean;
-  };
+  addMeta: boolean;
+  doCreateDataStream: boolean;
 }
 
 interface Props {
@@ -133,15 +134,17 @@ interface Props {
 function formDeserializer(formData: LogisticsForm): LogisticsFormInternal {
   return {
     ...formData,
-    __internal__: {
-      addMeta: Boolean(formData._meta && Object.keys(formData._meta).length),
-    },
+    addMeta: Boolean(formData._meta && Object.keys(formData._meta).length),
+    doCreateDataStream: Boolean(formData.dataStream),
   };
 }
 
-function formSerializer(formData: LogisticsFormInternal): LogisticsForm {
-  const { __internal__, ...rest } = formData;
-  return rest;
+function getformSerializer(initialTemplateData: LogisticsForm = {}) {
+  return (formData: LogisticsFormInternal): LogisticsForm => {
+    const { addMeta, doCreateDataStream, ...rest } = formData;
+    const dataStream = doCreateDataStream ? initialTemplateData.dataStream ?? {} : undefined;
+    return { ...rest, dataStream };
+  };
 }
 
 export const StepLogistics: React.FunctionComponent<Props> = React.memo(
@@ -150,10 +153,21 @@ export const StepLogistics: React.FunctionComponent<Props> = React.memo(
       schema: schemas.logistics,
       defaultValue,
       options: { stripEmptyFields: false },
-      serializer: formSerializer,
+      serializer: getformSerializer(defaultValue),
       deserializer: formDeserializer,
     });
-    const { subscribe, submit, isSubmitted, isValid: isFormValid, getErrors: getFormErrors } = form;
+    const {
+      submit,
+      isSubmitted,
+      isValid: isFormValid,
+      getErrors: getFormErrors,
+      getFormData,
+    } = form;
+
+    const [{ addMeta }] = useFormData<{ addMeta: boolean }>({
+      form,
+      watch: 'addMeta',
+    });
 
     /**
      * When the consumer call validate() on this step, we submit the form so it enters the "isSubmitted" state
@@ -164,17 +178,14 @@ export const StepLogistics: React.FunctionComponent<Props> = React.memo(
     }, [submit]);
 
     useEffect(() => {
-      const subscription = subscribe(({ data, isValid }) => {
-        onChange({
-          isValid,
-          validate,
-          getData: data.format,
-        });
+      onChange({
+        isValid: isFormValid,
+        getData: getFormData,
+        validate,
       });
-      return subscription.unsubscribe;
-    }, [onChange, validate, subscribe]);
+    }, [onChange, isFormValid, validate, getFormData]);
 
-    const { name, indexPatterns, dataStream, order, priority, version } = getFieldsMeta(
+    const { name, indexPatterns, createDataStream, order, priority, version } = getFieldsMeta(
       documentationService.getEsDocsBase()
     );
 
@@ -241,10 +252,10 @@ export const StepLogistics: React.FunctionComponent<Props> = React.memo(
 
           {/* Create data stream */}
           {isLegacy !== true && (
-            <FormRow title={dataStream.title} description={dataStream.description}>
+            <FormRow title={createDataStream.title} description={createDataStream.description}>
               <UseField
-                path="dataStream"
-                componentProps={{ 'data-test-subj': dataStream.testSubject }}
+                path="doCreateDataStream"
+                componentProps={{ 'data-test-subj': createDataStream.testSubject }}
               />
             </FormRow>
           )}
@@ -296,34 +307,28 @@ export const StepLogistics: React.FunctionComponent<Props> = React.memo(
                     defaultMessage="Use the _meta field to store any metadata you want."
                   />
                   <EuiSpacer size="m" />
-                  <UseField path="__internal__.addMeta" data-test-subj="metaToggle" />
+                  <UseField path="addMeta" data-test-subj="metaToggle" />
                 </>
               }
             >
-              <FormDataProvider pathsToWatch="__internal__.addMeta">
-                {({ '__internal__.addMeta': addMeta }) => {
-                  return (
-                    addMeta && (
-                      <UseField
-                        path="_meta"
-                        component={JsonEditorField}
-                        componentProps={{
-                          euiCodeEditorProps: {
-                            height: '280px',
-                            'aria-label': i18n.translate(
-                              'xpack.idxMgmt.templateForm.stepLogistics.metaFieldEditorAriaLabel',
-                              {
-                                defaultMessage: '_meta field data editor',
-                              }
-                            ),
-                            'data-test-subj': 'metaField',
-                          },
-                        }}
-                      />
-                    )
-                  );
-                }}
-              </FormDataProvider>
+              {addMeta && (
+                <UseField
+                  path="_meta"
+                  component={JsonEditorField}
+                  componentProps={{
+                    euiCodeEditorProps: {
+                      height: '280px',
+                      'aria-label': i18n.translate(
+                        'xpack.idxMgmt.templateForm.stepLogistics.metaFieldEditorAriaLabel',
+                        {
+                          defaultMessage: '_meta field data editor',
+                        }
+                      ),
+                      'data-test-subj': 'metaField',
+                    },
+                  }}
+                />
+              )}
             </FormRow>
           )}
         </Form>

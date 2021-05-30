@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import uuid from 'uuid';
@@ -11,15 +12,11 @@ import minimatch from 'minimatch';
 import { IndexPatternMapping } from './types';
 import { getLayerList } from './map_config';
 import { MAP_SAVED_OBJECT_TYPE } from '../../../../../maps/public';
-import {
+import type {
+  RenderTooltipContentParams,
   MapEmbeddable,
   MapEmbeddableInput,
-  // eslint-disable-next-line @kbn/eslint/no-restricted-paths
-} from '../../../../../../plugins/maps/public/embeddable';
-import {
-  RenderTooltipContentParams,
-  // eslint-disable-next-line @kbn/eslint/no-restricted-paths
-} from '../../../../../../plugins/maps/public/classes/tooltips/tooltip_property';
+} from '../../../../../../plugins/maps/public';
 import * as i18n from './translations';
 import { Query, Filter } from '../../../../../../../src/plugins/data/public';
 import {
@@ -68,6 +65,7 @@ export const createEmbeddable = async (
 
   const input: MapEmbeddableInput = {
     title: i18n.MAP_TITLE,
+    attributes: { title: '' },
     id: uuid.v4(),
     filters,
     hidePanelTitles: true,
@@ -115,7 +113,7 @@ export const createEmbeddable = async (
   if (!isErrorEmbeddable(embeddableObject)) {
     embeddableObject.setRenderTooltipContent(renderTooltipContent);
     // @ts-expect-error
-    await embeddableObject.setLayerList(getLayerList(indexPatterns));
+    embeddableObject.setLayerList(getLayerList(indexPatterns));
   }
 
   // Wire up to app refresh action
@@ -150,7 +148,15 @@ export const findMatchingIndexPatterns = ({
       const pattern = kip.attributes.title;
       return (
         !ignoredIndexPatterns.includes(pattern) &&
-        siemDefaultIndices.some((sdi) => minimatch(sdi, pattern))
+        siemDefaultIndices.some((sdi) => {
+          const splitPattern = pattern.split(',') ?? [];
+          return splitPattern.length > 1
+            ? splitPattern.some((p) => {
+                const isMatch = minimatch(sdi, p);
+                return isMatch && p.charAt(0) === '-' ? false : isMatch;
+              })
+            : minimatch(sdi, pattern);
+        })
       );
     });
   } catch {

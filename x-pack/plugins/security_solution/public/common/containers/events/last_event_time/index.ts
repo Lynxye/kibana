@@ -1,95 +1,149 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { get } from 'lodash/fp';
-import React, { useEffect, useState } from 'react';
+import deepEqual from 'fast-deep-equal';
+import { noop } from 'lodash/fp';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Subscription } from 'rxjs';
 
-import { DEFAULT_INDEX_KEY } from '../../../../../common/constants';
+import { inputsModel } from '../../../../common/store';
+import { useKibana } from '../../../../common/lib/kibana';
 import {
-  GetLastEventTimeQuery,
-  LastEventIndexKey,
+  TimelineEventsQueries,
+  TimelineEventsLastEventTimeRequestOptions,
+  TimelineEventsLastEventTimeStrategyResponse,
   LastTimeDetails,
-} from '../../../../graphql/types';
-import { inputsModel } from '../../../store';
-import { QueryTemplateProps } from '../../query_template';
-import { useUiSetting$ } from '../../../lib/kibana';
+  LastEventIndexKey,
+} from '../../../../../common/search_strategy/timeline';
+import {
+  isCompleteResponse,
+  isErrorResponse,
+} from '../../../../../../../../src/plugins/data/common';
+import * as i18n from './translations';
+import { DocValueFields } from '../../../../../common/search_strategy';
+import { useAppToasts } from '../../../hooks/use_app_toasts';
 
-import { LastEventTimeGqlQuery } from './last_event_time.gql_query';
-import { useApolloClient } from '../../../utils/apollo_context';
-import { useWithSource } from '../../source';
-
-export interface LastEventTimeArgs {
-  id: string;
-  errorMessage: string;
-  lastSeen: Date;
-  loading: boolean;
+export interface UseTimelineLastEventTimeArgs {
+  lastSeen: string | null;
   refetch: inputsModel.Refetch;
+  errorMessage?: string;
 }
 
-export interface OwnProps extends QueryTemplateProps {
-  children: (args: LastEventTimeArgs) => React.ReactNode;
+interface UseTimelineLastEventTimeProps {
+  docValueFields: DocValueFields[];
   indexKey: LastEventIndexKey;
+  indexNames: string[];
+  details: LastTimeDetails;
 }
 
-export function useLastEventTimeQuery(
-  indexKey: LastEventIndexKey,
-  details: LastTimeDetails,
-  sourceId: string
-) {
-  const [loading, updateLoading] = useState(false);
-  const [lastSeen, updateLastSeen] = useState<number | null>(null);
-  const [errorMessage, updateErrorMessage] = useState<string | null>(null);
-  const [currentIndexKey, updateCurrentIndexKey] = useState<LastEventIndexKey | null>(null);
-  const [defaultIndex] = useUiSetting$<string[]>(DEFAULT_INDEX_KEY);
-  const apolloClient = useApolloClient();
-  const { docValueFields } = useWithSource(sourceId);
+export const useTimelineLastEventTime = ({
+  docValueFields,
+  indexKey,
+  indexNames,
+  details,
+}: UseTimelineLastEventTimeProps): [boolean, UseTimelineLastEventTimeArgs] => {
+  const { data } = useKibana().services;
+  const refetch = useRef<inputsModel.Refetch>(noop);
+  const abortCtrl = useRef(new AbortController());
+  const searchSubscription$ = useRef(new Subscription());
+  const [loading, setLoading] = useState(false);
+  const [
+    TimelineLastEventTimeRequest,
+    setTimelineLastEventTimeRequest,
+  ] = useState<TimelineEventsLastEventTimeRequestOptions>({
+    defaultIndex: indexNames,
+    docValueFields,
+    factoryQueryType: TimelineEventsQueries.lastEventTime,
+    indexKey,
+    details,
+  });
 
-  async function fetchLastEventTime(signal: AbortSignal) {
-    updateLoading(true);
-    if (apolloClient) {
-      apolloClient
-        .query<GetLastEventTimeQuery.Query, GetLastEventTimeQuery.Variables>({
-          query: LastEventTimeGqlQuery,
-          fetchPolicy: 'cache-first',
-          variables: {
-            docValueFields,
-            sourceId,
-            indexKey,
-            details,
-            defaultIndex,
-          },
-          context: {
-            fetchOptions: {
-              signal,
+  const [
+    timelineLastEventTimeResponse,
+    setTimelineLastEventTimeResponse,
+  ] = useState<UseTimelineLastEventTimeArgs>({
+    lastSeen: null,
+    refetch: refetch.current,
+    errorMessage: undefined,
+  });
+  const { addError, addWarning } = useAppToasts();
+
+  const timelineLastEventTimeSearch = useCallback(
+    (request: TimelineEventsLastEventTimeRequestOptions) => {
+      const asyncSearch = async () => {
+        abortCtrl.current = new AbortController();
+        setLoading(true);
+
+        searchSubscription$.current = data.search
+          .search<
+            TimelineEventsLastEventTimeRequestOptions,
+            TimelineEventsLastEventTimeStrategyResponse
+          >(request, {
+            strategy: 'securitySolutionTimelineSearchStrategy',
+            abortSignal: abortCtrl.current.signal,
+          })
+          .subscribe({
+            next: (response) => {
+              if (isCompleteResponse(response)) {
+                setLoading(false);
+                setTimelineLastEventTimeResponse((prevResponse) => ({
+                  ...prevResponse,
+                  errorMessage: undefined,
+                  lastSeen: response.lastSeen,
+                  refetch: refetch.current,
+                }));
+              } else if (isErrorResponse(response)) {
+                setLoading(false);
+                addWarning(i18n.ERROR_LAST_EVENT_TIME);
+              }
             },
-          },
-        })
-        .then(
-          (result) => {
-            updateLoading(false);
-            updateLastSeen(get('data.source.LastEventTime.lastSeen', result));
-            updateErrorMessage(null);
-            updateCurrentIndexKey(currentIndexKey);
-          },
-          (error) => {
-            updateLoading(false);
-            updateLastSeen(null);
-            updateErrorMessage(error.message);
-          }
-        );
-    }
-  }
+            error: (msg) => {
+              setLoading(false);
+              addError(msg, {
+                title: i18n.FAIL_LAST_EVENT_TIME,
+              });
+              setTimelineLastEventTimeResponse((prevResponse) => ({
+                ...prevResponse,
+                errorMessage: msg.message,
+              }));
+            },
+          });
+      };
+      searchSubscription$.current.unsubscribe();
+      abortCtrl.current.abort();
+      asyncSearch();
+      refetch.current = asyncSearch;
+    },
+    [data.search, addError, addWarning]
+  );
 
   useEffect(() => {
-    const abortCtrl = new AbortController();
-    const signal = abortCtrl.signal;
-    fetchLastEventTime(signal);
-    return () => abortCtrl.abort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apolloClient, indexKey, details.hostName, details.ip]);
+    setTimelineLastEventTimeRequest((prevRequest) => {
+      const myRequest = {
+        ...prevRequest,
+        defaultIndex: indexNames,
+        docValueFields,
+        indexKey,
+        details,
+      };
+      if (!deepEqual(prevRequest, myRequest)) {
+        return myRequest;
+      }
+      return prevRequest;
+    });
+  }, [indexNames, details, docValueFields, indexKey]);
 
-  return { lastSeen, loading, errorMessage };
-}
+  useEffect(() => {
+    timelineLastEventTimeSearch(TimelineLastEventTimeRequest);
+    return () => {
+      searchSubscription$.current.unsubscribe();
+      abortCtrl.current.abort();
+    };
+  }, [TimelineLastEventTimeRequest, timelineLastEventTimeSearch]);
+
+  return [loading, timelineLastEventTimeResponse];
+};

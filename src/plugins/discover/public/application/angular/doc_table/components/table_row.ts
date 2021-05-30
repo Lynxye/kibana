@@ -1,58 +1,32 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
-import { find, template } from 'lodash';
+import { find } from 'lodash';
 import $ from 'jquery';
-import rison from 'rison-node';
-import '../../doc_viewer';
-
 import openRowHtml from './table_row/open.html';
 import detailsHtml from './table_row/details.html';
-
 import { dispatchRenderComplete } from '../../../../../../kibana_utils/public';
 import { DOC_HIDE_TIME_COLUMN_SETTING } from '../../../../../common';
-import cellTemplateHtml from '../components/table_row/cell.html';
-import truncateByHeightTemplateHtml from '../components/table_row/truncate_by_height.html';
-import { esFilters } from '../../../../../../data/public';
 import { getServices } from '../../../../kibana_services';
-
-const TAGS_WITH_WS = />\s+</g;
-
-/**
- * Remove all of the whitespace between html tags
- * so that inline elements don't have extra spaces.
- */
-export function noWhiteSpace(html: string): string {
-  return html.replace(TAGS_WITH_WS, '><');
-}
+import { getContextUrl } from '../../../helpers/get_context_url';
+import { formatRow, formatTopLevelObject } from '../../helpers';
+import { truncateByHeight } from './table_row/truncate_by_height';
+import { cell } from './table_row/cell';
 
 // guesstimate at the minimum number of chars wide cells in the table should be
 const MIN_LINE_LENGTH = 20;
 
 interface LazyScope extends ng.IScope {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any;
 }
 
-export function createTableRowDirective($compile: ng.ICompileService, $httpParamSerializer: any) {
-  const cellTemplate = template(noWhiteSpace(cellTemplateHtml));
-  const truncateByHeightTemplate = template(noWhiteSpace(truncateByHeightTemplateHtml));
-
+export function createTableRowDirective($compile: ng.ICompileService) {
   return {
     restrict: 'A',
     scope: {
@@ -62,6 +36,7 @@ export function createTableRowDirective($compile: ng.ICompileService, $httpParam
       row: '=kbnTableRow',
       onAddColumn: '=?',
       onRemoveColumn: '=?',
+      useNewFieldsApi: '<',
     },
     link: ($scope: LazyScope, $el: JQuery) => {
       $el.after('<tr data-test-subj="docTableDetailsRow" class="kbnDocTableDetails__row">');
@@ -107,36 +82,33 @@ export function createTableRowDirective($compile: ng.ICompileService, $httpParam
         createSummaryRow($scope.row);
       });
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       $scope.inlineFilter = function inlineFilter($event: any, type: string) {
-        const column = $($event.target).data().column;
+        const column = $($event.currentTarget).data().column;
         const field = $scope.indexPattern.fields.getByName(column);
         $scope.filter(field, $scope.flattenedRow[column], type);
       };
 
       $scope.getContextAppHref = () => {
-        const path = `#/context/${encodeURIComponent($scope.indexPattern.id)}/${encodeURIComponent(
-          $scope.row._id
-        )}`;
-        const globalFilters: any = getServices().filterManager.getGlobalFilters();
-        const appFilters: any = getServices().filterManager.getAppFilters();
-        const hash = $httpParamSerializer({
-          _g: encodeURI(
-            rison.encode({
-              filters: globalFilters || [],
-            })
-          ),
-          _a: encodeURI(
-            rison.encode({
-              columns: $scope.columns,
-              filters: (appFilters || []).map(esFilters.disableFilter),
-            })
-          ),
-        });
+        return getContextUrl(
+          $scope.row._id,
+          $scope.indexPattern.id,
+          $scope.columns,
+          getServices().filterManager,
+          getServices().addBasePath
+        );
+      };
 
-        return `${path}?${hash}`;
+      $scope.getSingleDocHref = () => {
+        return getServices().addBasePath(
+          `/app/discover#/doc/${$scope.indexPattern.id}/${
+            $scope.row._index
+          }?id=${encodeURIComponent($scope.row._id)}`
+        );
       };
 
       // create a tr element that lists the value for each *column*
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       function createSummaryRow(row: any) {
         const indexPattern = $scope.indexPattern;
         $scope.flattenedRow = indexPattern.flattenHit(row);
@@ -148,7 +120,7 @@ export function createTableRowDirective($compile: ng.ICompileService, $httpParam
         const hideTimeColumn = getServices().uiSettings.get(DOC_HIDE_TIME_COLUMN_SETTING, false);
         if (indexPattern.timeFieldName && !hideTimeColumn) {
           newHtmls.push(
-            cellTemplate({
+            cell({
               timefield: true,
               formatted: _displayField(row, indexPattern.timeFieldName),
               filterable: mapping(indexPattern.timeFieldName).filterable && $scope.filter,
@@ -157,27 +129,57 @@ export function createTableRowDirective($compile: ng.ICompileService, $httpParam
           );
         }
 
-        $scope.columns.forEach(function (column: any) {
-          const isFilterable = mapping(column) && mapping(column).filterable && $scope.filter;
+        if ($scope.columns.length === 0 && $scope.useNewFieldsApi) {
+          const formatted = formatRow(row, indexPattern);
 
           newHtmls.push(
-            cellTemplate({
+            cell({
               timefield: false,
-              sourcefield: column === '_source',
-              formatted: _displayField(row, column, true),
-              filterable: isFilterable,
-              column,
+              sourcefield: true,
+              formatted,
+              filterable: false,
+              column: '__document__',
             })
           );
-        });
+        } else {
+          $scope.columns.forEach(function (column: string) {
+            const isFilterable = mapping(column) && mapping(column).filterable && $scope.filter;
+            if ($scope.useNewFieldsApi && !mapping(column) && !row.fields[column]) {
+              const innerColumns = Object.fromEntries(
+                Object.entries(row.fields).filter(([key]) => {
+                  return key.indexOf(`${column}.`) === 0;
+                })
+              );
+              newHtmls.push(
+                cell({
+                  timefield: false,
+                  sourcefield: true,
+                  formatted: formatTopLevelObject(row, innerColumns, indexPattern),
+                  filterable: false,
+                  column,
+                })
+              );
+            } else {
+              newHtmls.push(
+                cell({
+                  timefield: false,
+                  sourcefield: column === '_source',
+                  formatted: _displayField(row, column, true),
+                  filterable: isFilterable,
+                  column,
+                })
+              );
+            }
+          });
+        }
 
         let $cells = $el.children();
         newHtmls.forEach(function (html, i) {
           const $cell = $cells.eq(i);
           if ($cell.data('discover:html') === html) return;
 
-          const reuse = find($cells.slice(i + 1), function (cell: any) {
-            return $.data(cell, 'discover:html') === html;
+          const reuse = find($cells.slice(i + 1), (c) => {
+            return $.data(c, 'discover:html') === html;
           });
 
           const $target = reuse ? $(reuse).detach() : $(html);
@@ -210,12 +212,13 @@ export function createTableRowDirective($compile: ng.ICompileService, $httpParam
       /**
        * Fill an element with the value of a field
        */
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       function _displayField(row: any, fieldName: string, truncate = false) {
         const indexPattern = $scope.indexPattern;
         const text = indexPattern.formatField(row, fieldName);
 
         if (truncate && text.length > MIN_LINE_LENGTH) {
-          return truncateByHeightTemplate({
+          return truncateByHeight({
             body: text,
           });
         }

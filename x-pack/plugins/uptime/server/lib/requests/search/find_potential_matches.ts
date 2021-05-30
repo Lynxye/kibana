@@ -1,11 +1,11 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { set } from '@elastic/safer-lodash-set';
-import { get } from 'lodash';
 import { QueryContext } from './query_context';
 
 /**
@@ -19,11 +19,12 @@ export const findPotentialMatches = async (
   searchAfter: any,
   size: number
 ) => {
-  const queryResult = await query(queryContext, searchAfter, size);
+  const { body: queryResult } = await query(queryContext, searchAfter, size);
   const monitorIds: string[] = [];
-  get<any>(queryResult, 'aggregations.monitors.buckets', []).forEach((b: any) => {
+
+  (queryResult.aggregations?.monitors.buckets ?? []).forEach((b: any) => {
     const monitorId = b.key.monitor_id;
-    monitorIds.push(monitorId);
+    monitorIds.push(monitorId as string);
   });
 
   return {
@@ -36,11 +37,11 @@ const query = async (queryContext: QueryContext, searchAfter: any, size: number)
   const body = await queryBody(queryContext, searchAfter, size);
 
   const params = {
-    index: queryContext.heartbeatIndices,
     body,
   };
 
-  return await queryContext.search(params);
+  const response = await queryContext.search(params);
+  return response;
 };
 
 const queryBody = async (queryContext: QueryContext, searchAfter: any, size: number) => {
@@ -52,19 +53,34 @@ const queryBody = async (queryContext: QueryContext, searchAfter: any, size: num
 
   const body = {
     size: 0,
-    query: { bool: { filter: filters } },
-    aggs: {
-      has_timespan: {
-        filter: {
-          exists: { field: 'monitor.timespan' },
-        },
+    query: {
+      bool: {
+        filter: filters,
+        ...(queryContext.query
+          ? {
+              minimum_should_match: 1,
+              should: [
+                {
+                  multi_match: {
+                    query: escape(queryContext.query),
+                    type: 'phrase_prefix',
+                    fields: ['monitor.id.text', 'monitor.name.text', 'url.full.text'],
+                  },
+                },
+              ],
+            }
+          : {}),
       },
+    },
+    aggs: {
       monitors: {
         composite: {
           size,
           sources: [
             {
-              monitor_id: { terms: { field: 'monitor.id', order: queryContext.cursorOrder() } },
+              monitor_id: {
+                terms: { field: 'monitor.id' as const, order: queryContext.cursorOrder() },
+              },
             },
           ],
         },

@@ -1,13 +1,16 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
+import { isMlRule } from '../../../machine_learning/helpers';
+import { isThresholdRule } from '../../utils';
 import { AddPrepackagedRulesSchema } from './add_prepackaged_rules_schema';
 
 export const validateAnomalyThreshold = (rule: AddPrepackagedRulesSchema): string[] => {
-  if (rule.type === 'machine_learning') {
+  if (isMlRule(rule.type)) {
     if (rule.anomaly_threshold == null) {
       return ['when "type" is "machine_learning" anomaly_threshold is required'];
     } else {
@@ -19,7 +22,7 @@ export const validateAnomalyThreshold = (rule: AddPrepackagedRulesSchema): strin
 };
 
 export const validateQuery = (rule: AddPrepackagedRulesSchema): string[] => {
-  if (rule.type === 'machine_learning') {
+  if (isMlRule(rule.type)) {
     if (rule.query != null) {
       return ['when "type" is "machine_learning", "query" cannot be set'];
     } else {
@@ -31,7 +34,7 @@ export const validateQuery = (rule: AddPrepackagedRulesSchema): string[] => {
 };
 
 export const validateLanguage = (rule: AddPrepackagedRulesSchema): string[] => {
-  if (rule.type === 'machine_learning') {
+  if (isMlRule(rule.type)) {
     if (rule.language != null) {
       return ['when "type" is "machine_learning", "language" cannot be set'];
     } else {
@@ -55,7 +58,7 @@ export const validateSavedId = (rule: AddPrepackagedRulesSchema): string[] => {
 };
 
 export const validateMachineLearningJobId = (rule: AddPrepackagedRulesSchema): string[] => {
-  if (rule.type === 'machine_learning') {
+  if (isMlRule(rule.type)) {
     if (rule.machine_learning_job_id == null) {
       return ['when "type" is "machine_learning", "machine_learning_job_id" is required'];
     } else {
@@ -93,7 +96,7 @@ export const validateTimelineTitle = (rule: AddPrepackagedRulesSchema): string[]
 };
 
 export const validateThreshold = (rule: AddPrepackagedRulesSchema): string[] => {
-  if (rule.type === 'threshold') {
+  if (isThresholdRule(rule.type)) {
     if (!rule.threshold) {
       return ['when "type" is "threshold", "threshold" is required'];
     } else if (rule.threshold.value <= 0) {

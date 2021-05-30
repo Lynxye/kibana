@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 // eslint-disable-next-line @kbn/eslint/no-restricted-paths
@@ -17,75 +18,7 @@ export const metricsExplorerViewSavedObjectType: SavedObjectsType = {
     importableAndExportable: true,
   },
   mappings: {
-    properties: {
-      name: {
-        type: 'keyword',
-      },
-      options: {
-        properties: {
-          forceInterval: {
-            type: 'boolean',
-          },
-          metrics: {
-            type: 'nested',
-            properties: {
-              aggregation: {
-                type: 'keyword',
-              },
-              field: {
-                type: 'keyword',
-              },
-              color: {
-                type: 'keyword',
-              },
-              label: {
-                type: 'keyword',
-              },
-            },
-          },
-          limit: {
-            type: 'integer',
-          },
-          groupBy: {
-            type: 'keyword',
-          },
-          filterQuery: {
-            type: 'keyword',
-          },
-          aggregation: {
-            type: 'keyword',
-          },
-          source: {
-            type: 'keyword',
-          },
-        },
-      },
-      chartOptions: {
-        properties: {
-          type: {
-            type: 'keyword',
-          },
-          yAxisMode: {
-            type: 'keyword',
-          },
-          stack: {
-            type: 'boolean',
-          },
-        },
-      },
-      currentTimerange: {
-        properties: {
-          from: {
-            type: 'keyword',
-          },
-          to: {
-            type: 'keyword',
-          },
-          interval: {
-            type: 'keyword',
-          },
-        },
-      },
-    },
+    dynamic: false,
+    properties: {},
   },
 };

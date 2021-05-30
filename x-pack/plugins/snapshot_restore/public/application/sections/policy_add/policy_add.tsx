@@ -1,8 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import React, { useEffect, useState } from 'react';
 import { FormattedMessage } from '@kbn/i18n/react';
 import { RouteComponentProps } from 'react-router-dom';
@@ -43,7 +45,7 @@ export const PolicyAdd: React.FunctionComponent<RouteComponentProps> = ({
     if (error) {
       setSaveError(error);
     } else {
-      history.push(`${BASE_PATH}/policies/${name}`);
+      history.push(encodeURI(`${BASE_PATH}/policies/${encodeURIComponent(name)}`));
     }
   };
 

@@ -1,8 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import expect from '@kbn/expect';
 
 import { FtrProviderContext } from '../../ftr_provider_context';
@@ -33,6 +35,12 @@ export function TransformEditFlyoutProvider({ getService }: FtrProviderContext) 
         expectedValue,
         `Transform edit flyout '${input}' input text should be '${expectedValue}' (got '${actualValue}')`
       );
+    },
+
+    // for now we expect this to be used only for opening the accordion
+    async openTransformEditAccordionAdvancedSettings() {
+      await testSubjects.click('transformEditAccordionAdvancedSettings');
+      await testSubjects.existOrFail('transformEditAccordionAdvancedSettingsContent');
     },
 
     async setTransformEditFlyoutInputValue(input: string, value: string) {

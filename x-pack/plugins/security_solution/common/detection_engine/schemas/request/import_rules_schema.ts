@@ -1,11 +1,53 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import * as t from 'io-ts';
 
+import {
+  Actions,
+  DefaultActionsArray,
+  DefaultFromString,
+  DefaultIntervalString,
+  DefaultMaxSignalsNumber,
+  DefaultRiskScoreMappingArray,
+  DefaultSeverityMappingArray,
+  DefaultThreatArray,
+  DefaultThrottleNull,
+  DefaultToString,
+  From,
+  machine_learning_job_id,
+  risk_score,
+  RiskScoreMapping,
+  threat_index,
+  items_per_search,
+  concurrent_searches,
+  threat_query,
+  threat_filters,
+  threat_mapping,
+  threat_language,
+  threat_indicator_path,
+  Threats,
+  type,
+  language,
+  severity,
+  SeverityMapping,
+  ThrottleOrNull,
+  MaxSignals,
+} from '@kbn/securitysolution-io-ts-alerting-types';
+
+import {
+  DefaultVersionNumber,
+  Version,
+  DefaultStringArray,
+  DefaultBooleanTrue,
+  OnlyFalseAllowed,
+  DefaultStringBooleanFalse,
+} from '@kbn/securitysolution-io-ts-types';
+import { DefaultListArray, ListArray } from '@kbn/securitysolution-io-ts-list-types';
 import {
   description,
   anomaly_threshold,
@@ -17,26 +59,15 @@ import {
   timeline_id,
   timeline_title,
   meta,
-  machine_learning_job_id,
-  risk_score,
-  MaxSignals,
   name,
-  severity,
   Tags,
   To,
-  type,
-  Threat,
   threshold,
-  ThrottleOrNull,
   note,
-  Version,
   References,
-  Actions,
   Enabled,
   FalsePositives,
-  From,
   Interval,
-  language,
   query,
   rule_id,
   id,
@@ -49,28 +80,8 @@ import {
   rule_name_override,
   timestamp_override,
   Author,
-  RiskScoreMapping,
-  SeverityMapping,
+  event_category_override,
 } from '../common/schemas';
-
-import {
-  DefaultStringArray,
-  DefaultActionsArray,
-  DefaultBooleanTrue,
-  DefaultFromString,
-  DefaultIntervalString,
-  DefaultMaxSignalsNumber,
-  DefaultToString,
-  DefaultThreatArray,
-  DefaultThrottleNull,
-  DefaultVersionNumber,
-  OnlyFalseAllowed,
-  DefaultStringBooleanFalse,
-  DefaultListArray,
-  ListArray,
-  DefaultRiskScoreMappingArray,
-  DefaultSeverityMappingArray,
-} from '../types';
 
 /**
  * Differences from this and the createRulesSchema are
@@ -101,6 +112,7 @@ export const importRulesSchema = t.intersection([
       author: DefaultStringArray, // defaults to empty array of strings if not set during decode
       building_block_type, // defaults to undefined if not set during decode
       enabled: DefaultBooleanTrue, // defaults to true if not set during decode
+      event_category_override, // defaults to "undefined" if not set during decode
       false_positives: DefaultStringArray, // defaults to empty string array if not set during decode
       filters, // defaults to undefined if not set during decode
       from: DefaultFromString, // defaults to "now-6m" if not set during decode
@@ -135,6 +147,14 @@ export const importRulesSchema = t.intersection([
       updated_at, // defaults "undefined" if not set during decode
       created_by, // defaults "undefined" if not set during decode
       updated_by, // defaults "undefined" if not set during decode
+      threat_filters, // defaults to "undefined" if not set during decode
+      threat_mapping, // defaults to "undefined" if not set during decode
+      threat_query, // defaults to "undefined" if not set during decode
+      threat_index, // defaults to "undefined" if not set during decode
+      threat_language, // defaults "undefined" if not set during decode
+      threat_indicator_path, // defaults to "undefined" if not set during decode
+      concurrent_searches, // defaults to "undefined" if not set during decode
+      items_per_search, // defaults to "undefined" if not set during decode
     })
   ),
 ]);
@@ -175,7 +195,7 @@ export type ImportRulesSchemaDecoded = Omit<
   severity_mapping: SeverityMapping;
   tags: Tags;
   to: To;
-  threat: Threat;
+  threat: Threats;
   throttle: ThrottleOrNull;
   version: Version;
   exceptions_list: ListArray;

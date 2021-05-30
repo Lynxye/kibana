@@ -1,20 +1,23 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
+import { transformError } from '@kbn/securitysolution-es-utils';
 import { setSignalStatusValidateTypeDependents } from '../../../../../common/detection_engine/schemas/request/set_signal_status_type_dependents';
 import {
   SetSignalsStatusSchemaDecoded,
   setSignalsStatusSchema,
 } from '../../../../../common/detection_engine/schemas/request/set_signal_status_schema';
-import { IRouter } from '../../../../../../../../src/core/server';
+import type { SecuritySolutionPluginRouter } from '../../../../types';
 import { DETECTION_ENGINE_SIGNALS_STATUS_URL } from '../../../../../common/constants';
-import { transformError, buildSiemResponse } from '../utils';
+import { buildSiemResponse } from '../utils';
+
 import { buildRouteValidation } from '../../../../utils/build_validation/route_validation';
 
-export const setSignalsStatusRoute = (router: IRouter) => {
+export const setSignalsStatusRoute = (router: SecuritySolutionPluginRouter) => {
   router.post(
     {
       path: DETECTION_ENGINE_SIGNALS_STATUS_URL,
@@ -28,11 +31,12 @@ export const setSignalsStatusRoute = (router: IRouter) => {
       },
     },
     async (context, request, response) => {
-      const { signal_ids: signalIds, query, status } = request.body;
+      const { conflicts, signal_ids: signalIds, query, status } = request.body;
       const clusterClient = context.core.elasticsearch.legacy.client;
       const siemClient = context.securitySolution?.getAppClient();
       const siemResponse = buildSiemResponse(response);
       const validationErrors = setSignalStatusValidateTypeDependents(request.body);
+
       if (validationErrors.length) {
         return siemResponse.error({ statusCode: 400, body: validationErrors });
       }
@@ -55,6 +59,7 @@ export const setSignalsStatusRoute = (router: IRouter) => {
       try {
         const result = await clusterClient.callAsCurrentUser('updateByQuery', {
           index: siemClient.getSignalsIndex(),
+          conflicts: conflicts ?? 'abort',
           refresh: 'wait_for',
           body: {
             script: {

@@ -1,14 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import expect from '@kbn/expect';
 
 import { FtrProviderContext } from '../../../ftr_provider_context';
 import { USER } from '../../../../functional/services/ml/security_common';
-import { COMMON_REQUEST_HEADERS } from '../../../../functional/services/ml/common';
+import { COMMON_REQUEST_HEADERS } from '../../../../functional/services/ml/common_api';
 
 export default ({ getService }: FtrProviderContext) => {
   const esArchiver = getService('esArchiver');
@@ -116,8 +117,7 @@ export default ({ getService }: FtrProviderContext) => {
         responseBody: {
           statusCode: 404,
           error: 'Not Found',
-          message:
-            '[index_not_found_exception] no such index [ft_farequote_not_exist], with { resource.type="index_or_alias" & resource.id="ft_farequote_not_exist" & index_uuid="_na_" & index="ft_farequote_not_exist" }',
+          message: 'index_not_found_exception',
         },
       },
     },
@@ -142,7 +142,7 @@ export default ({ getService }: FtrProviderContext) => {
           expect(body).to.eql(testData.expected.responseBody);
         } else {
           expect(body.error).to.eql(testData.expected.responseBody.error);
-          expect(body.message).to.eql(testData.expected.responseBody.message);
+          expect(body.message).to.contain(testData.expected.responseBody.message);
         }
       });
     }

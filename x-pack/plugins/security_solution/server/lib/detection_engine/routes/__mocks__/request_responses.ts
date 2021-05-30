@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { SavedObjectsFindResponse } from 'kibana/server';
@@ -15,6 +16,8 @@ import {
   INTERNAL_RULE_ID_KEY,
   INTERNAL_IMMUTABLE_KEY,
   DETECTION_ENGINE_PREPACKAGED_URL,
+  DETECTION_ENGINE_SIGNALS_FINALIZE_MIGRATION_URL,
+  DETECTION_ENGINE_SIGNALS_MIGRATION_STATUS_URL,
 } from '../../../../../common/constants';
 import { ShardsResponse } from '../../../types';
 import {
@@ -26,8 +29,13 @@ import { requestMock } from './request';
 import { RuleNotificationAlertType } from '../../notifications/types';
 import { QuerySignalsSchemaDecoded } from '../../../../../common/detection_engine/schemas/request/query_signals_index_schema';
 import { SetSignalsStatusSchemaDecoded } from '../../../../../common/detection_engine/schemas/request/set_signal_status_schema';
-import { getCreateRulesSchemaMock } from '../../../../../common/detection_engine/schemas/request/create_rules_schema.mock';
-import { getListArrayMock } from '../../../../../common/detection_engine/schemas/types/lists.mock';
+import { getCreateRulesSchemaMock } from '../../../../../common/detection_engine/schemas/request/rule_schemas.mock';
+import { getFinalizeSignalsMigrationSchemaMock } from '../../../../../common/detection_engine/schemas/request/finalize_signals_migration_schema.mock';
+import { EqlSearchResponse } from '../../../../../common/detection_engine/types';
+import { getSignalsMigrationStatusSchemaMock } from '../../../../../common/detection_engine/schemas/request/get_signals_migration_status_schema.mock';
+import { RuleParams } from '../../schemas/rule_schemas';
+import { Alert } from '../../../../../../alerting/common';
+import { getQueryRuleParams } from '../../schemas/rule_schemas.mock';
 
 export const typicalSetStatusSignalByIdsPayload = (): SetSignalsStatusSchemaDecoded => ({
   signal_ids: ['somefakeid1', 'somefakeid2'],
@@ -127,10 +135,11 @@ export const getDeleteAsPostBulkRequest = () =>
     body: [{ rule_id: 'rule-1' }],
   });
 
-export const getPrivilegeRequest = () =>
+export const getPrivilegeRequest = (options: { auth?: { isAuthenticated: boolean } } = {}) =>
   requestMock.create({
     method: 'get',
     path: DETECTION_ENGINE_PRIVILEGES_URL,
+    ...options,
   });
 
 export const addPrepackagedRulesRequest = () =>
@@ -163,7 +172,7 @@ export const getFindResultWithSingleHit = (): FindHit => ({
   page: 1,
   perPage: 1,
   total: 1,
-  data: [getResult()],
+  data: [getAlertMock(getQueryRuleParams())],
 });
 
 export const nonRuleFindResult = (): FindHit => ({
@@ -196,7 +205,7 @@ export const ruleStatusRequest = () =>
   requestMock.create({
     method: 'post',
     path: `${DETECTION_ENGINE_RULES_URL}/_find_statuses`,
-    body: { ids: ['someId'] },
+    body: { ids: ['04128c15-0d1b-4716-a4c5-46997ac7f3bd'] },
   });
 
 export const getImportRulesRequest = (hapiStream?: HapiReadableStream) =>
@@ -329,84 +338,27 @@ export const createActionResult = (): ActionResult => ({
 });
 
 export const nonRuleAlert = () => ({
-  ...getResult(),
+  // Defaulting to QueryRuleParams because ts doesn't like empty objects
+  ...getAlertMock(getQueryRuleParams()),
   id: '04128c15-0d1b-4716-a4c5-46997ac7f3bc',
   name: 'Non-Rule Alert',
   alertTypeId: 'something',
 });
 
-export const getResult = (): RuleAlertType => ({
+export const getAlertMock = <T extends RuleParams>(params: T): Alert<T> => ({
   id: '04128c15-0d1b-4716-a4c5-46997ac7f3bd',
   name: 'Detect Root/Admin Users',
   tags: [`${INTERNAL_RULE_ID_KEY}:rule-1`, `${INTERNAL_IMMUTABLE_KEY}:false`],
   alertTypeId: 'siem.signals',
   consumer: 'siem',
-  params: {
-    author: ['Elastic'],
-    buildingBlockType: undefined,
-    anomalyThreshold: undefined,
-    description: 'Detecting root and admin users',
-    ruleId: 'rule-1',
-    index: ['auditbeat-*', 'filebeat-*', 'packetbeat-*', 'winlogbeat-*'],
-    falsePositives: [],
-    from: 'now-6m',
-    immutable: false,
-    savedId: undefined,
-    query: 'user.name: root or user.name: admin',
-    language: 'kuery',
-    license: 'Elastic License',
-    machineLearningJobId: undefined,
-    outputIndex: '.siem-signals',
-    timelineId: 'some-timeline-id',
-    timelineTitle: 'some-timeline-title',
-    meta: { someMeta: 'someField' },
-    filters: [
-      {
-        query: {
-          match_phrase: {
-            'host.name': 'some-host',
-          },
-        },
-      },
-    ],
-    riskScore: 50,
-    riskScoreMapping: [],
-    ruleNameOverride: undefined,
-    maxSignals: 100,
-    severity: 'high',
-    severityMapping: [],
-    to: 'now',
-    type: 'query',
-    threat: [
-      {
-        framework: 'MITRE ATT&CK',
-        tactic: {
-          id: 'TA0040',
-          name: 'impact',
-          reference: 'https://attack.mitre.org/tactics/TA0040/',
-        },
-        technique: [
-          {
-            id: 'T1499',
-            name: 'endpoint denial of service',
-            reference: 'https://attack.mitre.org/techniques/T1499/',
-          },
-        ],
-      },
-    ],
-    threshold: undefined,
-    timestampOverride: undefined,
-    references: ['http://www.example.com', 'https://ww.example.com'],
-    note: '# Investigative notes',
-    version: 1,
-    exceptionsList: getListArrayMock(),
-  },
+  params,
   createdAt: new Date('2019-12-13T16:40:33.400Z'),
   updatedAt: new Date('2019-12-13T16:40:33.400Z'),
   schedule: { interval: '5m' },
   enabled: true,
   actions: [],
   throttle: null,
+  notifyWhen: null,
   createdBy: 'elastic',
   updatedBy: 'elastic',
   apiKey: null,
@@ -414,25 +366,11 @@ export const getResult = (): RuleAlertType => ({
   muteAll: false,
   mutedInstanceIds: [],
   scheduledTaskId: '2dabe330-0702-11ea-8b50-773b89126888',
+  executionStatus: {
+    status: 'unknown',
+    lastExecutionDate: new Date('2020-08-20T19:23:38Z'),
+  },
 });
-
-export const getMlResult = (): RuleAlertType => {
-  const result = getResult();
-
-  return {
-    ...result,
-    params: {
-      ...result.params,
-      query: undefined,
-      language: undefined,
-      filters: undefined,
-      index: undefined,
-      type: 'machine_learning',
-      anomalyThreshold: 44,
-      machineLearningJobId: 'some_job_id',
-    },
-  };
-};
 
 export const updateActionResult = (): ActionResult => ({
   id: 'result-1',
@@ -495,18 +433,14 @@ export const getMockPrivilegesResult = () => ({
   application: {},
 });
 
-export const getFindResultStatusEmpty = (): SavedObjectsFindResponse<
-  IRuleSavedAttributesSavedObjectAttributes
-> => ({
+export const getFindResultStatusEmpty = (): SavedObjectsFindResponse<IRuleSavedAttributesSavedObjectAttributes> => ({
   page: 1,
   per_page: 1,
   total: 0,
   saved_objects: [],
 });
 
-export const getFindResultStatus = (): SavedObjectsFindResponse<
-  IRuleSavedAttributesSavedObjectAttributes
-> => ({
+export const getFindResultStatus = (): SavedObjectsFindResponse<IRuleSavedAttributesSavedObjectAttributes> => ({
   page: 1,
   per_page: 6,
   total: 2,
@@ -515,7 +449,7 @@ export const getFindResultStatus = (): SavedObjectsFindResponse<
       type: 'my-type',
       id: 'e0b86950-4e9f-11ea-bdbd-07b56aa159b3',
       attributes: {
-        alertId: '1ea5a820-4da1-4e82-92a1-2b43a7bece08',
+        alertId: '04128c15-0d1b-4716-a4c5-46997ac7f3bc',
         statusDate: '2020-02-18T15:26:49.783Z',
         status: 'succeeded',
         lastFailureAt: undefined,
@@ -557,6 +491,72 @@ export const getFindResultStatus = (): SavedObjectsFindResponse<
   ],
 });
 
+export const getFindBulkResultStatus = (): SavedObjectsFindResponse<IRuleSavedAttributesSavedObjectAttributes> => ({
+  page: 1,
+  per_page: 6,
+  total: 2,
+  saved_objects: [],
+  aggregations: {
+    alertIds: {
+      buckets: [
+        {
+          key: '04128c15-0d1b-4716-a4c5-46997ac7f3bd',
+          most_recent_statuses: {
+            hits: {
+              hits: [
+                {
+                  _source: {
+                    'siem-detection-engine-rule-status': {
+                      alertId: '04128c15-0d1b-4716-a4c5-46997ac7f3bd',
+                      statusDate: '2020-02-18T15:26:49.783Z',
+                      status: 'succeeded',
+                      lastFailureAt: undefined,
+                      lastSuccessAt: '2020-02-18T15:26:49.783Z',
+                      lastFailureMessage: undefined,
+                      lastSuccessMessage: 'succeeded',
+                      lastLookBackDate: new Date('2020-02-18T15:14:58.806Z').toISOString(),
+                      gap: '500.32',
+                      searchAfterTimeDurations: ['200.00'],
+                      bulkCreateTimeDurations: ['800.43'],
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
+        {
+          key: '1ea5a820-4da1-4e82-92a1-2b43a7bece08',
+          most_recent_statuses: {
+            hits: {
+              hits: [
+                {
+                  _source: {
+                    'siem-detection-engine-rule-status': {
+                      alertId: '1ea5a820-4da1-4e82-92a1-2b43a7bece08',
+                      statusDate: '2020-02-18T15:15:58.806Z',
+                      status: 'failed',
+                      lastFailureAt: '2020-02-18T15:15:58.806Z',
+                      lastSuccessAt: '2020-02-13T20:31:59.855Z',
+                      lastFailureMessage:
+                        'Signal rule name: "Query with a rule id Number 1", id: "1ea5a820-4da1-4e82-92a1-2b43a7bece08", rule_id: "query-rule-id-1" has a time gap of 5 days (412682928ms), and could be missing signals within that time. Consider increasing your look behind time or adding more Kibana instances.',
+                      lastSuccessMessage: 'succeeded',
+                      lastLookBackDate: new Date('2020-02-18T15:14:58.806Z').toISOString(),
+                      gap: '500.32',
+                      searchAfterTimeDurations: ['200.00'],
+                      bulkCreateTimeDurations: ['800.43'],
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      ],
+    },
+  },
+});
+
 export const getEmptySignalsResponse = (): SignalSearchResponse => ({
   took: 1,
   timed_out: false,
@@ -565,6 +565,22 @@ export const getEmptySignalsResponse = (): SignalSearchResponse => ({
   aggregations: {
     alertsByGrouping: { doc_count_error_upper_bound: 0, sum_other_doc_count: 0, buckets: [] },
   },
+});
+
+export const getEmptyEqlSearchResponse = (): EqlSearchResponse<unknown> => ({
+  hits: { total: { value: 0, relation: 'eq' }, events: [] },
+  is_partial: false,
+  is_running: false,
+  took: 1,
+  timed_out: false,
+});
+
+export const getEmptyEqlSequencesResponse = (): EqlSearchResponse<unknown> => ({
+  hits: { total: { value: 0, relation: 'eq' }, sequences: [] },
+  is_partial: false,
+  is_running: false,
+  took: 1,
+  timed_out: false,
 });
 
 export const getSuccessfulSignalUpdateResponse = () => ({
@@ -616,6 +632,7 @@ export const getNotificationResult = (): RuleNotificationAlertType => ({
     },
   ],
   throttle: null,
+  notifyWhen: null,
   apiKey: null,
   apiKeyOwner: 'elastic',
   createdBy: 'elastic',
@@ -625,6 +642,10 @@ export const getNotificationResult = (): RuleNotificationAlertType => ({
   mutedInstanceIds: [],
   scheduledTaskId: '62b3a130-6b70-11ea-9ce9-6b9818c4cbd7',
   updatedAt: new Date('2020-03-21T12:37:08.730Z'),
+  executionStatus: {
+    status: 'unknown',
+    lastExecutionDate: new Date('2020-08-20T19:23:38Z'),
+  },
 });
 
 export const getFindNotificationsResultWithSingleHit = (): FindHit<RuleNotificationAlertType> => ({
@@ -633,3 +654,17 @@ export const getFindNotificationsResultWithSingleHit = (): FindHit<RuleNotificat
   total: 1,
   data: [getNotificationResult()],
 });
+
+export const getFinalizeSignalsMigrationRequest = () =>
+  requestMock.create({
+    method: 'post',
+    path: DETECTION_ENGINE_SIGNALS_FINALIZE_MIGRATION_URL,
+    body: getFinalizeSignalsMigrationSchemaMock(),
+  });
+
+export const getSignalsMigrationStatusRequest = () =>
+  requestMock.create({
+    method: 'get',
+    path: DETECTION_ENGINE_SIGNALS_MIGRATION_STATUS_URL,
+    query: getSignalsMigrationStatusSchemaMock(),
+  });

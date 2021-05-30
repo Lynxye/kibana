@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { shallow } from 'enzyme';
@@ -10,7 +11,7 @@ import React from 'react';
 
 import { BrowserFields } from '../../../../../../common/containers/source';
 import { mockBrowserFields } from '../../../../../../common/containers/source/mock';
-import { Ecs } from '../../../../../../graphql/types';
+import { Ecs } from '../../../../../../../common/ecs';
 import { mockTimelineData, TestProviders } from '../../../../../../common/mock';
 import { useMountAppended } from '../../../../../../common/utils/use_mount_appended';
 import { RowRenderer } from '../row_renderer';
@@ -18,6 +19,15 @@ import {
   createGenericAuditRowRenderer,
   createGenericFileRowRenderer,
 } from './generic_row_renderer';
+
+jest.mock('@elastic/eui', () => {
+  const original = jest.requireActual('@elastic/eui');
+  return {
+    ...original,
+    // eslint-disable-next-line react/display-name
+    EuiScreenReaderOnly: () => <></>,
+  };
+});
 
 jest.mock('../../../../../../common/components/link_to');
 jest.mock('../../../../../../overview/components/events_by_dataset');

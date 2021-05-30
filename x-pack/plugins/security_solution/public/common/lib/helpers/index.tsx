@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { castArray, isUndefined } from 'lodash/fp';
@@ -23,19 +24,6 @@ export const asArrayIfExists: WrapArrayIfExitts = (value) =>
  * Creates a Union Type for all the values of an object
  */
 export type ValueOf<T> = T[keyof T];
-
-/**
- * Unreachable Assertion helper for scenarios like exhaustive switches
- *
- * @param x Unreachable field
- * @param message Message of error thrown
- */
-export const assertUnreachable = (
-  x: never,
-  message = 'Unknown Field in switch statement'
-): never => {
-  throw new Error(`${message}: ${x}`);
-};
 
 /**
  * Global variables

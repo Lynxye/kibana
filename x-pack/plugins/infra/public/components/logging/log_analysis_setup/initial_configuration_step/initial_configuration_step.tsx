@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { EuiCallOut, EuiForm, EuiSpacer } from '@elastic/eui';
@@ -9,7 +10,7 @@ import { EuiContainedStepProps } from '@elastic/eui/src/components/steps/steps';
 import { i18n } from '@kbn/i18n';
 import { FormattedMessage } from '@kbn/i18n/react';
 import React, { useMemo } from 'react';
-import { SetupStatus } from '../../../../../common/log_analysis';
+import { QualityWarning, SetupStatus } from '../../../../../common/log_analysis';
 import { AnalysisSetupIndicesForm } from './analysis_setup_indices_form';
 import { AnalysisSetupTimerangeForm } from './analysis_setup_timerange_form';
 import {
@@ -31,6 +32,7 @@ interface InitialConfigurationStepProps {
   setupStatus: SetupStatus;
   setValidatedIndices: (selectedIndices: AvailableIndex[]) => void;
   validationErrors?: ValidationUIError[];
+  previousQualityWarnings?: QualityWarning[];
 }
 
 export const createInitialConfigurationStep = (
@@ -50,6 +52,7 @@ export const InitialConfigurationStep: React.FunctionComponent<InitialConfigurat
   setupStatus,
   setValidatedIndices,
   validationErrors = [],
+  previousQualityWarnings = [],
 }: InitialConfigurationStepProps) => {
   const disabled = useMemo(() => !editableFormStatus.includes(setupStatus.type), [setupStatus]);
 
@@ -75,6 +78,7 @@ export const InitialConfigurationStep: React.FunctionComponent<InitialConfigurat
           indices={validatedIndices}
           isValidating={isValidating}
           onChangeSelectedIndices={setValidatedIndices}
+          previousQualityWarnings={previousQualityWarnings}
           validationErrors={indexValidationErrors}
         />
 

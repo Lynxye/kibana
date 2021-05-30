@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
@@ -13,15 +14,14 @@ import {
   ValidationFunc,
   ERROR_CODE,
 } from '../../../../shared_imports';
-import { IMitreEnterpriseAttack } from '../../../pages/detection_engine/rules/types';
-import { isMitreAttackInvalid } from '../mitre/helpers';
+import { AboutStepRule } from '../../../pages/detection_engine/rules/types';
 import { OptionalFieldLabel } from '../optional_field_label';
 import { isUrlInvalid } from '../../../../common/utils/validators';
 import * as I18n from './translations';
 
 const { emptyField } = fieldValidators;
 
-export const schema: FormSchema = {
+export const schema: FormSchema<AboutStepRule> = {
   author: {
     type: FIELD_TYPES.COMBO_BOX,
     label: i18n.translate(
@@ -102,29 +102,12 @@ export const schema: FormSchema = {
     labelAppend: OptionalFieldLabel,
   },
   severity: {
-    value: {
-      type: FIELD_TYPES.SUPER_SELECT,
-      validations: [
-        {
-          validator: emptyField(
-            i18n.translate(
-              'xpack.securitySolution.detectionEngine.createRule.stepAboutRule.severityFieldRequiredError',
-              {
-                defaultMessage: 'A severity is required.',
-              }
-            )
-          ),
-        },
-      ],
-    },
+    value: {},
     mapping: {},
     isMappingChecked: {},
   },
   riskScore: {
-    value: {
-      type: FIELD_TYPES.RANGE,
-      serializer: (input: string) => Number(input),
-    },
+    value: {},
     mapping: {},
     isMappingChecked: {},
   },
@@ -209,28 +192,23 @@ export const schema: FormSchema = {
       }
     ),
     labelAppend: OptionalFieldLabel,
-    validations: [
+  },
+  threatIndicatorPath: {
+    type: FIELD_TYPES.TEXT,
+    label: i18n.translate(
+      'xpack.securitySolution.detectionEngine.createRule.stepAboutRule.fieldThreatIndicatorPathLabel',
       {
-        validator: (
-          ...args: Parameters<ValidationFunc>
-        ): ReturnType<ValidationFunc<{}, ERROR_CODE>> | undefined => {
-          const [{ value, path }] = args;
-          let hasError = false;
-          (value as IMitreEnterpriseAttack[]).forEach((v) => {
-            if (isMitreAttackInvalid(v.tactic.name, v.technique)) {
-              hasError = true;
-            }
-          });
-          return hasError
-            ? {
-                code: 'ERR_FIELD_MISSING',
-                path,
-                message: I18n.CUSTOM_MITRE_ATTACK_TECHNIQUES_REQUIRED,
-              }
-            : undefined;
-        },
-      },
-    ],
+        defaultMessage: 'Indicator prefix override',
+      }
+    ),
+    helpText: i18n.translate(
+      'xpack.securitySolution.detectionEngine.createRule.stepAboutRule.fieldThreatIndicatorPathHelpText',
+      {
+        defaultMessage:
+          'Specify the document prefix containing your indicator fields. Used for enrichment of indicator match alerts.',
+      }
+    ),
+    labelAppend: OptionalFieldLabel,
   },
   timestampOverride: {
     type: FIELD_TYPES.TEXT,

@@ -1,18 +1,19 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import moment from 'moment';
-import { LegacyAPICaller } from 'src/core/server';
 import { CursorPagination } from './types';
 import { parseRelativeDate } from '../../helper';
 import { CursorDirection, SortOrder } from '../../../../common/runtime_types';
+import { UptimeESClient } from '../../lib';
+import { ESFilter } from '../../../../../../../typings/elasticsearch';
 
 export class QueryContext {
-  callES: LegacyAPICaller;
-  heartbeatIndices: string;
+  callES: UptimeESClient;
   dateRangeStart: string;
   dateRangeEnd: string;
   pagination: CursorPagination;
@@ -20,38 +21,40 @@ export class QueryContext {
   size: number;
   statusFilter?: string;
   hasTimespanCache?: boolean;
+  query?: string;
 
   constructor(
-    database: any,
-    heartbeatIndices: string,
+    database: UptimeESClient,
     dateRangeStart: string,
     dateRangeEnd: string,
     pagination: CursorPagination,
     filterClause: any | null,
     size: number,
-    statusFilter?: string
+    statusFilter?: string,
+    query?: string
   ) {
     this.callES = database;
-    this.heartbeatIndices = heartbeatIndices;
     this.dateRangeStart = dateRangeStart;
     this.dateRangeEnd = dateRangeEnd;
     this.pagination = pagination;
     this.filterClause = filterClause;
     this.size = size;
     this.statusFilter = statusFilter;
+    this.query = query;
   }
 
-  async search(params: any): Promise<any> {
-    params.index = this.heartbeatIndices;
-    return this.callES('search', params);
+  async search<TParams>(params: TParams) {
+    return this.callES.search(params);
   }
 
   async count(params: any): Promise<any> {
-    params.index = this.heartbeatIndices;
-    return this.callES('count', params);
+    const {
+      result: { body },
+    } = await this.callES.count(params);
+    return body;
   }
 
-  async dateAndCustomFilters(): Promise<any[]> {
+  async dateAndCustomFilters(): Promise<ESFilter[]> {
     const clauses = [await this.dateRangeFilter()];
     if (this.filterClause) {
       clauses.push(this.filterClause);
@@ -138,13 +141,13 @@ export class QueryContext {
   clone(): QueryContext {
     return new QueryContext(
       this.callES,
-      this.heartbeatIndices,
       this.dateRangeStart,
       this.dateRangeEnd,
       this.pagination,
       this.filterClause,
       this.size,
-      this.statusFilter
+      this.statusFilter,
+      this.query
     );
   }
 

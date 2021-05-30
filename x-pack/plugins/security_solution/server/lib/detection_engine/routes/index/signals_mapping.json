@@ -3,7 +3,33 @@
     "properties": {
       "signal": {
         "properties": {
+          "_meta": {
+            "properties": {
+              "version": {
+                "type": "long"
+              }
+            }
+          },
           "parent": {
+            "properties": {
+              "rule": {
+                "type": "keyword"
+              },
+              "index": {
+                "type": "keyword"
+              },
+              "id": {
+                "type": "keyword"
+              },
+              "type": {
+                "type": "keyword"
+              },
+              "depth": {
+                "type": "long"
+              }
+            }
+          },
+          "parents": {
             "properties": {
               "rule": {
                 "type": "keyword"
@@ -27,6 +53,9 @@
               "rule": {
                 "type": "keyword"
               },
+              "index": {
+                "type": "keyword"
+              },
               "id": {
                 "type": "keyword"
               },
@@ -35,6 +64,16 @@
               },
               "depth": {
                 "type": "long"
+              }
+            }
+          },
+          "group": {
+            "properties": {
+              "id": {
+                "type": "keyword"
+              },
+              "index": {
+                "type": "integer"
               }
             }
           },
@@ -169,6 +208,19 @@
                       },
                       "reference": {
                         "type": "keyword"
+                      },
+                      "subtechnique": {
+                        "properties": {
+                          "id": {
+                            "type": "keyword"
+                          },
+                          "name": {
+                            "type": "keyword"
+                          },
+                          "reference": {
+                            "type": "keyword"
+                          }
+                        }
                       }
                     }
                   }
@@ -183,6 +235,38 @@
                     "type": "float"
                   }
                 }
+              },
+              "threat_mapping": {
+                "properties": {
+                  "entries": {
+                    "properties": {
+                      "field": {
+                        "type": "keyword"
+                      },
+                      "value": {
+                        "type": "keyword"
+                      },
+                      "type": {
+                        "type": "keyword"
+                      }
+                    }
+                  }
+                }
+              },
+              "threat_filters": {
+                "type": "object"
+              },
+              "threat_indicator_path": {
+                "type": "keyword"
+              },
+              "threat_query": {
+                "type": "keyword"
+              },
+              "threat_index": {
+                "type": "keyword"
+              },
+              "threat_language": {
+                "type": "keyword"
               },
               "note": {
                 "type": "text"
@@ -224,6 +308,11 @@
           },
           "original_time": {
             "type": "date"
+          },
+          "original_signal": {
+            "type": "object",
+            "dynamic": false,
+            "enabled": false
           },
           "original_event": {
             "properties": {
@@ -299,6 +388,39 @@
           },
           "threshold_count": {
             "type": "float"
+          },
+          "threshold_result": {
+            "properties": {
+              "from": {
+                "type": "date"
+              },
+              "terms": {
+                "properties": {
+                  "field": {
+                    "type": "keyword"
+                  },
+                  "value": {
+                    "type": "keyword"
+                  }
+                }
+              },
+              "cardinality": {
+                "properties": {
+                  "field": {
+                    "type": "keyword"
+                  },
+                  "value": {
+                    "type": "long"
+                  }
+                }
+              },
+              "count": {
+                "type": "long"
+              }
+            }
+          },
+          "depth": {
+            "type": "integer"
           }
         }
       }

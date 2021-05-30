@@ -1,14 +1,14 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { shallow } from 'enzyme';
 import React from 'react';
-import { MockedProvider } from 'react-apollo/test-utils';
 
-import { mockBrowserFields, mocksSource } from '../../containers/source/mock';
+import { mockBrowserFields } from '../../containers/source/mock';
 import { TestProviders } from '../../mock';
 
 import { DragDropContextWrapper } from './drag_drop_context_wrapper';
@@ -24,11 +24,9 @@ describe('DroppableWrapper', () => {
 
       const wrapper = shallow(
         <TestProviders>
-          <MockedProvider mocks={{}} addTypename={false}>
-            <DragDropContextWrapper browserFields={mockBrowserFields}>
-              <DroppableWrapper droppableId="testing">{message}</DroppableWrapper>
-            </DragDropContextWrapper>
-          </MockedProvider>
+          <DragDropContextWrapper browserFields={mockBrowserFields}>
+            <DroppableWrapper droppableId="testing">{message}</DroppableWrapper>
+          </DragDropContextWrapper>
         </TestProviders>
       );
 
@@ -40,11 +38,9 @@ describe('DroppableWrapper', () => {
 
       const wrapper = mount(
         <TestProviders>
-          <MockedProvider mocks={mocksSource} addTypename={false}>
-            <DragDropContextWrapper browserFields={mockBrowserFields}>
-              <DroppableWrapper droppableId="testing">{message}</DroppableWrapper>
-            </DragDropContextWrapper>
-          </MockedProvider>
+          <DragDropContextWrapper browserFields={mockBrowserFields}>
+            <DroppableWrapper droppableId="testing">{message}</DroppableWrapper>
+          </DragDropContextWrapper>
         </TestProviders>
       );
 
@@ -56,13 +52,11 @@ describe('DroppableWrapper', () => {
 
       const wrapper = mount(
         <TestProviders>
-          <MockedProvider mocks={mocksSource} addTypename={false}>
-            <DragDropContextWrapper browserFields={mockBrowserFields}>
-              <DroppableWrapper render={() => null} droppableId="testing">
-                <div data-test-subj="this-should-not-render">{message}</div>
-              </DroppableWrapper>
-            </DragDropContextWrapper>
-          </MockedProvider>
+          <DragDropContextWrapper browserFields={mockBrowserFields}>
+            <DroppableWrapper render={() => null} droppableId="testing">
+              <div data-test-subj="this-should-not-render">{message}</div>
+            </DroppableWrapper>
+          </DragDropContextWrapper>
         </TestProviders>
       );
 
@@ -72,14 +66,12 @@ describe('DroppableWrapper', () => {
     test('it renders the render prop contents when a render prop is provided', () => {
       const wrapper = mount(
         <TestProviders>
-          <MockedProvider mocks={mocksSource} addTypename={false}>
-            <DragDropContextWrapper browserFields={mockBrowserFields}>
-              <DroppableWrapper
-                render={({ isDraggingOver }) => <div>{`isDraggingOver is: ${isDraggingOver}`}</div>}
-                droppableId="testing"
-              />
-            </DragDropContextWrapper>
-          </MockedProvider>
+          <DragDropContextWrapper browserFields={mockBrowserFields}>
+            <DroppableWrapper
+              render={({ isDraggingOver }) => <div>{`isDraggingOver is: ${isDraggingOver}`}</div>}
+              droppableId="testing"
+            />
+          </DragDropContextWrapper>
         </TestProviders>
       );
 

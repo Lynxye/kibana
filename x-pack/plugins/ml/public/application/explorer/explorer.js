@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 /*
@@ -15,9 +16,9 @@ import { FormattedMessage } from '@kbn/i18n/react';
 
 import {
   htmlIdGenerator,
+  EuiCallOut,
   EuiFlexGroup,
   EuiFlexItem,
-  EuiFormRow,
   EuiHorizontalRule,
   EuiIconTip,
   EuiPage,
@@ -66,7 +67,15 @@ import { ExplorerChartsContainer } from './explorer_charts/explorer_charts_conta
 // Anomalies Table
 import { AnomaliesTable } from '../components/anomalies_table/anomalies_table';
 
-import { getTimefilter, getToastNotifications } from '../util/dependency_cache';
+// Anomalies Map
+import { AnomaliesMap } from './anomalies_map';
+
+import { getToastNotifications } from '../util/dependency_cache';
+import { ANOMALY_DETECTION_DEFAULT_TIME_RANGE } from '../../../common/constants/settings';
+import { withKibana } from '../../../../../../src/plugins/kibana_react/public';
+import { ML_APP_URL_GENERATOR } from '../../../common/constants/ml_url_generator';
+import { AnomalyContextMenu } from './anomaly_context_menu';
+import { isDefined } from '../../../common/types/guards';
 
 const ExplorerPage = ({
   children,
@@ -133,16 +142,33 @@ const ExplorerPage = ({
   </div>
 );
 
-export class Explorer extends React.Component {
+export class ExplorerUI extends React.Component {
   static propTypes = {
     explorerState: PropTypes.object.isRequired,
     setSelectedCells: PropTypes.func.isRequired,
     severity: PropTypes.number.isRequired,
     showCharts: PropTypes.bool.isRequired,
+    selectedJobsRunning: PropTypes.bool.isRequired,
   };
 
   state = { filterIconTriggeredQuery: undefined, language: DEFAULT_QUERY_LANG };
   htmlIdGen = htmlIdGenerator();
+
+  componentDidMount() {
+    const { invalidTimeRangeError } = this.props;
+    if (invalidTimeRangeError) {
+      const toastNotifications = getToastNotifications();
+      toastNotifications.addWarning(
+        i18n.translate('xpack.ml.explorer.invalidTimeRangeInUrlCallout', {
+          defaultMessage:
+            'The time filter was changed to the full range due to an invalid default time filter. Check the advanced settings for {field}.',
+          values: {
+            field: ANOMALY_DETECTION_DEFAULT_TIME_RANGE,
+          },
+        })
+      );
+    }
+  }
 
   // Escape regular parens from fieldName as that portion of the query is not wrapped in double quotes
   // and will cause a syntax error when called with getKqlQueryValues
@@ -204,7 +230,22 @@ export class Explorer extends React.Component {
   updateLanguage = (language) => this.setState({ language });
 
   render() {
-    const { showCharts, severity } = this.props;
+    const {
+      share: {
+        urlGenerators: { getUrlGenerator },
+      },
+    } = this.props.kibana.services;
+
+    const mlUrlGenerator = getUrlGenerator(ML_APP_URL_GENERATOR);
+
+    const {
+      showCharts,
+      severity,
+      stoppedPartitions,
+      selectedJobsRunning,
+      timefilter,
+      timeBuckets,
+    } = this.props;
 
     const {
       annotations,
@@ -220,8 +261,9 @@ export class Explorer extends React.Component {
       selectedCells,
       selectedJobs,
       tableData,
+      swimLaneSeverity,
     } = this.props.explorerState;
-    const { annotationsData, aggregations } = annotations;
+    const { annotationsData, aggregations, error: annotationsError } = annotations;
 
     const jobSelectorProps = {
       dateFormatTz: getDateFormatTz(),
@@ -229,6 +271,11 @@ export class Explorer extends React.Component {
 
     const noJobsFound = selectedJobs === null || selectedJobs.length === 0;
     const hasResults = overallSwimlaneData.points && overallSwimlaneData.points.length > 0;
+    const hasResultsWithAnomalies =
+      (hasResults && overallSwimlaneData.points.some((v) => v.value > 0)) ||
+      tableData.anomalies?.length > 0;
+
+    const hasActiveFilter = isDefined(swimLaneSeverity);
 
     if (noJobsFound && !loading) {
       return (
@@ -238,17 +285,19 @@ export class Explorer extends React.Component {
       );
     }
 
-    if (noJobsFound && hasResults === false && !loading) {
+    if (!hasResultsWithAnomalies && !loading && !hasActiveFilter) {
       return (
         <ExplorerPage jobSelectorProps={jobSelectorProps}>
-          <ExplorerNoResultsFound />
+          <ExplorerNoResultsFound
+            hasResults={hasResults}
+            selectedJobsRunning={selectedJobsRunning}
+          />
         </ExplorerPage>
       );
     }
     const mainColumnWidthClassName = noInfluencersConfigured === true ? 'col-xs-12' : 'col-xs-10';
     const mainColumnClasses = `column ${mainColumnWidthClassName}`;
 
-    const timefilter = getTimefilter();
     const bounds = timefilter.getActiveBounds();
     const selectedJobIds = Array.isArray(selectedJobs) ? selectedJobs.map((job) => job.id) : [];
     return (
@@ -285,6 +334,15 @@ export class Explorer extends React.Component {
                     id="xpack.ml.explorer.topInfuencersTitle"
                     defaultMessage="Top influencers"
                   />
+                  <EuiIconTip
+                    content={
+                      <FormattedMessage
+                        id="xpack.ml.explorer.topInfluencersTooltip"
+                        defaultMessage="View the relative impact of the top influencers in the selected time period and add them as filters on the results. Each influencer has a maximum anomaly score between 0-100 and a total anomaly score for that period."
+                      />
+                    }
+                    position="right"
+                  />
                 </h2>
               </EuiTitle>
               {loading ? (
@@ -297,14 +355,62 @@ export class Explorer extends React.Component {
 
           <div className={mainColumnClasses}>
             <EuiSpacer size="m" />
+            {stoppedPartitions && (
+              <EuiCallOut
+                size={'s'}
+                title={
+                  <FormattedMessage
+                    id="xpack.ml.explorer.stoppedPartitionsExistCallout"
+                    defaultMessage="There may be fewer results than there could have been because stop_on_warn is turned on. Both categorization and subsequent anomaly detection have stopped for some partitions in {jobsWithStoppedPartitions, plural, one {job} other {jobs}} [{stoppedPartitions}] where the categorization status has changed to warn."
+                    values={{
+                      jobsWithStoppedPartitions: stoppedPartitions.length,
+                      stoppedPartitions: stoppedPartitions.join(', '),
+                    }}
+                  />
+                }
+              />
+            )}
+
             <AnomalyTimeline
               explorerState={this.props.explorerState}
               setSelectedCells={this.props.setSelectedCells}
             />
+
             <EuiSpacer size="m" />
+
+            {annotationsError !== undefined && (
+              <>
+                <EuiTitle
+                  className="panel-title"
+                  data-test-subj="mlAnomalyExplorerAnnotationsPanel error"
+                >
+                  <h2>
+                    <FormattedMessage
+                      id="xpack.ml.explorer.annotationsErrorTitle"
+                      defaultMessage="Annotations"
+                    />
+                  </h2>
+                </EuiTitle>
+                <EuiPanel>
+                  <EuiCallOut
+                    title={i18n.translate('xpack.ml.explorer.annotationsErrorCallOutTitle', {
+                      defaultMessage: 'An error occurred loading annotations:',
+                    })}
+                    color="danger"
+                    iconType="alert"
+                  >
+                    <p>{annotationsError}</p>
+                  </EuiCallOut>
+                </EuiPanel>
+                <EuiSpacer size="m" />
+              </>
+            )}
+            {loading === false && tableData.anomalies?.length ? (
+              <AnomaliesMap anomalies={tableData.anomalies} jobIds={selectedJobIds} />
+            ) : null}
             {annotationsData.length > 0 && (
               <>
-                <EuiPanel>
+                <EuiPanel data-test-subj="mlAnomalyExplorerAnnotationsPanel loaded">
                   <EuiAccordion
                     id={this.htmlIdGen()}
                     buttonContent={
@@ -346,44 +452,43 @@ export class Explorer extends React.Component {
             )}
             {loading === false && (
               <EuiPanel>
-                <EuiTitle className="panel-title">
-                  <h2>
-                    <FormattedMessage
-                      id="xpack.ml.explorer.anomaliesTitle"
-                      defaultMessage="Anomalies"
-                    />
-                  </h2>
-                </EuiTitle>
-
-                <EuiFlexGroup
-                  direction="row"
-                  gutterSize="l"
-                  responsive={true}
-                  className="ml-anomalies-controls"
-                >
-                  <EuiFlexItem grow={false} style={{ width: '170px' }}>
-                    <EuiFormRow
-                      label={i18n.translate('xpack.ml.explorer.severityThresholdLabel', {
-                        defaultMessage: 'Severity threshold',
-                      })}
-                    >
-                      <SelectSeverity />
-                    </EuiFormRow>
+                <EuiFlexGroup direction="row" gutterSize="m" responsive={false} alignItems="center">
+                  <EuiFlexItem grow={false}>
+                    <EuiTitle className="panel-title">
+                      <h2>
+                        <FormattedMessage
+                          id="xpack.ml.explorer.anomaliesTitle"
+                          defaultMessage="Anomalies"
+                        />
+                      </h2>
+                    </EuiTitle>
                   </EuiFlexItem>
-                  <EuiFlexItem grow={false} style={{ width: '170px' }}>
-                    <EuiFormRow
-                      label={i18n.translate('xpack.ml.explorer.intervalLabel', {
-                        defaultMessage: 'Interval',
-                      })}
-                    >
-                      <SelectInterval />
-                    </EuiFormRow>
+
+                  <EuiFlexItem grow={false} style={{ marginLeft: 'auto', alignSelf: 'baseline' }}>
+                    <AnomalyContextMenu
+                      selectedJobs={selectedJobs}
+                      selectedCells={selectedCells}
+                      bounds={bounds}
+                      interval={
+                        this.props.explorerState.swimlaneBucketInterval
+                          ? this.props.explorerState.swimlaneBucketInterval.asSeconds()
+                          : undefined
+                      }
+                      chartsCount={chartsData.seriesToPlot.length}
+                    />
+                  </EuiFlexItem>
+                </EuiFlexGroup>
+
+                <EuiFlexGroup direction="row" gutterSize="l" responsive={true} alignItems="center">
+                  <EuiFlexItem grow={false}>
+                    <SelectSeverity />
+                  </EuiFlexItem>
+                  <EuiFlexItem grow={false}>
+                    <SelectInterval />
                   </EuiFlexItem>
                   {chartsData.seriesToPlot.length > 0 && selectedCells !== undefined && (
-                    <EuiFlexItem grow={false} style={{ alignSelf: 'center' }}>
-                      <EuiFormRow label="&#8203;">
-                        <CheckboxShowCharts />
-                      </EuiFormRow>
+                    <EuiFlexItem grow={false}>
+                      <CheckboxShowCharts />
                     </EuiFlexItem>
                   )}
                 </EuiFlexGroup>
@@ -391,7 +496,18 @@ export class Explorer extends React.Component {
                 <EuiSpacer size="m" />
 
                 <div className="euiText explorer-charts">
-                  {showCharts && <ExplorerChartsContainer {...{ ...chartsData, severity }} />}
+                  {showCharts ? (
+                    <ExplorerChartsContainer
+                      {...{
+                        ...chartsData,
+                        severity,
+                        timefilter,
+                        mlUrlGenerator,
+                        timeBuckets,
+                        onSelectEntity: this.applyFilter,
+                      }}
+                    />
+                  ) : null}
                 </div>
 
                 <AnomaliesTable
@@ -407,3 +523,5 @@ export class Explorer extends React.Component {
     );
   }
 }
+
+export const Explorer = withKibana(ExplorerUI);

@@ -1,19 +1,23 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
-import expect from '@kbn/expect';
+
+import { TRANSFORM_STATE } from '../../../../plugins/transform/common/constants';
 
 import { FtrProviderContext } from '../../ftr_provider_context';
-
-interface GroupByEntry {
-  identifier: string;
-  label: string;
-  intervalLabel?: string;
-}
+import {
+  GroupByEntry,
+  isLatestTransformTestData,
+  isPivotTransformTestData,
+  LatestTransformTestData,
+  PivotTransformTestData,
+} from './index';
 
 export default function ({ getService }: FtrProviderContext) {
+  const canvasElement = getService('canvasElement');
   const esArchiver = getService('esArchiver');
   const transform = getService('transform');
 
@@ -30,14 +34,15 @@ export default function ({ getService }: FtrProviderContext) {
       await transform.api.cleanTransformIndices();
     });
 
-    const testDataList = [
+    const testDataList: Array<PivotTransformTestData | LatestTransformTestData> = [
       {
+        type: 'pivot',
         suiteTitle: 'batch transform with terms+date_histogram groups and avg agg',
         source: 'ft_ecommerce',
         groupByEntries: [
           {
-            identifier: 'terms(category.keyword)',
-            label: 'category.keyword',
+            identifier: 'terms(category)',
+            label: 'category',
           } as GroupByEntry,
           {
             identifier: 'date_histogram(order_date)',
@@ -81,15 +86,16 @@ export default function ({ getService }: FtrProviderContext) {
         ],
         transformId: `ec_1_${Date.now()}`,
         transformDescription:
-          'ecommerce batch transform with groups terms(category.keyword) + date_histogram(order_date) 1m and aggregation avg(products.base_price)',
+          'ecommerce batch transform with groups terms(category) + date_histogram(order_date) 1m and aggregation avg(products.base_price)',
         get destinationIndex(): string {
           return `user-${this.transformId}`;
         },
+        discoverAdjustSuperDatePicker: true,
         expected: {
-          pivotAdvancedEditorValueArr: ['{', '  "group_by": {', '    "category.keyword": {'],
+          pivotAdvancedEditorValueArr: ['{', '  "group_by": {', '    "category": {'],
           pivotAdvancedEditorValue: {
             group_by: {
-              'category.keyword': {
+              category: {
                 terms: {
                   field: 'category.keyword',
                 },
@@ -137,12 +143,12 @@ export default function ({ getService }: FtrProviderContext) {
               },
             },
           },
-          pivotPreview: {
+          transformPreview: {
             column: 0,
             values: [`Men's Accessories`],
           },
           row: {
-            status: 'stopped',
+            status: TRANSFORM_STATE.STOPPED,
             mode: 'batch',
             progress: '100',
           },
@@ -151,24 +157,102 @@ export default function ({ getService }: FtrProviderContext) {
             rows: 5,
           },
           histogramCharts: [
-            { chartAvailable: false, id: 'category', legend: 'Chart not supported.' },
-            { chartAvailable: true, id: 'currency', legend: '1 category' },
             {
-              chartAvailable: false,
-              id: 'customer_birth_date',
-              legend: '0 documents contain field.',
+              chartAvailable: true,
+              id: 'category',
+              legend: '6 categories',
+              colorStats: [
+                { color: '#000000', percentage: 45 },
+                { color: '#54B399', percentage: 55 },
+              ],
             },
-            { chartAvailable: false, id: 'customer_first_name', legend: 'Chart not supported.' },
-            { chartAvailable: false, id: 'customer_full_name', legend: 'Chart not supported.' },
-            { chartAvailable: true, id: 'customer_gender', legend: '2 categories' },
-            { chartAvailable: true, id: 'customer_id', legend: 'top 20 of 46 categories' },
-            { chartAvailable: false, id: 'customer_last_name', legend: 'Chart not supported.' },
-            { chartAvailable: true, id: 'customer_phone', legend: '1 category' },
-            { chartAvailable: true, id: 'day_of_week', legend: '7 categories' },
+            {
+              chartAvailable: true,
+              id: 'currency',
+              legend: '1 category',
+              colorStats: [
+                { color: '#000000', percentage: 10 },
+                { color: '#54B399', percentage: 90 },
+              ],
+            },
+            {
+              chartAvailable: true,
+              id: 'customer_first_name',
+              legend: 'top 20 of 46 categories',
+              colorStats: [
+                { color: '#000000', percentage: 60 },
+                { color: '#54B399', percentage: 35 },
+              ],
+            },
+            {
+              chartAvailable: true,
+              id: 'customer_full_name',
+              legend: 'top 20 of 3321 categories',
+              colorStats: [
+                { color: '#000000', percentage: 25 },
+                { color: '#54B399', percentage: 67 },
+              ],
+            },
+            {
+              chartAvailable: true,
+              id: 'customer_gender',
+              legend: '2 categories',
+              colorStats: [
+                { color: '#000000', percentage: 15 },
+                { color: '#54B399', percentage: 85 },
+              ],
+            },
+            {
+              chartAvailable: true,
+              id: 'customer_id',
+              legend: 'top 20 of 46 categories',
+              colorStats: [
+                { color: '#54B399', percentage: 35 },
+                { color: '#000000', percentage: 60 },
+              ],
+            },
+            {
+              chartAvailable: true,
+              id: 'customer_last_name',
+              legend: 'top 20 of 183 categories',
+              colorStats: [
+                { color: '#000000', percentage: 25 },
+                { color: '#54B399', percentage: 70 },
+              ],
+            },
+            {
+              chartAvailable: true,
+              id: 'customer_phone',
+              legend: '1 category',
+              colorStats: [
+                { color: '#000000', percentage: 10 },
+                { color: '#54B399', percentage: 90 },
+              ],
+            },
+            {
+              chartAvailable: true,
+              id: 'day_of_week',
+              legend: '7 categories',
+              colorStats: [
+                { color: '#000000', percentage: 20 },
+                { color: '#54B399', percentage: 75 },
+              ],
+            },
+            {
+              chartAvailable: true,
+              id: 'day_of_week_i',
+              legend: '0 - 6',
+              colorStats: [
+                { color: '#000000', percentage: 20 },
+                { color: '#54B399', percentage: 75 },
+              ],
+            },
           ],
+          discoverQueryHits: '7,270',
         },
-      },
+      } as PivotTransformTestData,
       {
+        type: 'pivot',
         suiteTitle: 'batch transform with terms group and percentiles agg',
         source: 'ft_ecommerce',
         groupByEntries: [
@@ -202,6 +286,7 @@ export default function ({ getService }: FtrProviderContext) {
         get destinationIndex(): string {
           return `user-${this.transformId}`;
         },
+        discoverAdjustSuperDatePicker: false,
         expected: {
           pivotAdvancedEditorValueArr: ['{', '  "group_by": {', '    "geoip.country_iso_code": {'],
           pivotAdvancedEditorValue: {
@@ -235,12 +320,12 @@ export default function ({ getService }: FtrProviderContext) {
               },
             },
           },
-          pivotPreview: {
+          transformPreview: {
             column: 0,
             values: ['AE', 'CO', 'EG', 'FR', 'GB'],
           },
           row: {
-            status: 'stopped',
+            status: TRANSFORM_STATE.STOPPED,
             mode: 'batch',
             progress: '100',
           },
@@ -248,9 +333,58 @@ export default function ({ getService }: FtrProviderContext) {
             columns: 10,
             rows: 5,
           },
-          histogramCharts: [],
+          discoverQueryHits: '10',
         },
-      },
+      } as PivotTransformTestData,
+      {
+        type: 'latest',
+        suiteTitle: 'batch transform with the latest function',
+        source: 'ft_ecommerce',
+        uniqueKeys: [
+          {
+            identifier: 'geoip.country_iso_code',
+            label: 'geoip.country_iso_code',
+          },
+        ],
+        sortField: {
+          identifier: 'order_date',
+          label: 'order_date',
+        },
+        transformId: `ec_3_${Date.now()}`,
+
+        transformDescription:
+          'ecommerce batch transform with the latest function config, sort by order_data, country code as unique key',
+        get destinationIndex(): string {
+          return `user-${this.transformId}`;
+        },
+        discoverAdjustSuperDatePicker: true,
+        expected: {
+          latestPreview: {
+            column: 0,
+            values: [],
+          },
+          row: {
+            status: TRANSFORM_STATE.STOPPED,
+            mode: 'batch',
+            progress: '100',
+          },
+          indexPreview: {
+            columns: 10,
+            rows: 5,
+          },
+          transformPreview: {
+            column: 0,
+            values: [
+              'July 12th 2019, 22:16:19',
+              'July 12th 2019, 22:50:53',
+              'July 12th 2019, 23:06:43',
+              'July 12th 2019, 23:15:22',
+              'July 12th 2019, 23:31:12',
+            ],
+          },
+          discoverQueryHits: '10',
+        },
+      } as LatestTransformTestData,
     ];
 
     for (const testData of testDataList) {
@@ -260,179 +394,187 @@ export default function ({ getService }: FtrProviderContext) {
           await transform.testResources.deleteIndexPatternByTitle(testData.destinationIndex);
         });
 
-        it('loads the home page', async () => {
+        it('loads the wizard for the source data', async () => {
+          await transform.testExecution.logTestStep('loads the home page');
           await transform.navigation.navigateTo();
           await transform.management.assertTransformListPageExists();
-        });
 
-        it('displays the stats bar', async () => {
+          await transform.testExecution.logTestStep('displays the stats bar');
           await transform.management.assertTransformStatsBarExists();
-        });
 
-        it('loads the source selection modal', async () => {
+          await transform.testExecution.logTestStep('loads the source selection modal');
           await transform.management.startTransformCreation();
-        });
 
-        it('selects the source data', async () => {
+          await transform.testExecution.logTestStep('selects the source data');
           await transform.sourceSelection.selectSource(testData.source);
         });
 
-        it('displays the define pivot step', async () => {
+        it('navigates through the wizard and sets all needed fields', async () => {
+          await transform.testExecution.logTestStep('displays the define step');
           await transform.wizard.assertDefineStepActive();
-        });
 
-        it('loads the index preview', async () => {
+          await transform.testExecution.logTestStep('has correct transform function selected');
+          await transform.wizard.assertSelectedTransformFunction('pivot');
+
+          await transform.testExecution.logTestStep('loads the index preview');
           await transform.wizard.assertIndexPreviewLoaded();
-        });
 
-        it('shows the index preview', async () => {
+          await transform.testExecution.logTestStep('shows the index preview');
           await transform.wizard.assertIndexPreview(
             testData.expected.indexPreview.columns,
             testData.expected.indexPreview.rows
           );
-        });
 
-        it('displays an empty pivot preview', async () => {
-          await transform.wizard.assertPivotPreviewEmpty();
-        });
+          await transform.testExecution.logTestStep('displays an empty transform preview');
+          await transform.wizard.assertTransformPreviewEmpty();
 
-        it('displays the query input', async () => {
+          await transform.testExecution.logTestStep('displays the query input');
           await transform.wizard.assertQueryInputExists();
           await transform.wizard.assertQueryValue('');
-        });
 
-        it('displays the advanced query editor switch', async () => {
+          await transform.testExecution.logTestStep('displays the advanced query editor switch');
           await transform.wizard.assertAdvancedQueryEditorSwitchExists();
           await transform.wizard.assertAdvancedQueryEditorSwitchCheckState(false);
-        });
 
-        it('enables the index preview histogram charts', async () => {
-          await transform.wizard.enableIndexPreviewHistogramCharts();
-        });
+          // Disable anti-aliasing to stabilize canvas image rendering assertions
+          await canvasElement.disableAntiAliasing();
 
-        it('displays the index preview histogram charts', async () => {
-          await transform.wizard.assertIndexPreviewHistogramCharts(
-            testData.expected.histogramCharts
-          );
-        });
+          await transform.testExecution.logTestStep('enables the index preview histogram charts');
+          await transform.wizard.enableIndexPreviewHistogramCharts(true);
 
-        it('adds the group by entries', async () => {
-          for (const [index, entry] of testData.groupByEntries.entries()) {
-            await transform.wizard.assertGroupByInputExists();
-            await transform.wizard.assertGroupByInputValue([]);
-            await transform.wizard.addGroupByEntry(
-              index,
-              entry.identifier,
-              entry.label,
-              entry.intervalLabel
+          if (Array.isArray(testData.expected.histogramCharts)) {
+            await transform.testExecution.logTestStep(
+              'displays the index preview histogram charts'
+            );
+            await transform.wizard.assertIndexPreviewHistogramCharts(
+              testData.expected.histogramCharts
             );
           }
-        });
 
-        it('adds the aggregation entries', async () => {
-          await transform.wizard.addAggregationEntries(testData.aggregationEntries);
-        });
+          await canvasElement.resetAntiAliasing();
 
-        it('displays the advanced pivot editor switch', async () => {
-          await transform.wizard.assertAdvancedPivotEditorSwitchExists();
-          await transform.wizard.assertAdvancedPivotEditorSwitchCheckState(false);
-        });
+          if (isPivotTransformTestData(testData)) {
+            await transform.testExecution.logTestStep('adds the group by entries');
+            for (const [index, entry] of testData.groupByEntries.entries()) {
+              await transform.wizard.assertGroupByInputExists();
+              await transform.wizard.assertGroupByInputValue([]);
+              await transform.wizard.addGroupByEntry(
+                index,
+                entry.identifier,
+                entry.label,
+                entry.intervalLabel
+              );
+            }
 
-        it('displays the advanced configuration', async () => {
-          await transform.wizard.enabledAdvancedPivotEditor();
-          await transform.wizard.assertAdvancedPivotEditorContent(
-            testData.expected.pivotAdvancedEditorValueArr
-          );
-        });
+            await transform.testExecution.logTestStep('adds the aggregation entries');
+            await transform.wizard.addAggregationEntries(testData.aggregationEntries);
 
-        it('loads the pivot preview', async () => {
+            await transform.testExecution.logTestStep('displays the advanced pivot editor switch');
+            await transform.wizard.assertAdvancedPivotEditorSwitchExists();
+            await transform.wizard.assertAdvancedPivotEditorSwitchCheckState(false);
+
+            await transform.testExecution.logTestStep('displays the advanced configuration');
+            await transform.wizard.enableAdvancedPivotEditor();
+            await transform.wizard.assertAdvancedPivotEditorContent(
+              testData.expected.pivotAdvancedEditorValueArr
+            );
+          }
+
+          if (isLatestTransformTestData(testData)) {
+            await transform.testExecution.logTestStep('sets latest transform method');
+            await transform.wizard.selectTransformFunction('latest');
+            await transform.testExecution.logTestStep('adds unique keys');
+            for (const { identifier, label } of testData.uniqueKeys) {
+              await transform.wizard.assertUniqueKeysInputExists();
+              await transform.wizard.assertUniqueKeysInputValue([]);
+              await transform.wizard.addUniqueKeyEntry(identifier, label);
+            }
+            await transform.testExecution.logTestStep('sets the sort field');
+            await transform.wizard.assertSortFieldInputExists();
+            await transform.wizard.assertSortFieldInputValue('');
+            await transform.wizard.setSortFieldValue(
+              testData.sortField.identifier,
+              testData.sortField.label
+            );
+          }
+
+          await transform.testExecution.logTestStep('loads the transform preview');
           await transform.wizard.assertPivotPreviewLoaded();
-        });
 
-        it('shows the pivot preview', async () => {
+          await transform.testExecution.logTestStep('shows the transform preview');
           await transform.wizard.assertPivotPreviewChartHistogramButtonMissing();
-          await transform.wizard.assertPivotPreviewColumnValues(
-            testData.expected.pivotPreview.column,
-            testData.expected.pivotPreview.values
-          );
-        });
+          // cell virtualization means the last column is cutoff in the functional tests
+          // https://github.com/elastic/eui/issues/4470
+          // await transform.wizard.assertPivotPreviewColumnValues(
+          //   testData.expected.transformPreview.column,
+          //   testData.expected.transformPreview.values
+          // );
 
-        it('loads the details step', async () => {
+          await transform.testExecution.logTestStep('loads the details step');
           await transform.wizard.advanceToDetailsStep();
-        });
 
-        it('inputs the transform id', async () => {
+          await transform.testExecution.logTestStep('inputs the transform id');
           await transform.wizard.assertTransformIdInputExists();
           await transform.wizard.assertTransformIdValue('');
           await transform.wizard.setTransformId(testData.transformId);
-        });
 
-        it('inputs the transform description', async () => {
+          await transform.testExecution.logTestStep('inputs the transform description');
           await transform.wizard.assertTransformDescriptionInputExists();
           await transform.wizard.assertTransformDescriptionValue('');
           await transform.wizard.setTransformDescription(testData.transformDescription);
-        });
 
-        it('inputs the destination index', async () => {
+          await transform.testExecution.logTestStep('inputs the destination index');
           await transform.wizard.assertDestinationIndexInputExists();
           await transform.wizard.assertDestinationIndexValue('');
           await transform.wizard.setDestinationIndex(testData.destinationIndex);
-        });
 
-        it('displays the create index pattern switch', async () => {
+          await transform.testExecution.logTestStep('displays the create index pattern switch');
           await transform.wizard.assertCreateIndexPatternSwitchExists();
           await transform.wizard.assertCreateIndexPatternSwitchCheckState(true);
-        });
 
-        it('displays the continuous mode switch', async () => {
+          await transform.testExecution.logTestStep('displays the continuous mode switch');
           await transform.wizard.assertContinuousModeSwitchExists();
           await transform.wizard.assertContinuousModeSwitchCheckState(false);
-        });
 
-        it('loads the create step', async () => {
+          await transform.testExecution.logTestStep('loads the create step');
           await transform.wizard.advanceToCreateStep();
-        });
 
-        it('displays the create and start button', async () => {
+          await transform.testExecution.logTestStep('displays the create and start button');
           await transform.wizard.assertCreateAndStartButtonExists();
           await transform.wizard.assertCreateAndStartButtonEnabled(true);
-        });
 
-        it('displays the create button', async () => {
+          await transform.testExecution.logTestStep('displays the create button');
           await transform.wizard.assertCreateButtonExists();
           await transform.wizard.assertCreateButtonEnabled(true);
-        });
 
-        it('displays the copy to clipboard button', async () => {
+          await transform.testExecution.logTestStep('displays the copy to clipboard button');
           await transform.wizard.assertCopyToClipboardButtonExists();
           await transform.wizard.assertCopyToClipboardButtonEnabled(true);
         });
 
-        it('creates the transform', async () => {
+        it('runs the transform and displays it correctly in the job list', async () => {
+          await transform.testExecution.logTestStep('creates the transform');
           await transform.wizard.createTransform();
-        });
 
-        it('starts the transform and finishes processing', async () => {
+          await transform.testExecution.logTestStep('starts the transform and finishes processing');
           await transform.wizard.startTransform();
           await transform.wizard.waitForProgressBarComplete();
-        });
 
-        it('returns to the management page', async () => {
+          await transform.testExecution.logTestStep('returns to the management page');
           await transform.wizard.returnToManagement();
-        });
 
-        it('displays the transforms table', async () => {
+          await transform.testExecution.logTestStep('displays the transforms table');
           await transform.management.assertTransformsTableExists();
-        });
 
-        it('displays the created transform in the transform list', async () => {
+          await transform.testExecution.logTestStep(
+            'displays the created transform in the transform list'
+          );
           await transform.table.refreshTransformList();
-          await transform.table.filterWithSearchString(testData.transformId);
-          const rows = await transform.table.parseTransformTable();
-          expect(rows.filter((row) => row.id === testData.transformId)).to.have.length(1);
-        });
+          await transform.table.filterWithSearchString(testData.transformId, 1);
 
-        it('transform creation displays details for the created transform in the transform list', async () => {
+          await transform.testExecution.logTestStep(
+            'transform creation displays details for the created transform in the transform list'
+          );
           await transform.table.assertTransformRowFields(testData.transformId, {
             id: testData.transformId,
             description: testData.transformDescription,
@@ -440,6 +582,26 @@ export default function ({ getService }: FtrProviderContext) {
             mode: testData.expected.row.mode,
             progress: testData.expected.row.progress,
           });
+        });
+
+        it('navigates to discover and displays results of the destination index', async () => {
+          await transform.testExecution.logTestStep('should show the actions popover');
+          await transform.table.assertTransformRowActions(testData.transformId, false);
+
+          await transform.testExecution.logTestStep('should navigate to discover');
+          await transform.table.clickTransformRowAction('Discover');
+
+          if (testData.discoverAdjustSuperDatePicker) {
+            await transform.discover.assertNoResults(testData.destinationIndex);
+            await transform.testExecution.logTestStep(
+              'should switch quick select lookback to years'
+            );
+            await transform.discover.assertSuperDatePickerToggleQuickMenuButtonExists();
+            await transform.discover.openSuperDatePicker();
+            await transform.discover.quickSelectYears();
+          }
+
+          await transform.discover.assertDiscoverQueryHits(testData.expected.discoverQueryHits);
         });
       });
     }

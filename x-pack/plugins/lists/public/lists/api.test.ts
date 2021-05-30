@@ -1,8 +1,18 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
+import {
+  createListIndex,
+  deleteList,
+  exportList,
+  findLists,
+  importList,
+  readListIndex,
+} from '@kbn/securitysolution-list-api';
 
 import { HttpFetchOptions } from '../../../../../src/core/public';
 import { httpServiceMock } from '../../../../../src/core/public/mocks';
@@ -12,20 +22,14 @@ import { getListItemIndexExistSchemaResponseMock } from '../../common/schemas/re
 import { getFoundListSchemaMock } from '../../common/schemas/response/found_list_schema.mock';
 
 import {
-  createListIndex,
-  deleteList,
-  exportList,
-  findLists,
-  importList,
-  readListIndex,
-} from './api';
-import {
   ApiPayload,
   DeleteListParams,
   ExportListParams,
   FindListsParams,
   ImportListParams,
 } from './types';
+
+// TODO: This test should be ported to: packages/kbn-securitysolution-list-api/src/list_api/index.test.ts once the mocks are ported from Kibana core
 
 describe('Value Lists API', () => {
   let httpMock: ReturnType<typeof httpServiceMock.createStartContract>;
@@ -41,7 +45,11 @@ describe('Value Lists API', () => {
 
     it('DELETEs specifying the id as a query parameter', async () => {
       const abortCtrl = new AbortController();
-      const payload: ApiPayload<DeleteListParams> = { id: 'list-id' };
+      const payload: ApiPayload<DeleteListParams> = {
+        deleteReferences: false,
+        id: 'list-id',
+        ignoreReferences: true,
+      };
       await deleteList({
         http: httpMock,
         ...payload,
@@ -52,7 +60,7 @@ describe('Value Lists API', () => {
         '/api/lists',
         expect.objectContaining({
           method: 'DELETE',
-          query: { id: 'list-id' },
+          query: { deleteReferences: false, id: 'list-id', ignoreReferences: true },
         })
       );
     });

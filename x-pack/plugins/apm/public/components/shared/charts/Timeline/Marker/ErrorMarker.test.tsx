@@ -1,18 +1,29 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import React from 'react';
-import { ErrorMarker } from './ErrorMarker';
-import { ErrorMark } from '../../../../app/TransactionDetails/WaterfallWithSummmary/WaterfallContainer/Marks/get_error_marks';
 import { fireEvent } from '@testing-library/react';
 import { act } from '@testing-library/react-hooks';
+import React, { ReactNode } from 'react';
+import { MemoryRouter } from 'react-router-dom';
+import { MockApmPluginContextWrapper } from '../../../../../context/apm_plugin/mock_apm_plugin_context';
 import {
   expectTextsInDocument,
   renderWithTheme,
 } from '../../../../../utils/testHelpers';
+import { ErrorMark } from '../../../../app/transaction_details/WaterfallWithSummmary/WaterfallContainer/Marks/get_error_marks';
+import { ErrorMarker } from './ErrorMarker';
+
+function Wrapper({ children }: { children?: ReactNode }) {
+  return (
+    <MemoryRouter>
+      <MockApmPluginContextWrapper>{children}</MockApmPluginContextWrapper>
+    </MemoryRouter>
+  );
+}
 
 describe('ErrorMarker', () => {
   const mark = ({
@@ -36,7 +47,9 @@ describe('ErrorMarker', () => {
   } as unknown) as ErrorMark;
 
   function openPopover(errorMark: ErrorMark) {
-    const component = renderWithTheme(<ErrorMarker mark={errorMark} />);
+    const component = renderWithTheme(<ErrorMarker mark={errorMark} />, {
+      wrapper: Wrapper,
+    });
     act(() => {
       fireEvent.click(component.getByTestId('popover'));
     });
@@ -51,7 +64,8 @@ describe('ErrorMarker', () => {
   it('renders link with trace and transaction', () => {
     const component = openPopover(mark);
     const errorLink = component.getByTestId('errorLink') as HTMLAnchorElement;
-    expect(getKueryDecoded(errorLink.hash)).toEqual(
+
+    expect(getKueryDecoded(errorLink.search)).toEqual(
       'kuery=trace.id : "123" and transaction.id : "456"'
     );
   });
@@ -63,7 +77,7 @@ describe('ErrorMarker', () => {
     } as ErrorMark;
     const component = openPopover(newMark);
     const errorLink = component.getByTestId('errorLink') as HTMLAnchorElement;
-    expect(getKueryDecoded(errorLink.hash)).toEqual('kuery=trace.id : "123"');
+    expect(getKueryDecoded(errorLink.search)).toEqual('kuery=trace.id : "123"');
   });
   it('renders link with transaction', () => {
     const { trace, ...withoutTrace } = mark.error;
@@ -73,7 +87,7 @@ describe('ErrorMarker', () => {
     } as ErrorMark;
     const component = openPopover(newMark);
     const errorLink = component.getByTestId('errorLink') as HTMLAnchorElement;
-    expect(getKueryDecoded(errorLink.hash)).toEqual(
+    expect(getKueryDecoded(errorLink.search)).toEqual(
       'kuery=transaction.id : "456"'
     );
   });
@@ -85,7 +99,7 @@ describe('ErrorMarker', () => {
     } as ErrorMark;
     const component = openPopover(newMark);
     const errorLink = component.getByTestId('errorLink') as HTMLAnchorElement;
-    expect(getKueryDecoded(errorLink.hash)).toEqual('kuery=');
+    expect(getKueryDecoded(errorLink.search)).toEqual('kuery=');
   });
   it('truncates the error message text', () => {
     const { trace, transaction, ...withoutTraceAndTransaction } = mark.error;

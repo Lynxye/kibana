@@ -4,8 +4,10 @@
 
 ## SearchSourceFields.aggs property
 
+[AggConfigs](./kibana-plugin-plugins-data-public.aggconfigs.md)
+
 <b>Signature:</b>
 
 ```typescript
-aggs?: any;
+aggs?: object | IAggConfigs | (() => object);
 ```

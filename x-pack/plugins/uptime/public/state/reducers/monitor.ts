@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { Action } from 'redux-actions';
@@ -9,8 +10,6 @@ import {
   MonitorDetailsState,
   getMonitorDetailsAction,
   getMonitorLocationsAction,
-  getMonitorDetailsActionSuccess,
-  getMonitorDetailsActionFail,
   getMonitorLocationsActionSuccess,
   getMonitorLocationsActionFail,
 } from '../actions/monitor';
@@ -34,12 +33,12 @@ const initialState: MonitorState = {
 
 export function monitorReducer(state = initialState, action: Action<any>): MonitorState {
   switch (action.type) {
-    case String(getMonitorDetailsAction):
+    case String(getMonitorDetailsAction.get):
       return {
         ...state,
         loading: true,
       };
-    case String(getMonitorDetailsActionSuccess):
+    case String(getMonitorDetailsAction.success):
       const { monitorId } = action.payload;
       return {
         ...state,
@@ -49,10 +48,11 @@ export function monitorReducer(state = initialState, action: Action<any>): Monit
         },
         loading: false,
       };
-    case String(getMonitorDetailsActionFail):
+    case String(getMonitorDetailsAction.fail):
       return {
         ...state,
         errors: [...state.errors, action.payload],
+        loading: false,
       };
     case String(getMonitorLocationsAction):
       return {

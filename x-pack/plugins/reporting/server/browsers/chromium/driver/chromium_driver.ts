@@ -1,18 +1,22 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
 import { map, truncate } from 'lodash';
 import open from 'opn';
-import { ElementHandle, EvaluateFn, Page, Response, SerializableOrJSHandle } from 'puppeteer';
+import puppeteer, { ElementHandle, EvaluateFn, SerializableOrJSHandle } from 'puppeteer';
 import { parse as parseUrl } from 'url';
 import { getDisallowedOutgoingUrlError } from '../';
+import { ReportingCore } from '../../..';
+import { KBN_SCREENSHOT_MODE_HEADER } from '../../../../../../../src/plugins/screenshot_mode/server';
+import { ConditionalHeaders, ConditionalHeadersConditions } from '../../../export_types/common';
 import { LevelLogger } from '../../../lib';
 import { ViewZoomWidthHeight } from '../../../lib/layouts/layout';
-import { ConditionalHeaders, ElementPosition } from '../../../types';
+import { ElementPosition } from '../../../lib/screenshots';
 import { allowRequest, NetworkPolicy } from '../../network_policy';
 
 export interface ChromiumDriverOptions {
@@ -33,8 +37,6 @@ interface EvaluateMetaOpts {
   context: string;
 }
 
-type ConditionalHeadersConditions = ConditionalHeaders['conditions'];
-
 interface InterceptedRequest {
   requestId: string;
   request: {
@@ -53,14 +55,20 @@ interface InterceptedRequest {
 const WAIT_FOR_DELAY_MS: number = 100;
 
 export class HeadlessChromiumDriver {
-  private readonly page: Page;
+  private readonly page: puppeteer.Page;
   private readonly inspect: boolean;
   private readonly networkPolicy: NetworkPolicy;
 
   private listenersAttached = false;
   private interceptedCount = 0;
+  private core: ReportingCore;
 
-  constructor(page: Page, { inspect, networkPolicy }: ChromiumDriverOptions) {
+  constructor(
+    core: ReportingCore,
+    page: puppeteer.Page,
+    { inspect, networkPolicy }: ChromiumDriverOptions
+  ) {
+    this.core = core;
     this.page = page;
     this.inspect = inspect;
     this.networkPolicy = networkPolicy;
@@ -98,6 +106,8 @@ export class HeadlessChromiumDriver {
     // Reset intercepted request count
     this.interceptedCount = 0;
 
+    const enableScreenshotMode = this.core.getEnableScreenshotMode();
+    await this.page.evaluateOnNewDocument(enableScreenshotMode);
     await this.page.setRequestInterception(true);
 
     this.registerListeners(conditionalHeaders, logger);
@@ -127,7 +137,7 @@ export class HeadlessChromiumDriver {
   /*
    * Call Page.screenshot and return a base64-encoded string of the image
    */
-  public async screenshot(elementPosition: ElementPosition): Promise<string> {
+  public async screenshot(elementPosition: ElementPosition): Promise<string | void> {
     const { boundingClientRect, scroll } = elementPosition;
     const screenshot = await this.page.screenshot({
       clip: {
@@ -138,7 +148,10 @@ export class HeadlessChromiumDriver {
       },
     });
 
-    return screenshot.toString('base64');
+    if (screenshot) {
+      return screenshot.toString('base64');
+    }
+    return screenshot;
   }
 
   public async evaluate(
@@ -159,7 +172,12 @@ export class HeadlessChromiumDriver {
   ): Promise<ElementHandle<Element>> {
     const { timeout } = opts;
     logger.debug(`waitForSelector ${selector}`);
-    const resp = await this.page.waitFor(selector, { timeout }); // override default 30000ms
+    const resp = await this.page.waitForSelector(selector, { timeout }); // override default 30000ms
+
+    if (!resp) {
+      throw new Error(`Failure in waitForSelector: void response! Context: ${context.context}`);
+    }
+
     logger.debug(`waitForSelector ${selector} resolved`);
     return resp;
   }
@@ -197,14 +215,17 @@ export class HeadlessChromiumDriver {
   }
 
   public async setViewport(
-    { width, height, zoom }: ViewZoomWidthHeight,
+    { width: _width, height: _height, zoom }: ViewZoomWidthHeight,
     logger: LevelLogger
   ): Promise<void> {
-    logger.debug(`Setting viewport to width: ${width}, height: ${height}, zoom: ${zoom}`);
+    const width = Math.floor(_width);
+    const height = Math.floor(_height);
+
+    logger.debug(`Setting viewport to: width=${width} height=${height} zoom=${zoom}`);
 
     await this.page.setViewport({
-      width: Math.floor(width / zoom),
-      height: Math.floor(height / zoom),
+      width,
+      height,
       deviceScaleFactor: zoom,
       isMobile: false,
     });
@@ -216,6 +237,7 @@ export class HeadlessChromiumDriver {
     }
 
     // @ts-ignore
+    // FIXME: use `await page.target().createCDPSession();`
     const client = this.page._client;
 
     // We have to reach into the Chrome Devtools Protocol to apply headers as using
@@ -244,11 +266,12 @@ export class HeadlessChromiumDriver {
       }
 
       if (this._shouldUseCustomHeaders(conditionalHeaders.conditions, interceptedUrl)) {
-        logger.debug(`Using custom headers for ${interceptedUrl}`);
+        logger.trace(`Using custom headers for ${interceptedUrl}`);
         const headers = map(
           {
             ...interceptedRequest.request.headers,
             ...conditionalHeaders.headers,
+            [KBN_SCREENSHOT_MODE_HEADER]: 'true',
           },
           (value, name) => ({
             name,
@@ -271,7 +294,7 @@ export class HeadlessChromiumDriver {
         }
       } else {
         const loggedUrl = isData ? this.truncateUrl(interceptedUrl) : interceptedUrl;
-        logger.debug(`No custom headers for ${loggedUrl}`);
+        logger.trace(`No custom headers for ${loggedUrl}`);
         try {
           await client.send('Fetch.continueRequest', { requestId });
         } catch (err) {
@@ -290,7 +313,7 @@ export class HeadlessChromiumDriver {
     // Even though 3xx redirects go through our request
     // handler, we should probably inspect responses just to
     // avoid being bamboozled by some malicious request
-    this.page.on('response', (interceptedResponse: Response) => {
+    this.page.on('response', (interceptedResponse: puppeteer.HTTPResponse) => {
       const interceptedUrl = interceptedResponse.url();
       const allowed = !interceptedUrl.startsWith('file://');
 
@@ -303,7 +326,7 @@ export class HeadlessChromiumDriver {
       if (!allowed || !this.allowRequest(interceptedUrl)) {
         this.page.browser().close();
         logger.error(getDisallowedOutgoingUrlError(interceptedUrl));
-        throw getDisallowedOutgoingUrlError(interceptedUrl);
+        return;
       }
     });
 
@@ -312,17 +335,17 @@ export class HeadlessChromiumDriver {
 
   private async launchDebugger() {
     // In order to pause on execution we have to reach more deeply into Chromiums Devtools Protocol,
-    // and more specifically, for the page being used. _client is per-page, and puppeteer doesn't expose
-    // a page's client in their api, so we have to reach into internals to get this behavior.
-    // Finally, in order to get the inspector running, we have to know the page's internal ID (again, private)
+    // and more specifically, for the page being used. _client is per-page.
+    // In order to get the inspector running, we have to know the page's internal ID (again, private)
     // in order to construct the final debugging URL.
 
+    const target = this.page.target();
+    const client = await target.createCDPSession();
+
+    await client.send('Debugger.enable');
+    await client.send('Debugger.pause');
     // @ts-ignore
-    await this.page._client.send('Debugger.enable');
-    // @ts-ignore
-    await this.page._client.send('Debugger.pause');
-    // @ts-ignore
-    const targetId = this.page._target._targetId;
+    const targetId = target._targetId;
     const wsEndpoint = this.page.browser().wsEndpoint();
     const { port } = parseUrl(wsEndpoint);
 
@@ -334,17 +357,32 @@ export class HeadlessChromiumDriver {
   private _shouldUseCustomHeaders(conditions: ConditionalHeadersConditions, url: string) {
     const { hostname, protocol, port, pathname } = parseUrl(url);
 
-    if (pathname === undefined) {
-      // There's a discrepancy between the NodeJS docs and the typescript types. NodeJS docs
-      // just say 'string' and the typescript types say 'string | undefined'. We haven't hit a
-      // situation where it's undefined but here's an explicit Error if we do.
-      throw new Error(`pathname is undefined, don't know how to proceed`);
-    }
+    // `port` is null in URLs that don't explicitly state it,
+    // however we can derive the port from the protocol (http/https)
+    // IE: https://feeds-staging.elastic.co/kibana/v8.0.0.json
+    const derivedPort = (() => {
+      if (port) {
+        return port;
+      }
+
+      if (protocol === 'http:') {
+        return '80';
+      }
+
+      if (protocol === 'https:') {
+        return '443';
+      }
+
+      return null;
+    })();
+
+    if (derivedPort === null) throw new Error(`URL missing port: ${url}`);
+    if (pathname === null) throw new Error(`URL missing pathname: ${url}`);
 
     return (
       hostname === conditions.hostname &&
       protocol === `${conditions.protocol}:` &&
-      this._shouldUseCustomHeadersForPort(conditions, port) &&
+      this._shouldUseCustomHeadersForPort(conditions, derivedPort) &&
       pathname.startsWith(`${conditions.basePath}/`)
     );
   }

@@ -1,26 +1,18 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import React from 'react';
+import { ReactWrapper } from 'enzyme';
+import { act } from 'react-dom/test-utils';
+import { MountPoint } from 'kibana/public';
 import { TopNavMenu } from './top_nav_menu';
 import { TopNavMenuData } from './top_nav_menu_data';
-import { shallowWithIntl } from 'test_utils/enzyme_helpers';
+import { shallowWithIntl, mountWithIntl } from '@kbn/test/jest';
 
 const dataShim = {
   ui: {
@@ -108,5 +100,59 @@ describe('TopNavMenu', () => {
     );
     expect(component.find('.kbnTopNavMenu').length).toBe(1);
     expect(component.find('.myCoolClass').length).toBeTruthy();
+  });
+
+  describe('when setMenuMountPoint is provided', () => {
+    let portalTarget: HTMLElement;
+    let mountPoint: MountPoint;
+    let setMountPoint: jest.Mock<(mountPoint: MountPoint<HTMLElement>) => void>;
+    let dom: ReactWrapper;
+
+    const refresh = () => {
+      new Promise(async (resolve) => {
+        if (dom) {
+          act(() => {
+            dom.update();
+          });
+        }
+        setImmediate(() => resolve(dom)); // flushes any pending promises
+      });
+    };
+
+    beforeEach(() => {
+      portalTarget = document.createElement('div');
+      document.body.append(portalTarget);
+      setMountPoint = jest.fn().mockImplementation((mp) => (mountPoint = mp));
+    });
+
+    afterEach(() => {
+      if (portalTarget) {
+        portalTarget.remove();
+      }
+    });
+
+    it('mounts the menu inside the provided mountPoint', async () => {
+      const component = mountWithIntl(
+        <TopNavMenu
+          appName={'test'}
+          config={menuItems}
+          showSearchBar={true}
+          data={dataShim as any}
+          setMenuMountPoint={setMountPoint}
+        />
+      );
+
+      act(() => {
+        mountPoint(portalTarget);
+      });
+
+      await refresh();
+
+      expect(component.find(WRAPPER_SELECTOR).length).toBe(1);
+      expect(component.find(SEARCH_BAR_SELECTOR).length).toBe(1);
+
+      // menu is rendered outside of the component
+      expect(component.find(TOP_NAV_ITEM_SELECTOR).length).toBe(0);
+    });
   });
 });

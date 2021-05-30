@@ -1,34 +1,30 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { FC } from 'react';
-import { Dictionary } from '../../../common/types/common';
+
 import { KBN_FIELD_TYPES } from '../../../../../../src/plugins/data/common';
 
-import { AggName } from './aggregations';
-import { EsFieldName } from './fields';
+import type { AggName } from '../../../common/types/aggregations';
+import type { Dictionary } from '../../../common/types/common';
+import type { EsFieldName } from '../../../common/types/fields';
+import type { PivotAgg, PivotSupportedAggs } from '../../../common/types/pivot_aggs';
+import { PIVOT_SUPPORTED_AGGS } from '../../../common/types/pivot_aggs';
+import { isPopulatedObject } from '../../../common/shared_imports';
+
 import { getAggFormConfig } from '../sections/create_transform/components/step_define/common/get_agg_form_config';
 import { PivotAggsConfigFilter } from '../sections/create_transform/components/step_define/common/filter_agg/types';
 
-export type PivotSupportedAggs = typeof PIVOT_SUPPORTED_AGGS[keyof typeof PIVOT_SUPPORTED_AGGS];
-
-export function isPivotSupportedAggs(arg: any): arg is PivotSupportedAggs {
-  return Object.values(PIVOT_SUPPORTED_AGGS).includes(arg);
+export function isPivotSupportedAggs(arg: unknown): arg is PivotSupportedAggs {
+  return (
+    typeof arg === 'string' &&
+    Object.values(PIVOT_SUPPORTED_AGGS).includes(arg as PivotSupportedAggs)
+  );
 }
-
-export const PIVOT_SUPPORTED_AGGS = {
-  AVG: 'avg',
-  CARDINALITY: 'cardinality',
-  MAX: 'max',
-  MIN: 'min',
-  PERCENTILES: 'percentiles',
-  SUM: 'sum',
-  VALUE_COUNT: 'value_count',
-  FILTER: 'filter',
-} as const;
 
 export const PERCENTILES_AGG_DEFAULT_PERCENTS = [1, 5, 25, 50, 75, 95, 99];
 
@@ -67,16 +63,6 @@ export const pivotAggsFieldSupport = {
   [KBN_FIELD_TYPES._SOURCE]: [PIVOT_SUPPORTED_AGGS.VALUE_COUNT, PIVOT_SUPPORTED_AGGS.FILTER],
   [KBN_FIELD_TYPES.UNKNOWN]: [PIVOT_SUPPORTED_AGGS.VALUE_COUNT, PIVOT_SUPPORTED_AGGS.FILTER],
   [KBN_FIELD_TYPES.CONFLICT]: [PIVOT_SUPPORTED_AGGS.VALUE_COUNT, PIVOT_SUPPORTED_AGGS.FILTER],
-};
-
-export type PivotAgg = {
-  [key in PivotSupportedAggs]?: {
-    field: EsFieldName;
-  };
-};
-
-export type PivotAggDict = {
-  [key in AggName]: PivotAgg;
 };
 
 /**
@@ -178,12 +164,9 @@ export type PivotAggsConfigWithUiSupport =
   | PivotAggsConfigPercentiles
   | PivotAggsConfigWithExtendedForm;
 
-export function isPivotAggsConfigWithUiSupport(arg: any): arg is PivotAggsConfigWithUiSupport {
+export function isPivotAggsConfigWithUiSupport(arg: unknown): arg is PivotAggsConfigWithUiSupport {
   return (
-    arg.hasOwnProperty('agg') &&
-    arg.hasOwnProperty('aggName') &&
-    arg.hasOwnProperty('dropDownName') &&
-    arg.hasOwnProperty('field') &&
+    isPopulatedObject(arg, ['agg', 'aggName', 'dropDownName', 'field']) &&
     isPivotSupportedAggs(arg.agg)
   );
 }
@@ -193,15 +176,13 @@ export function isPivotAggsConfigWithUiSupport(arg: any): arg is PivotAggsConfig
  */
 type PivotAggsConfigWithExtendedForm = PivotAggsConfigFilter;
 
-export function isPivotAggsWithExtendedForm(arg: any): arg is PivotAggsConfigWithExtendedForm {
-  return arg.hasOwnProperty('AggFormComponent');
+export function isPivotAggsWithExtendedForm(arg: unknown): arg is PivotAggsConfigWithExtendedForm {
+  return isPopulatedObject(arg, ['AggFormComponent']);
 }
 
-export function isPivotAggsConfigPercentiles(arg: any): arg is PivotAggsConfigPercentiles {
+export function isPivotAggsConfigPercentiles(arg: unknown): arg is PivotAggsConfigPercentiles {
   return (
-    arg.hasOwnProperty('agg') &&
-    arg.hasOwnProperty('field') &&
-    arg.hasOwnProperty('percents') &&
+    isPopulatedObject(arg, ['agg', 'field', 'percents']) &&
     arg.agg === PIVOT_SUPPORTED_AGGS.PERCENTILES
   );
 }

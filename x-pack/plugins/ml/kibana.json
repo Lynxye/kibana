@@ -10,19 +10,26 @@
     "data",
     "cloud",
     "features",
-    "home",
+    "fileDataVisualizer",
     "licensing",
-    "usageCollection",
     "share",
     "embeddable",
     "uiActions",
-    "kibanaLegacy"
+    "kibanaLegacy",
+    "indexPatternManagement",
+    "discover",
+    "triggersActionsUi"
   ],
   "optionalPlugins": [
+    "alerting",
+    "home",
     "security",
     "spaces",
     "management",
-    "licenseManagement"
+    "licenseManagement",
+    "maps",
+    "lens",
+    "usageCollection"
   ],
   "server": true,
   "ui": true,
@@ -31,6 +38,11 @@
     "kibanaUtils",
     "kibanaReact",
     "dashboard",
-    "savedObjects"
+    "savedObjects",
+    "home",
+    "maps"
+  ],
+  "extraPublicDirs": [
+    "common"
   ]
 }

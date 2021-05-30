@@ -1,12 +1,13 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 /* eslint-disable react/display-name */
 
-import React, { useMemo, useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Router } from 'react-router-dom';
 import { I18nProvider } from '@kbn/i18n/react';
 import { Provider } from 'react-redux';
@@ -17,7 +18,6 @@ import { ResolverState, SideEffectSimulator, ResolverProps } from '../../types';
 import { ResolverAction } from '../../store/actions';
 import { ResolverWithoutProviders } from '../../view/resolver_without_providers';
 import { SideEffectContext } from '../../view/side_effect_context';
-import { sideEffectSimulatorFactory } from '../../view/side_effect_simulator_factory';
 
 type MockResolverProps = {
   /**
@@ -38,6 +38,10 @@ type MockResolverProps = {
   history: React.ComponentProps<typeof Router>['history'];
   /** Pass a resolver store. See `storeFactory` and `mockDataAccessLayer` */
   store: Store<ResolverState, ResolverAction>;
+  /**
+   * Pass the side effect simulator which handles animations and resizing. See `sideEffectSimulatorFactory`
+   */
+  sideEffectSimulator: SideEffectSimulator;
   /**
    * All the props from `ResolverWithoutStore` can be passed. These aren't defaulted to anything (you might want to test what happens when they aren't present.)
    */
@@ -66,8 +70,6 @@ export const MockResolver = React.memo((props: MockResolverProps) => {
     setResolverElement(element);
   }, []);
 
-  const simulator: SideEffectSimulator = useMemo(() => sideEffectSimulatorFactory(), []);
-
   // Resize the Resolver element to match the passed in props. Resolver is size dependent.
   useEffect(() => {
     if (resolverElement) {
@@ -84,20 +86,23 @@ export const MockResolver = React.memo((props: MockResolverProps) => {
           return this;
         },
       };
-      simulator.controls.simulateElementResize(resolverElement, size);
+      props.sideEffectSimulator.controls.simulateElementResize(resolverElement, size);
     }
-  }, [props.rasterWidth, props.rasterHeight, simulator.controls, resolverElement]);
+  }, [props.rasterWidth, props.rasterHeight, props.sideEffectSimulator.controls, resolverElement]);
 
   return (
     <I18nProvider>
       <Router history={props.history}>
         <KibanaContextProvider services={props.coreStart}>
-          <SideEffectContext.Provider value={simulator.mock}>
+          <SideEffectContext.Provider value={props.sideEffectSimulator.mock}>
             <Provider store={props.store}>
               <ResolverWithoutProviders
                 ref={resolverRef}
                 databaseDocumentID={props.databaseDocumentID}
                 resolverComponentInstanceID={props.resolverComponentInstanceID}
+                indices={props.indices}
+                shouldUpdate={props.shouldUpdate}
+                filters={props.filters}
               />
             </Provider>
           </SideEffectContext.Provider>

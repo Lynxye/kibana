@@ -1,20 +1,9 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import { SavedObjectsImportUnknownError } from 'src/core/public';
@@ -50,17 +39,16 @@ describe('resolveImportErrors', () => {
     const result = await resolveImportErrors({
       http: httpMock,
       getConflictResolutions,
-      state: {
-        importCount: 0,
-      },
+      state: { importCount: 0, importMode: { createNewCopies: false, overwrite: false } },
     });
     expect(result).toMatchInlineSnapshot(`
-Object {
-  "failedImports": Array [],
-  "importCount": 0,
-  "status": "success",
-}
-`);
+      Object {
+        "failedImports": Array [],
+        "importCount": 0,
+        "status": "success",
+        "successfulImports": Array [],
+      }
+    `);
   });
 
   test(`doesn't retry if only unknown failures are passed in`, async () => {
@@ -74,41 +62,49 @@ Object {
             obj: {
               type: 'a',
               id: '1',
+              meta: {},
             },
-            error: {
-              type: 'unknown',
-            } as SavedObjectsImportUnknownError,
+            error: { type: 'unknown' } as SavedObjectsImportUnknownError,
           },
         ],
+        importMode: { createNewCopies: false, overwrite: false },
       },
     });
+    expect(httpMock.post).not.toHaveBeenCalled();
     expect(result).toMatchInlineSnapshot(`
-Object {
-  "failedImports": Array [
-    Object {
-      "error": Object {
-        "type": "unknown",
-      },
-      "obj": Object {
-        "id": "1",
-        "type": "a",
-      },
-    },
-  ],
-  "importCount": 0,
-  "status": "success",
-}
-`);
+      Object {
+        "failedImports": Array [
+          Object {
+            "error": Object {
+              "type": "unknown",
+            },
+            "obj": Object {
+              "id": "1",
+              "meta": Object {},
+              "type": "a",
+            },
+          },
+        ],
+        "importCount": 0,
+        "status": "success",
+        "successfulImports": Array [],
+      }
+    `);
   });
 
   test('resolves conflicts', async () => {
     httpMock.post.mockResolvedValueOnce({
       success: true,
-      successCount: 1,
+      successCount: 2,
+      successResults: [
+        { type: 'a', id: '1' },
+        { type: 'a', id: '2', destinationId: 'x' },
+      ],
     });
     getConflictResolutions.mockReturnValueOnce({
-      'a:1': true,
-      'a:2': false,
+      'a:1': { retry: true, options: { overwrite: true } },
+      'a:2': { retry: true, options: { overwrite: true, destinationId: 'x' } },
+      'a:3': { retry: false },
     });
     const result = await resolveImportErrors({
       http: httpMock,
@@ -116,124 +112,54 @@ Object {
       state: {
         importCount: 0,
         failedImports: [
+          { obj: { type: 'a', id: '1', meta: {} }, error: { type: 'conflict' } },
           {
-            obj: {
-              type: 'a',
-              id: '1',
-            },
-            error: {
-              type: 'conflict',
-            },
+            obj: { type: 'a', id: '2', meta: {} },
+            error: { type: 'conflict', destinationId: 'x' },
           },
-          {
-            obj: {
-              type: 'a',
-              id: '2',
-            },
-            error: {
-              type: 'conflict',
-            },
-          },
+          { obj: { type: 'a', id: '3', meta: {} }, error: { type: 'conflict' } },
         ],
+        importMode: { createNewCopies: false, overwrite: false },
       },
     });
     expect(result).toMatchInlineSnapshot(`
-Object {
-  "failedImports": Array [],
-  "importCount": 1,
-  "status": "success",
-}
-`);
+      Object {
+        "failedImports": Array [],
+        "importCount": 2,
+        "status": "success",
+        "successfulImports": Array [
+          Object {
+            "id": "1",
+            "type": "a",
+          },
+          Object {
+            "destinationId": "x",
+            "id": "2",
+            "type": "a",
+          },
+        ],
+      }
+    `);
 
     const formData = getFormData(extractBodyFromCall(0));
     expect(formData).toMatchInlineSnapshot(`
-Object {
-  "file": "undefined",
-  "retries": Array [
-    Object {
-      "id": "1",
-      "overwrite": true,
-      "replaceReferences": Array [],
-      "type": "a",
-    },
-  ],
-}
-`);
-  });
-
-  test('resolves missing references', async () => {
-    httpMock.post.mockResolvedValueOnce({
-      success: true,
-      successCount: 2,
-    });
-    getConflictResolutions.mockResolvedValueOnce({});
-    const result = await resolveImportErrors({
-      http: httpMock,
-      getConflictResolutions,
-      state: {
-        importCount: 0,
-        unmatchedReferences: [
-          {
-            existingIndexPatternId: '2',
-            newIndexPatternId: '3',
+      Object {
+        "file": "undefined",
+        "retries": Array [
+          Object {
+            "id": "1",
+            "overwrite": true,
+            "type": "a",
+          },
+          Object {
+            "destinationId": "x",
+            "id": "2",
+            "overwrite": true,
+            "type": "a",
           },
         ],
-        failedImports: [
-          {
-            obj: {
-              type: 'a',
-              id: '1',
-            },
-            error: {
-              type: 'missing_references',
-              references: [
-                {
-                  type: 'index-pattern',
-                  id: '2',
-                },
-              ],
-              blocking: [
-                {
-                  type: 'a',
-                  id: '2',
-                },
-              ],
-            },
-          },
-        ],
-      },
-    });
-    expect(result).toMatchInlineSnapshot(`
-Object {
-  "failedImports": Array [],
-  "importCount": 2,
-  "status": "success",
-}
-`);
-    const formData = getFormData(extractBodyFromCall(0));
-    expect(formData).toMatchInlineSnapshot(`
-Object {
-  "file": "undefined",
-  "retries": Array [
-    Object {
-      "id": "1",
-      "overwrite": false,
-      "replaceReferences": Array [
-        Object {
-          "from": "2",
-          "to": "3",
-          "type": "index-pattern",
-        },
-      ],
-      "type": "a",
-    },
-    Object {
-      "id": "2",
-      "type": "a",
-    },
-  ],
-}
-`);
+      }
+    `);
   });
 
   test(`doesn't resolve missing references if newIndexPatternId isn't defined`, async () => {
@@ -244,144 +170,115 @@ Object {
       state: {
         importCount: 0,
         unmatchedReferences: [
-          {
-            existingIndexPatternId: '2',
-            newIndexPatternId: undefined,
-          },
+          { existingIndexPatternId: '2', newIndexPatternId: undefined, list: [] },
         ],
         failedImports: [
           {
             obj: {
               type: 'a',
               id: '1',
+              meta: {},
             },
             error: {
               type: 'missing_references',
-              references: [
-                {
-                  type: 'index-pattern',
-                  id: '2',
-                },
-              ],
-              blocking: [
-                {
-                  type: 'a',
-                  id: '2',
-                },
-              ],
+              references: [{ type: 'index-pattern', id: '2' }],
             },
           },
         ],
+        importMode: { createNewCopies: false, overwrite: false },
       },
     });
     expect(result).toMatchInlineSnapshot(`
-Object {
-  "failedImports": Array [],
-  "importCount": 0,
-  "status": "success",
-}
-`);
+      Object {
+        "failedImports": Array [],
+        "importCount": 0,
+        "status": "success",
+        "successfulImports": Array [],
+      }
+    `);
   });
 
   test('handles missing references then conflicts on the same errored objects', async () => {
     httpMock.post.mockResolvedValueOnce({
       success: false,
       successCount: 0,
-      errors: [
-        {
-          type: 'a',
-          id: '1',
-          error: {
-            type: 'conflict',
-          },
-        },
-      ],
+      errors: [{ type: 'a', id: '1', error: { type: 'conflict' } }],
     });
     httpMock.post.mockResolvedValueOnce({
       success: true,
       successCount: 1,
+      successResults: [{ type: 'a', id: '1' }],
     });
     getConflictResolutions.mockResolvedValueOnce({});
     getConflictResolutions.mockResolvedValueOnce({
-      'a:1': true,
+      'a:1': { retry: true, options: { overwrite: true } },
     });
     const result = await resolveImportErrors({
       http: httpMock,
       getConflictResolutions,
       state: {
         importCount: 0,
-        unmatchedReferences: [
-          {
-            existingIndexPatternId: '2',
-            newIndexPatternId: '3',
-          },
-        ],
+        unmatchedReferences: [{ existingIndexPatternId: '2', newIndexPatternId: '3', list: [] }],
         failedImports: [
           {
-            obj: {
-              type: 'a',
-              id: '1',
-            },
-            error: {
-              type: 'missing_references',
-              references: [
-                {
-                  type: 'index-pattern',
-                  id: '2',
-                },
-              ],
-              blocking: [],
-            },
+            obj: { type: 'a', id: '1', meta: {} },
+            error: { type: 'missing_references', references: [{ type: 'index-pattern', id: '2' }] },
           },
         ],
+        importMode: { createNewCopies: false, overwrite: false },
       },
     });
     expect(result).toMatchInlineSnapshot(`
-Object {
-  "failedImports": Array [],
-  "importCount": 1,
-  "status": "success",
-}
-`);
+      Object {
+        "failedImports": Array [],
+        "importCount": 1,
+        "status": "success",
+        "successfulImports": Array [
+          Object {
+            "id": "1",
+            "type": "a",
+          },
+        ],
+      }
+    `);
     const formData1 = getFormData(extractBodyFromCall(0));
     expect(formData1).toMatchInlineSnapshot(`
-Object {
-  "file": "undefined",
-  "retries": Array [
-    Object {
-      "id": "1",
-      "overwrite": false,
-      "replaceReferences": Array [
-        Object {
-          "from": "2",
-          "to": "3",
-          "type": "index-pattern",
-        },
-      ],
-      "type": "a",
-    },
-  ],
-}
-`);
+      Object {
+        "file": "undefined",
+        "retries": Array [
+          Object {
+            "id": "1",
+            "replaceReferences": Array [
+              Object {
+                "from": "2",
+                "to": "3",
+                "type": "index-pattern",
+              },
+            ],
+            "type": "a",
+          },
+        ],
+      }
+    `);
     const formData2 = getFormData(extractBodyFromCall(1));
     expect(formData2).toMatchInlineSnapshot(`
-Object {
-  "file": "undefined",
-  "retries": Array [
-    Object {
-      "id": "1",
-      "overwrite": true,
-      "replaceReferences": Array [
-        Object {
-          "from": "2",
-          "to": "3",
-          "type": "index-pattern",
-        },
-      ],
-      "type": "a",
-    },
-  ],
-}
-`);
+      Object {
+        "file": "undefined",
+        "retries": Array [
+          Object {
+            "id": "1",
+            "overwrite": true,
+            "replaceReferences": Array [
+              Object {
+                "from": "2",
+                "to": "3",
+                "type": "index-pattern",
+              },
+            ],
+            "type": "a",
+          },
+        ],
+      }
+    `);
   });
 });

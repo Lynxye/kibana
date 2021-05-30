@@ -1,14 +1,21 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 /* eslint-disable max-classes-per-file */
 
 import { AbstractLayer } from './layer';
 import { ISource } from '../sources/source';
-import { IStyle } from '../styles/style';
-import { AGG_TYPE, FIELD_ORIGIN, LAYER_STYLE_TYPE, VECTOR_STYLES } from '../../../common/constants';
+import {
+  AGG_TYPE,
+  FIELD_ORIGIN,
+  LAYER_STYLE_TYPE,
+  SOURCE_TYPES,
+  VECTOR_STYLES,
+} from '../../../common/constants';
 import { ESTermSourceDescriptor, VectorStyleDescriptor } from '../../../common/descriptor_types';
 import { getDefaultDynamicProperties } from '../styles/vector/vector_style_defaults';
 
@@ -21,6 +28,10 @@ jest.mock('uuid/v4', () => {
 class MockLayer extends AbstractLayer {}
 
 class MockSource {
+  private readonly _fitToBounds: boolean;
+  constructor({ fitToBounds = true } = {}) {
+    this._fitToBounds = fitToBounds;
+  }
   cloneDescriptor() {
     return {};
   }
@@ -28,9 +39,11 @@ class MockSource {
   getDisplayName() {
     return 'mySource';
   }
-}
 
-class MockStyle {}
+  async supportsFitToBounds() {
+    return this._fitToBounds;
+  }
+}
 
 describe('cloneDescriptor', () => {
   describe('with joins', () => {
@@ -68,7 +81,9 @@ describe('cloneDescriptor', () => {
               indexPatternTitle: 'logs-*',
               metrics: [{ type: AGG_TYPE.COUNT }],
               term: 'myTermField',
-              type: 'joinSource',
+              type: SOURCE_TYPES.ES_TERM_SOURCE,
+              applyGlobalQuery: true,
+              applyGlobalTime: true,
             },
           },
         ],
@@ -76,7 +91,6 @@ describe('cloneDescriptor', () => {
       const layer = new MockLayer({
         layerDescriptor,
         source: (new MockSource() as unknown) as ISource,
-        style: (new MockStyle() as unknown) as IStyle,
       });
       const clonedDescriptor = await layer.cloneDescriptor();
       const clonedStyleProps = (clonedDescriptor.style as VectorStyleDescriptor).properties;
@@ -114,7 +128,6 @@ describe('cloneDescriptor', () => {
       const layer = new MockLayer({
         layerDescriptor,
         source: (new MockSource() as unknown) as ISource,
-        style: (new MockStyle() as unknown) as IStyle,
       });
       const clonedDescriptor = await layer.cloneDescriptor();
       const clonedStyleProps = (clonedDescriptor.style as VectorStyleDescriptor).properties;
@@ -123,6 +136,51 @@ describe('cloneDescriptor', () => {
       expect(clonedStyleProps[VECTOR_STYLES.FILL_COLOR].options.field.name).toEqual(
         '__kbnjoin__count__12345'
       );
+    });
+  });
+});
+
+describe('isFittable', () => {
+  [
+    {
+      isVisible: true,
+      fitToBounds: true,
+      canFit: true,
+    },
+    {
+      isVisible: false,
+      fitToBounds: true,
+      canFit: false,
+    },
+    {
+      isVisible: true,
+      fitToBounds: false,
+      canFit: false,
+    },
+    {
+      isVisible: false,
+      fitToBounds: false,
+      canFit: false,
+    },
+    {
+      isVisible: true,
+      fitToBounds: true,
+      includeInFitToBounds: false,
+      canFit: false,
+    },
+  ].forEach((test) => {
+    it(`Should take into account layer visibility and bounds-retrieval: ${JSON.stringify(
+      test
+    )}`, async () => {
+      const layerDescriptor = AbstractLayer.createDescriptor({
+        visible: test.isVisible,
+        includeInFitToBounds: test.includeInFitToBounds,
+      });
+      const layer = new MockLayer({
+        layerDescriptor,
+        source: (new MockSource({ fitToBounds: test.fitToBounds }) as unknown) as ISource,
+      });
+      expect(await layer.isFittable()).toBe(test.canFit);
     });
   });
 });

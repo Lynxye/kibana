@@ -1,25 +1,32 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { ILegacyScopedClusterClient } from 'kibana/server';
+import { IScopedClusterClient } from 'kibana/server';
 import { datafeedsProvider } from './datafeeds';
 import { jobsProvider } from './jobs';
 import { groupsProvider } from './groups';
 import { newJobCapsProvider } from './new_job_caps';
 import { newJobChartsProvider, topCategoriesProvider } from './new_job';
 import { modelSnapshotProvider } from './model_snapshots';
+import type { MlClient } from '../../lib/ml_client';
+import type { AlertsClient } from '../../../../alerting/server';
 
-export function jobServiceProvider(mlClusterClient: ILegacyScopedClusterClient) {
+export function jobServiceProvider(
+  client: IScopedClusterClient,
+  mlClient: MlClient,
+  alertsClient?: AlertsClient
+) {
   return {
-    ...datafeedsProvider(mlClusterClient),
-    ...jobsProvider(mlClusterClient),
-    ...groupsProvider(mlClusterClient),
-    ...newJobCapsProvider(mlClusterClient),
-    ...newJobChartsProvider(mlClusterClient),
-    ...topCategoriesProvider(mlClusterClient),
-    ...modelSnapshotProvider(mlClusterClient),
+    ...datafeedsProvider(client, mlClient),
+    ...jobsProvider(client, mlClient, alertsClient),
+    ...groupsProvider(mlClient),
+    ...newJobCapsProvider(client),
+    ...newJobChartsProvider(client),
+    ...topCategoriesProvider(mlClient),
+    ...modelSnapshotProvider(client, mlClient),
   };
 }

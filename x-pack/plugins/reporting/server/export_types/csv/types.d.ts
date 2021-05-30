@@ -1,24 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { ScheduledTaskParams } from '../../types';
+import { BaseParams, BasePayload } from '../../types';
 
 export type RawValue = string | object | null | undefined;
 
-interface DocValueField {
-  field: string;
-  format: string;
-}
-
-interface SortOptions {
-  order: string;
-  unmapped_type: string;
-}
-
-export interface IndexPatternSavedObject {
+export interface IndexPatternSavedObjectDeprecatedCSV {
   title: string;
   timeFieldName: string;
   fields?: any[];
@@ -28,27 +19,25 @@ export interface IndexPatternSavedObject {
   };
 }
 
-export interface JobParamsDiscoverCsv {
-  browserTimezone: string;
-  indexPatternId: string;
-  objectType: string;
-  title: string;
-  searchRequest: SearchRequest;
+interface BaseParamsDeprecatedCSV {
+  searchRequest: SearchRequestDeprecatedCSV;
   fields: string[];
   metaFields: string[];
   conflictedTypesFields: string[];
 }
 
-export interface ScheduledTaskParamsCSV extends ScheduledTaskParams<JobParamsDiscoverCsv> {
-  basePath: string;
-  searchRequest: any;
-  fields: any;
-  indexPatternSavedObject: any;
-  metaFields: any;
-  conflictedTypesFields: any;
-}
+export type JobParamsDeprecatedCSV = BaseParamsDeprecatedCSV &
+  BaseParams & {
+    indexPatternId: string;
+  };
 
-export interface SearchRequest {
+// CSV create job method converts indexPatternID to indexPatternSavedObject
+export type TaskPayloadDeprecatedCSV = BaseParamsDeprecatedCSV &
+  BasePayload & {
+    indexPatternSavedObject: IndexPatternSavedObjectDeprecatedCSV;
+  };
+
+export interface SearchRequestDeprecatedCSV {
   index: string;
   body:
     | {
@@ -78,7 +67,7 @@ export interface SearchRequest {
     | any;
 }
 
-type FormatsMap = Map<
+type FormatsMapDeprecatedCSV = Map<
   string,
   {
     id: string;
@@ -88,15 +77,10 @@ type FormatsMap = Map<
   }
 >;
 
-export interface SavedSearchGeneratorResult {
+export interface SavedSearchGeneratorResultDeprecatedCSV {
   content: string;
   size: number;
   maxSizeReached: boolean;
   csvContainsFormulas?: boolean;
   warnings: string[];
-}
-
-export interface CsvResultFromSearch {
-  type: string;
-  result: SavedSearchGeneratorResult;
 }

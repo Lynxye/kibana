@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { EuiFlexGroup, EuiFlexItem, EuiIconTip, EuiTitle, EuiTitleSize } from '@elastic/eui';
@@ -19,11 +20,11 @@ interface HeaderProps {
 const Header = styled.header.attrs(() => ({
   className: 'siemHeaderSection',
 }))<HeaderProps>`
-${({ height }) =>
-  height &&
-  css`
-    height: ${height}px;
-  `}
+  ${({ height }) =>
+    height &&
+    css`
+      height: ${height}px;
+    `}
   margin-bottom: ${({ height, theme }) => (height ? 0 : theme.eui.euiSizeL)};
   user-select: text;
 
@@ -45,6 +46,8 @@ export interface HeaderSectionProps extends HeaderProps {
   title: string | React.ReactNode;
   titleSize?: EuiTitleSize;
   tooltip?: string;
+  growLeftSplit?: boolean;
+  inspectMultiple?: boolean;
 }
 
 const HeaderSectionComponent: React.FC<HeaderSectionProps> = ({
@@ -57,10 +60,12 @@ const HeaderSectionComponent: React.FC<HeaderSectionProps> = ({
   title,
   titleSize = 'm',
   tooltip,
+  growLeftSplit = true,
+  inspectMultiple = false,
 }) => (
   <Header data-test-subj="header-section" border={border} height={height}>
     <EuiFlexGroup alignItems="center">
-      <EuiFlexItem>
+      <EuiFlexItem grow={growLeftSplit}>
         <EuiFlexGroup alignItems="center" responsive={false}>
           <EuiFlexItem>
             <EuiTitle size={titleSize}>
@@ -80,7 +85,7 @@ const HeaderSectionComponent: React.FC<HeaderSectionProps> = ({
 
           {id && (
             <EuiFlexItem grow={false}>
-              <InspectButton queryId={id} inspectIndex={0} title={title} />
+              <InspectButton queryId={id} multiple={inspectMultiple} title={title} />
             </EuiFlexItem>
           )}
         </EuiFlexGroup>

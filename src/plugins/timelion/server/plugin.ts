@@ -1,60 +1,33 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
-import { CoreSetup, Plugin, PluginInitializerContext } from 'src/core/server';
+import { CoreSetup, CoreStart, Plugin, PluginInitializerContext, Logger } from 'src/core/server';
 import { i18n } from '@kbn/i18n';
 import { schema } from '@kbn/config-schema';
 import { TimelionConfigType } from './config';
+import { timelionSheetSavedObjectType } from './saved_objects';
+import { getDeprecations, showWarningMessageIfTimelionSheetWasFound } from './deprecations';
 
 export class TimelionPlugin implements Plugin {
-  constructor(context: PluginInitializerContext<TimelionConfigType>) {}
+  private logger: Logger;
+
+  constructor(context: PluginInitializerContext<TimelionConfigType>) {
+    this.logger = context.logger.get();
+  }
 
   public setup(core: CoreSetup) {
     core.capabilities.registerProvider(() => ({
       timelion: {
         save: true,
+        show: true,
       },
     }));
-    core.savedObjects.registerType({
-      name: 'timelion-sheet',
-      hidden: false,
-      namespaceType: 'single',
-      mappings: {
-        properties: {
-          description: { type: 'text' },
-          hits: { type: 'integer' },
-          kibanaSavedObjectMeta: {
-            properties: {
-              searchSourceJSON: { type: 'text' },
-            },
-          },
-          timelion_chart_height: { type: 'integer' },
-          timelion_columns: { type: 'integer' },
-          timelion_interval: { type: 'keyword' },
-          timelion_other_interval: { type: 'keyword' },
-          timelion_rows: { type: 'integer' },
-          timelion_sheet: { type: 'text' },
-          title: { type: 'text' },
-          version: { type: 'integer' },
-        },
-      },
-    });
+    core.savedObjects.registerType(timelionSheetSavedObjectType);
 
     core.uiSettings.register({
       'timelion:showTutorial': {
@@ -91,7 +64,11 @@ export class TimelionPlugin implements Plugin {
         schema: schema.number(),
       },
     });
+
+    core.deprecations.registerDeprecations({ getDeprecations });
   }
-  start() {}
+  start(core: CoreStart) {
+    showWarningMessageIfTimelionSheetWasFound(core, this.logger);
+  }
   stop() {}
 }

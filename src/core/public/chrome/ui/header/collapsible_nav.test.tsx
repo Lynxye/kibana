@@ -1,27 +1,16 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import { mount, ReactWrapper } from 'enzyme';
 import React from 'react';
 import { BehaviorSubject } from 'rxjs';
 import sinon from 'sinon';
-import { StubBrowserStorage } from 'test_utils/stub_browser_storage';
+import { StubBrowserStorage } from '@kbn/test/jest';
 import { ChromeNavLink, DEFAULT_APP_CATEGORIES } from '../../..';
 import { httpServiceMock } from '../../../http/http_service.mock';
 import { ChromeRecentlyAccessedHistoryItem } from '../../recently_accessed';
@@ -40,7 +29,6 @@ function mockLink({ title = 'discover', category }: Partial<ChromeNavLink>) {
     id: title,
     href: title,
     baseUrl: '/',
-    legacy: false,
     isActive: true,
     'data-test-subj': title,
   };
@@ -60,15 +48,15 @@ function mockProps() {
     basePath: httpServiceMock.createSetupContract({ basePath: '/test' }).basePath,
     id: 'collapsibe-nav',
     isLocked: false,
-    isOpen: false,
+    isNavOpen: false,
     homeHref: '/',
-    legacyMode: false,
     navLinks$: new BehaviorSubject([]),
     recentlyAccessed$: new BehaviorSubject([]),
     storage: new StubBrowserStorage(),
     onIsLockedUpdate: () => {},
     closeNav: () => {},
     navigateToApp: () => Promise.resolve(),
+    navigateToUrl: () => Promise.resolve(),
     customNavLink$: new BehaviorSubject(undefined),
   };
 }
@@ -125,7 +113,7 @@ describe('CollapsibleNav', () => {
     const component = mount(
       <CollapsibleNav
         {...mockProps()}
-        isOpen={true}
+        isNavOpen={true}
         navLinks$={new BehaviorSubject(navLinks)}
         recentlyAccessed$={new BehaviorSubject(recentNavLinks)}
         customNavLink$={new BehaviorSubject(customNavLink)}
@@ -140,7 +128,7 @@ describe('CollapsibleNav', () => {
     const component = mount(
       <CollapsibleNav
         {...mockProps()}
-        isOpen={true}
+        isNavOpen={true}
         navLinks$={new BehaviorSubject(navLinks)}
         recentlyAccessed$={new BehaviorSubject(recentNavLinks)}
       />
@@ -149,9 +137,9 @@ describe('CollapsibleNav', () => {
     clickGroup(component, 'kibana');
     clickGroup(component, 'recentlyViewed');
     expectShownNavLinksCount(component, 1);
-    component.setProps({ isOpen: false });
+    component.setProps({ isNavOpen: false });
     expectNavIsClosed(component);
-    component.setProps({ isOpen: true });
+    component.setProps({ isNavOpen: true });
     expectShownNavLinksCount(component, 1);
   });
 
@@ -162,14 +150,14 @@ describe('CollapsibleNav', () => {
     const component = mount(
       <CollapsibleNav
         {...mockProps()}
-        isOpen={true}
+        isNavOpen={true}
         navLinks$={new BehaviorSubject(navLinks)}
         recentlyAccessed$={new BehaviorSubject(recentNavLinks)}
       />
     );
     component.setProps({
       closeNav: () => {
-        component.setProps({ isOpen: false });
+        component.setProps({ isNavOpen: false });
         onClose();
       },
     });
@@ -177,11 +165,11 @@ describe('CollapsibleNav', () => {
     component.find('[data-test-subj="collapsibleNavGroup-recentlyViewed"] a').simulate('click');
     expect(onClose.callCount).toEqual(1);
     expectNavIsClosed(component);
-    component.setProps({ isOpen: true });
+    component.setProps({ isNavOpen: true });
     component.find('[data-test-subj="collapsibleNavGroup-kibana"] a').simulate('click');
     expect(onClose.callCount).toEqual(2);
     expectNavIsClosed(component);
-    component.setProps({ isOpen: true });
+    component.setProps({ isNavOpen: true });
     component.find('[data-test-subj="collapsibleNavGroup-noCategory"] a').simulate('click');
     expect(onClose.callCount).toEqual(3);
     expectNavIsClosed(component);

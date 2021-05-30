@@ -1,17 +1,19 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import { Observable, Subject, Subscription } from 'rxjs';
 
 import { CoreSetup, CoreStart, Plugin, PluginInitializerContext } from 'src/core/public';
-
 import { ILicense } from '../common/types';
 import { LicensingPluginSetup, LicensingPluginStart } from './types';
 import { createLicenseUpdate } from '../common/license_update';
 import { License } from '../common/license';
 import { mountExpiredBanner } from './expired_banner';
+import { FeatureUsageService } from './services';
 
 export const licensingSessionStorageKey = 'xpack.licensing';
 
@@ -39,6 +41,7 @@ export class LicensingPlugin implements Plugin<LicensingPluginSetup, LicensingPl
 
   private refresh?: () => Promise<ILicense>;
   private license$?: Observable<ILicense>;
+  private featureUsage = new FeatureUsageService();
 
   constructor(
     context: PluginInitializerContext,
@@ -100,7 +103,7 @@ export class LicensingPlugin implements Plugin<LicensingPluginSetup, LicensingPl
         if (core.http.anonymousPaths.isAnonymous(window.location.pathname)) return httpResponse;
         if (httpResponse.response) {
           const signatureHeader = httpResponse.response.headers.get('kbn-license-sig');
-          if (this.prevSignature !== signatureHeader) {
+          if (typeof signatureHeader === 'string' && this.prevSignature !== signatureHeader) {
             if (!httpResponse.request!.url.includes(this.infoEndpoint)) {
               signatureUpdated$.next();
             }
@@ -116,10 +119,11 @@ export class LicensingPlugin implements Plugin<LicensingPluginSetup, LicensingPl
     return {
       refresh: refreshManually,
       license$,
+      featureUsage: this.featureUsage.setup(),
     };
   }
 
-  public async start(core: CoreStart) {
+  public start(core: CoreStart) {
     this.coreStart = core;
     if (!this.refresh || !this.license$) {
       throw new Error('Setup has not been completed');
@@ -127,6 +131,7 @@ export class LicensingPlugin implements Plugin<LicensingPluginSetup, LicensingPl
     return {
       refresh: this.refresh,
       license$: this.license$,
+      featureUsage: this.featureUsage.start({ http: core.http }),
     };
   }
 

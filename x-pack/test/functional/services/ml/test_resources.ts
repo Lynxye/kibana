@@ -1,13 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { ProvidedType } from '@kbn/test/types/ftr';
+import { ProvidedType } from '@kbn/test';
 import { savedSearches, dashboards } from './test_resources_data';
-import { COMMON_REQUEST_HEADERS } from './common';
+import { COMMON_REQUEST_HEADERS } from './common_api';
 import { FtrProviderContext } from '../../ftr_provider_context';
+import { JobType } from '../../../../plugins/ml/common/types/saved_objects';
 
 export enum SavedObjectType {
   CONFIG = 'config',
@@ -15,11 +17,13 @@ export enum SavedObjectType {
   INDEX_PATTERN = 'index-pattern',
   SEARCH = 'search',
   VISUALIZATION = 'visualization',
+  ML_JOB = 'ml-job',
 }
 
 export type MlTestResourcesi = ProvidedType<typeof MachineLearningTestResourcesProvider>;
 
 export function MachineLearningTestResourcesProvider({ getService }: FtrProviderContext) {
+  const es = getService('es');
   const kibanaServer = getService('kibanaServer');
   const log = getService('log');
   const supertest = getService('supertest');
@@ -69,6 +73,23 @@ export function MachineLearningTestResourcesProvider({ getService }: FtrProvider
         }
       }
       log.debug(` > Not found`);
+    },
+
+    async getSavedObjectIdsByType(objectType: SavedObjectType): Promise<string[]> {
+      const savedObjectIds: string[] = [];
+
+      log.debug(`Searching for '${objectType}' ...`);
+      const findResponse = await supertest
+        .get(`/api/saved_objects/_find?type=${objectType}&per_page=10000`)
+        .set(COMMON_REQUEST_HEADERS)
+        .expect(200)
+        .then((res: any) => res.body);
+
+      findResponse.saved_objects.forEach((element: any) => {
+        savedObjectIds.push(element.id);
+      });
+
+      return savedObjectIds;
     },
 
     async getIndexPatternId(title: string): Promise<string | undefined> {
@@ -166,6 +187,91 @@ export function MachineLearningTestResourcesProvider({ getService }: FtrProvider
       }
     },
 
+    async setupBrokenAnnotationsIndexState(jobId: string) {
+      // Creates a temporary annotations index with unsupported mappings.
+      await es.indices.create({
+        index: '.ml-annotations-6-wrong-mapping',
+        body: {
+          settings: {
+            number_of_shards: 1,
+          },
+          mappings: {
+            properties: {
+              field1: { type: 'text' },
+            },
+          },
+        },
+      });
+
+      // Ingests an annotation that will cause dynamic mapping to pick up the wrong field type.
+      es.create({
+        id: 'annotation_with_wrong_mapping',
+        index: '.ml-annotations-6-wrong-mapping',
+        body: {
+          annotation: 'Annotation with wrong mapping',
+          create_time: 1597393915910,
+          create_username: '_xpack',
+          timestamp: 1549756800000,
+          end_timestamp: 1549756800000,
+          job_id: jobId,
+          modified_time: 1597393915910,
+          modified_username: '_xpack',
+          type: 'annotation',
+          event: 'user',
+          detector_index: 0,
+        },
+      });
+
+      // Points the read/write aliases for annotations to the broken annotations index
+      // so we can run tests against a state where annotation endpoints return errors.
+      await es.indices.updateAliases({
+        body: {
+          actions: [
+            {
+              add: {
+                index: '.ml-annotations-6-wrong-mapping',
+                alias: '.ml-annotations-read',
+                is_hidden: true,
+              },
+            },
+            { remove: { index: '.ml-annotations-6', alias: '.ml-annotations-read' } },
+            {
+              add: {
+                index: '.ml-annotations-6-wrong-mapping',
+                alias: '.ml-annotations-write',
+                is_hidden: true,
+              },
+            },
+            { remove: { index: '.ml-annotations-6', alias: '.ml-annotations-write' } },
+          ],
+        },
+      });
+    },
+
+    async restoreAnnotationsIndexState() {
+      // restore the original working state of pointing read/write aliases
+      // to the right annotations index.
+      await es.indices.updateAliases({
+        body: {
+          actions: [
+            { add: { index: '.ml-annotations-6', alias: '.ml-annotations-read', is_hidden: true } },
+            { remove: { index: '.ml-annotations-6-wrong-mapping', alias: '.ml-annotations-read' } },
+            {
+              add: { index: '.ml-annotations-6', alias: '.ml-annotations-write', is_hidden: true },
+            },
+            {
+              remove: { index: '.ml-annotations-6-wrong-mapping', alias: '.ml-annotations-write' },
+            },
+          ],
+        },
+      });
+
+      // deletes the temporary annotations index with wrong mappings
+      await es.indices.delete({
+        index: '.ml-annotations-6-wrong-mapping',
+      });
+    },
+
     async updateSavedSearchRequestBody(body: object, indexPatternTitle: string): Promise<object> {
       const indexPatternId = await this.getIndexPatternId(indexPatternTitle);
       if (indexPatternId === undefined) {
@@ -199,6 +305,10 @@ export function MachineLearningTestResourcesProvider({ getService }: FtrProvider
       await this.createDashboardIfNeeded(dashboards.mlTestDashboard);
     },
 
+    async deleteMLTestDashboard() {
+      await this.deleteDashboardByTitle(dashboards.mlTestDashboard.requestBody.attributes.title);
+    },
+
     async createDashboardIfNeeded(dashboard: any) {
       const title = dashboard.requestBody.attributes.title;
       const dashboardId = await this.getDashboardId(title);
@@ -226,7 +336,7 @@ export function MachineLearningTestResourcesProvider({ getService }: FtrProvider
       await this.createSavedSearchIfNeeded(savedSearches.farequoteFilterAndKuery);
     },
 
-    async deleteSavedObjectById(id: string, objectType: SavedObjectType) {
+    async deleteSavedObjectById(id: string, objectType: SavedObjectType, force: boolean = false) {
       log.debug(`Deleting ${objectType} with id '${id}'...`);
 
       if ((await this.savedObjectExistsById(id, objectType)) === false) {
@@ -236,6 +346,7 @@ export function MachineLearningTestResourcesProvider({ getService }: FtrProvider
         await supertest
           .delete(`/api/saved_objects/${objectType}/${id}`)
           .set(COMMON_REQUEST_HEADERS)
+          .query({ force })
           .expect(200);
 
         await this.assertSavedObjectNotExistsById(id, objectType);
@@ -406,6 +517,42 @@ export function MachineLearningTestResourcesProvider({ getService }: FtrProvider
 
     async assertDashboardExistById(id: string) {
       await this.assertSavedObjectExistsById(id, SavedObjectType.DASHBOARD);
+    },
+
+    async deleteMlSavedObjectByJobId(jobId: string, jobType: JobType) {
+      const savedObjectId = `${jobType}-${jobId}`;
+      await this.deleteSavedObjectById(savedObjectId, SavedObjectType.ML_JOB, true);
+    },
+
+    async cleanMLSavedObjects() {
+      log.debug('Deleting ML saved objects ...');
+      const savedObjectIds = await this.getSavedObjectIdsByType(SavedObjectType.ML_JOB);
+      for (const id of savedObjectIds) {
+        await this.deleteSavedObjectById(id, SavedObjectType.ML_JOB, true);
+      }
+      log.debug('> ML saved objects deleted.');
+    },
+
+    async installFleetPackage(packageIdentifier: string) {
+      log.debug(`Installing Fleet package'${packageIdentifier}'`);
+
+      await supertest
+        .post(`/api/fleet/epm/packages/${packageIdentifier}`)
+        .set(COMMON_REQUEST_HEADERS)
+        .expect(200);
+
+      log.debug(` > Installed`);
+    },
+
+    async removeFleetPackage(packageIdentifier: string) {
+      log.debug(`Removing Fleet package'${packageIdentifier}'`);
+
+      await supertest
+        .delete(`/api/fleet/epm/packages/${packageIdentifier}`)
+        .set(COMMON_REQUEST_HEADERS)
+        .expect(200);
+
+      log.debug(` > Removed`);
     },
   };
 }

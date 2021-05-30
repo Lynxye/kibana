@@ -1,54 +1,29 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import Boom from 'boom';
-import Joi from 'joi';
+import Boom from '@hapi/boom';
 import { has, snakeCase } from 'lodash/fp';
+import { BadRequestError } from '@kbn/securitysolution-es-utils';
+import { SanitizedAlert } from '../../../../../alerting/common';
 
 import {
   RouteValidationFunction,
   KibanaResponseFactory,
   CustomHttpResponseOptions,
 } from '../../../../../../../src/core/server';
-import { BadRequestError } from '../errors/bad_request_error';
+import { AlertsClient } from '../../../../../alerting/server';
+import { RuleStatusResponse, IRuleStatusSOAttributes } from '../rules/types';
+
+import { RuleParams } from '../schemas/rule_schemas';
 
 export interface OutputError {
   message: string;
   statusCode: number;
 }
-
-export const transformError = (err: Error & { statusCode?: number }): OutputError => {
-  if (Boom.isBoom(err)) {
-    return {
-      message: err.output.payload.message,
-      statusCode: err.output.statusCode,
-    };
-  } else {
-    if (err.statusCode != null) {
-      return {
-        message: err.message,
-        statusCode: err.statusCode,
-      };
-    } else if (err instanceof BadRequestError) {
-      // allows us to throw request validation errors in the absence of Boom
-      return {
-        message: err.message,
-        statusCode: 400,
-      };
-    } else {
-      // natively return the err and allow the regular framework
-      // to deal with the error when it is a non Boom
-      return {
-        message: err.message ?? '(unknown error message)',
-        statusCode: 500,
-      };
-    }
-  }
-};
-
 export interface BulkError {
   id?: string;
   rule_id?: string;
@@ -220,7 +195,12 @@ export const transformBulkError = (
   }
 };
 
-export const buildRouteValidation = <T>(schema: Joi.Schema): RouteValidationFunction<T> => (
+interface Schema {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  validate: (input: any) => { value: any; error?: Error };
+}
+
+export const buildRouteValidation = <T>(schema: Schema): RouteValidationFunction<T> => (
   payload: T,
   { ok, badRequest }
 ) => {
@@ -288,4 +268,66 @@ export const convertToSnakeCase = <T extends Record<string, unknown>>(
     const newKey = snakeCase(item);
     return { ...acc, [newKey]: obj[item] };
   }, {});
+};
+
+/**
+ *
+ * @param id rule id
+ * @param currentStatusAndFailures array of rule statuses where the 0th status is the current status and 1-5 positions are the historical failures
+ * @param acc accumulated rule id : statuses
+ */
+export const mergeStatuses = (
+  id: string,
+  currentStatusAndFailures: IRuleStatusSOAttributes[],
+  acc: RuleStatusResponse
+): RuleStatusResponse => {
+  if (currentStatusAndFailures.length === 0) {
+    return {
+      ...acc,
+    };
+  }
+  const convertedCurrentStatus = convertToSnakeCase<IRuleStatusSOAttributes>(
+    currentStatusAndFailures[0]
+  );
+  return {
+    ...acc,
+    [id]: {
+      current_status: convertedCurrentStatus,
+      failures: currentStatusAndFailures
+        .slice(1)
+        .map((errorItem) => convertToSnakeCase<IRuleStatusSOAttributes>(errorItem)),
+    },
+  } as RuleStatusResponse;
+};
+
+export type GetFailingRulesResult = Record<string, SanitizedAlert<RuleParams>>;
+
+export const getFailingRules = async (
+  ids: string[],
+  alertsClient: AlertsClient
+): Promise<GetFailingRulesResult> => {
+  try {
+    const errorRules = await Promise.all(
+      ids.map(async (id) =>
+        alertsClient.get({
+          id,
+        })
+      )
+    );
+    return errorRules
+      .filter((rule) => rule.executionStatus.status === 'error')
+      .reduce<GetFailingRulesResult>((acc, failingRule) => {
+        return {
+          [failingRule.id]: {
+            ...failingRule,
+          },
+          ...acc,
+        };
+      }, {});
+  } catch (exc) {
+    if (Boom.isBoom(exc)) {
+      throw exc;
+    }
+    throw new Error(`Failed to get executionStatus with AlertsClient: ${exc.message}`);
+  }
 };

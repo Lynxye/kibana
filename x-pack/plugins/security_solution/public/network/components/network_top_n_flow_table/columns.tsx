@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { get } from 'lodash/fp';
@@ -14,7 +15,7 @@ import {
   FlowTargetSourceDest,
   NetworkTopNFlowEdges,
   TopNetworkTablesEcsField,
-} from '../../../graphql/types';
+} from '../../../../common/search_strategy';
 import { networkModel } from '../../store';
 import {
   DragEffects,
@@ -22,7 +23,7 @@ import {
 } from '../../../common/components/drag_and_drop/draggable_wrapper';
 import { escapeDataProviderId } from '../../../common/components/drag_and_drop/helpers';
 import { getEmptyTagValue } from '../../../common/components/empty_value';
-import { IPDetailsLink } from '../../../common/components/links';
+import { NetworkDetailsLink } from '../../../common/components/links';
 import { Columns } from '../../../common/components/paginated_table';
 import { IS_OPERATOR } from '../../../timelines/components/timeline/data_providers/data_provider';
 import { Provider } from '../../../timelines/components/timeline/data_providers/provider';
@@ -43,7 +44,7 @@ export type NetworkTopNFlowColumns = [
   Columns<NetworkTopNFlowEdges>
 ];
 
-export type NetworkTopNFlowColumnsIpDetails = [
+export type NetworkTopNFlowColumnsNetworkDetails = [
   Columns<NetworkTopNFlowEdges>,
   Columns<NetworkTopNFlowEdges>,
   Columns<NetworkTopNFlowEdges>,
@@ -86,7 +87,7 @@ export const getNetworkTopNFlowColumns = (
                     <Provider dataProvider={dataProvider} />
                   </DragEffects>
                 ) : (
-                  <IPDetailsLink ip={ip} flowTarget={flowTarget} />
+                  <NetworkDetailsLink ip={ip} flowTarget={flowTarget} />
                 )
               }
             />
@@ -239,7 +240,7 @@ export const getNFlowColumnsCurated = (
   flowTarget: FlowTargetSourceDest,
   type: networkModel.NetworkType,
   tableId: string
-): NetworkTopNFlowColumns | NetworkTopNFlowColumnsIpDetails => {
+): NetworkTopNFlowColumns | NetworkTopNFlowColumnsNetworkDetails => {
   const columns = getNetworkTopNFlowColumns(flowTarget, tableId);
 
   // Columns to exclude from host details pages

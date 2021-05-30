@@ -1,8 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import {
   EuiErrorBoundary,
   EuiFlexGroup,
@@ -70,13 +72,13 @@ function NewsItem({ item }: { item: INewsItem }) {
                 </EuiText>
               </EuiFlexItem>
               <EuiFlexItem grow={false}>
-                <EuiLink href={item.link_url.en} target="_blank">
-                  <EuiText size="xs">
+                <EuiText size="xs">
+                  <EuiLink href={item.link_url.en} target="_blank" external>
                     {i18n.translate('xpack.observability.news.readFullStory', {
                       defaultMessage: 'Read full story',
                     })}
-                  </EuiText>
-                </EuiLink>
+                  </EuiLink>
+                </EuiText>
               </EuiFlexItem>
             </EuiFlexGroup>
           </EuiFlexItem>

@@ -1,40 +1,40 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 // @ts-ignore
 import contentDisposition from 'content-disposition';
 import { get } from 'lodash';
-import { CSV_JOB_TYPE } from '../../../common/constants';
-import { statuses } from '../../lib/esqueue/constants/statuses';
-import { ExportTypesRegistry } from '../../lib/export_types_registry';
-import { ExportTypeDefinition, JobSource, TaskRunResult } from '../../types';
+import { CSV_JOB_TYPE, CSV_JOB_TYPE_DEPRECATED } from '../../../common/constants';
+import { ExportTypesRegistry, statuses } from '../../lib';
+import { ReportDocument } from '../../lib/store';
+import { TaskRunResult } from '../../lib/tasks';
+import { ExportTypeDefinition } from '../../types';
 
-type ExportTypeType = ExportTypeDefinition<unknown, unknown, unknown, unknown>;
-
-interface ErrorFromPayload {
+export interface ErrorFromPayload {
   message: string;
 }
 
-// A camelCase version of TaskRunResult
+// interface of the API result
 interface Payload {
   statusCode: number;
   content: string | Buffer | ErrorFromPayload;
-  contentType: string;
+  contentType: string | null;
   headers: Record<string, any>;
 }
 
 const DEFAULT_TITLE = 'report';
 
-const getTitle = (exportType: ExportTypeType, title?: string): string =>
+const getTitle = (exportType: ExportTypeDefinition, title?: string): string =>
   `${title || DEFAULT_TITLE}.${exportType.jobContentExtension}`;
 
-const getReportingHeaders = (output: TaskRunResult, exportType: ExportTypeType) => {
+const getReportingHeaders = (output: TaskRunResult, exportType: ExportTypeDefinition) => {
   const metaDataHeaders: Record<string, boolean> = {};
 
-  if (exportType.jobType === CSV_JOB_TYPE) {
+  if (exportType.jobType === CSV_JOB_TYPE || exportType.jobType === CSV_JOB_TYPE_DEPRECATED) {
     const csvContainsFormulas = get(output, 'csv_contains_formulas', false);
     const maxSizedReach = get(output, 'max_size_reached', false);
 
@@ -46,7 +46,10 @@ const getReportingHeaders = (output: TaskRunResult, exportType: ExportTypeType) 
 };
 
 export function getDocumentPayloadFactory(exportTypesRegistry: ExportTypesRegistry) {
-  function encodeContent(content: string | null, exportType: ExportTypeType): Buffer | string {
+  function encodeContent(
+    content: string | null,
+    exportType: ExportTypeDefinition
+  ): Buffer | string {
     switch (exportType.jobContentEncoding) {
       case 'base64':
         return content ? Buffer.from(content, 'base64') : ''; // convert null to empty string
@@ -56,7 +59,9 @@ export function getDocumentPayloadFactory(exportTypesRegistry: ExportTypesRegist
   }
 
   function getCompleted(output: TaskRunResult, jobType: string, title: string): Payload {
-    const exportType = exportTypesRegistry.get((item: ExportTypeType) => item.jobType === jobType);
+    const exportType = exportTypesRegistry.get(
+      (item: ExportTypeDefinition) => item.jobType === jobType
+    );
     const filename = getTitle(exportType, title);
     const headers = getReportingHeaders(output, exportType);
 
@@ -93,16 +98,18 @@ export function getDocumentPayloadFactory(exportTypesRegistry: ExportTypesRegist
     };
   }
 
-  return function getDocumentPayload(doc: JobSource<unknown>): Payload {
+  return function getDocumentPayload(doc: ReportDocument): Payload {
     const { status, jobtype: jobType, payload: { title } = { title: '' } } = doc._source;
     const { output } = doc._source;
 
-    if (status === statuses.JOB_STATUS_COMPLETED || status === statuses.JOB_STATUS_WARNINGS) {
-      return getCompleted(output, jobType, title);
-    }
+    if (output) {
+      if (status === statuses.JOB_STATUS_COMPLETED || status === statuses.JOB_STATUS_WARNINGS) {
+        return getCompleted(output, jobType, title);
+      }
 
-    if (status === statuses.JOB_STATUS_FAILED) {
-      return getFailure(output);
+      if (status === statuses.JOB_STATUS_FAILED) {
+        return getFailure(output);
+      }
     }
 
     // send a 503 indicating that the report isn't completed yet

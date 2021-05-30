@@ -1,12 +1,13 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import Boom from 'boom';
-import _ from 'lodash';
-import { ILegacyScopedClusterClient } from 'kibana/server';
+import Boom from '@hapi/boom';
+import { each, get } from 'lodash';
+import { IScopedClusterClient } from 'kibana/server';
 
 import { ANNOTATION_EVENT_USER, ANNOTATION_TYPE } from '../../../common/constants/annotations';
 import { PARTITION_FIELDS } from '../../../common/constants/anomalies';
@@ -39,8 +40,8 @@ export interface FieldToBucket {
 
 export interface IndexAnnotationArgs {
   jobIds: string[];
-  earliestMs: number;
-  latestMs: number;
+  earliestMs: number | null;
+  latestMs: number | null;
   maxAnnotations: number;
   fields?: FieldToBucket[];
   detectorIndex?: number;
@@ -66,17 +67,17 @@ export interface GetResponse {
 export interface IndexParams {
   index: string;
   body: Annotation;
-  refresh?: string;
+  refresh: boolean | 'wait_for' | undefined;
   id?: string;
 }
 
 export interface DeleteParams {
   index: string;
-  refresh?: string;
+  refresh: boolean | 'wait_for' | undefined;
   id: string;
 }
 
-export function annotationProvider({ callAsInternalUser }: ILegacyScopedClusterClient) {
+export function annotationProvider({ asInternalUser }: IScopedClusterClient) {
   async function indexAnnotation(annotation: Annotation, username: string) {
     if (isAnnotation(annotation) === false) {
       // No need to translate, this will not be exposed in the UI.
@@ -103,7 +104,8 @@ export function annotationProvider({ callAsInternalUser }: ILegacyScopedClusterC
       delete params.body.key;
     }
 
-    return await callAsInternalUser('index', params);
+    const { body } = await asInternalUser.index(params);
+    return body;
   }
 
   async function getAnnotations({
@@ -190,7 +192,7 @@ export function annotationProvider({ callAsInternalUser }: ILegacyScopedClusterC
 
     if (jobIds && jobIds.length > 0 && !(jobIds.length === 1 && jobIds[0] === '*')) {
       let jobIdFilterStr = '';
-      _.each(jobIds, (jobId, i: number) => {
+      each(jobIds, (jobId, i: number) => {
         jobIdFilterStr += `${i! > 0 ? ' OR ' : ''}job_id:${jobId}`;
       });
       boolCriteria.push({
@@ -286,14 +288,16 @@ export function annotationProvider({ callAsInternalUser }: ILegacyScopedClusterC
     };
 
     try {
-      const resp = await callAsInternalUser('search', params);
+      const { body } = await asInternalUser.search(params);
 
-      if (resp.error !== undefined && resp.message !== undefined) {
+      // @ts-expect-error TODO fix search response types
+      if (body.error !== undefined && body.message !== undefined) {
         // No need to translate, this will not be exposed in the UI.
         throw new Error(`Annotations couldn't be retrieved from Elasticsearch.`);
       }
 
-      const docs: Annotations = _.get(resp, ['hits', 'hits'], []).map((d: EsResult) => {
+      // @ts-expect-error TODO fix search response types
+      const docs: Annotations = get(body, ['hits', 'hits'], []).map((d: EsResult) => {
         // get the original source document and the document id, we need it
         // to identify the annotation when editing/deleting it.
         // if original `event` is undefined then substitute with 'user` by default
@@ -305,7 +309,7 @@ export function annotationProvider({ callAsInternalUser }: ILegacyScopedClusterC
         } as Annotation;
       });
 
-      const aggregations = _.get(resp, ['aggregations'], {}) as EsAggregationResult;
+      const aggregations = get(body, ['aggregations'], {}) as EsAggregationResult;
       if (fields) {
         obj.aggregations = aggregations;
       }
@@ -329,13 +333,14 @@ export function annotationProvider({ callAsInternalUser }: ILegacyScopedClusterC
   }
 
   async function deleteAnnotation(id: string) {
-    const param: DeleteParams = {
+    const params: DeleteParams = {
       index: ML_ANNOTATIONS_INDEX_ALIAS_WRITE,
       id,
       refresh: 'wait_for',
     };
 
-    return await callAsInternalUser('delete', param);
+    const { body } = await asInternalUser.delete(params);
+    return body;
   }
 
   return {

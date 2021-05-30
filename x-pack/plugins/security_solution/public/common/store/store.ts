@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import {
@@ -13,6 +14,7 @@ import {
   Middleware,
   Dispatch,
   PreloadedState,
+  CombinedState,
 } from 'redux';
 
 import { createEpicMiddleware } from 'redux-observable';
@@ -24,12 +26,12 @@ import { timelineSelectors } from '../../timelines/store/timeline';
 import { inputsSelectors } from './inputs';
 import { SubPluginsInitReducer, createReducer } from './reducer';
 import { createRootEpic } from './epic';
-import { AppApolloClient } from '../lib/lib';
 import { AppAction } from './actions';
 import { Immutable } from '../../../common/endpoint/types';
 import { State } from './types';
 import { Storage } from '../../../../../../src/plugins/kibana_utils/public';
 import { CoreStart } from '../../../../../../src/core/public';
+import { TimelineEpicDependencies } from '../../timelines/store/timeline/types';
 
 type ComposeType = typeof compose;
 declare global {
@@ -49,15 +51,13 @@ let store: Store<State, Action> | null = null;
 export const createStore = (
   state: PreloadedState<State>,
   pluginsReducer: SubPluginsInitReducer,
-  apolloClient: Observable<AppApolloClient>,
   kibana: Observable<CoreStart>,
   storage: Storage,
   additionalMiddleware?: Array<Middleware<{}, State, Dispatch<AppAction | Immutable<AppAction>>>>
 ): Store<State, Action> => {
   const composeEnhancers = window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ || compose;
 
-  const middlewareDependencies = {
-    apolloClient$: apolloClient,
+  const middlewareDependencies: TimelineEpicDependencies<State> = {
     kibana$: kibana,
     selectAllTimelineQuery: inputsSelectors.globalQueryByIdSelector,
     selectNotesByIdSelector: appSelectors.selectNotesByIdSelector,
@@ -80,7 +80,7 @@ export const createStore = (
     )
   );
 
-  epicMiddleware.run(createRootEpic<State>());
+  epicMiddleware.run(createRootEpic<CombinedState<State>>());
 
   return store;
 };

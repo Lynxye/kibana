@@ -1,23 +1,21 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 export {
   getAnalysisType,
   getDependentVar,
   getPredictionFieldName,
+  getDefaultTrainingFilterQuery,
   isOutlierAnalysis,
   refreshAnalyticsList$,
   useRefreshAnalyticsList,
-  DataFrameAnalyticsId,
-  DataFrameAnalyticsConfig,
   UpdateDataFrameAnalyticsConfig,
-  IndexName,
   IndexPattern,
   REFRESH_ANALYTICS_LIST_STATE,
-  ANALYSIS_CONFIG_TYPE,
   OUTLIER_ANALYSIS_METHOD,
   RegressionEvaluateResponse,
   getValuesFromResponse,
@@ -29,6 +27,7 @@ export {
   SEARCH_SIZE,
   defaultSearchQuery,
   SearchQuery,
+  ANALYSIS_CONFIG_TYPE,
 } from './analytics';
 
 export {
@@ -43,5 +42,9 @@ export {
 
 export { getIndexData } from './get_index_data';
 export { getIndexFields } from './get_index_fields';
+export { getScatterplotMatrixLegendType } from './get_scatterplot_matrix_legend_type';
 
 export { useResultsViewConfig } from './use_results_view_config';
+export { DataFrameAnalyticsConfig } from '../../../../common/types/data_frame_analytics';
+export { DataFrameAnalyticsId } from '../../../../common/types/data_frame_analytics';
+export { IndexName } from '../../../../common/types/data_frame_analytics';

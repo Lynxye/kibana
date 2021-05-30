@@ -1,6 +1,3 @@
-/src
-/test
+/index.test.js
+/jest.config.js
 /tsconfig.json
-/.babelrc
-/yarn.lock
-/__tests__

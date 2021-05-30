@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { EuiCallOut, EuiSpacer } from '@elastic/eui';
@@ -22,7 +23,7 @@ export const getFailureToast = (
       <FormattedMessage
         id="xpack.reporting.publicNotifier.error.couldNotCreateReportTitle"
         defaultMessage="Could not create report for {reportObjectType} '{reportObjectTitle}'."
-        values={{ reportObjectType: job.type, reportObjectTitle: job.title }}
+        values={{ reportObjectType: job.jobtype, reportObjectTitle: job.title }}
       />
     ),
     text: toMountPoint(

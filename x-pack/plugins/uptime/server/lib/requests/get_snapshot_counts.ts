@@ -1,35 +1,39 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { UMElasticsearchQueryFn } from '../adapters';
 import { CONTEXT_DEFAULTS } from '../../../common/constants';
 import { Snapshot } from '../../../common/runtime_types';
 import { QueryContext } from './search';
+import { ESFilter } from '../../../../../../typings/elasticsearch';
 
 export interface GetSnapshotCountParams {
   dateRangeStart: string;
   dateRangeEnd: string;
   filters?: string | null;
+  query?: string;
 }
 
 export const getSnapshotCount: UMElasticsearchQueryFn<GetSnapshotCountParams, Snapshot> = async ({
-  callES,
-  dynamicSettings: { heartbeatIndices },
+  uptimeEsClient,
   dateRangeStart,
   dateRangeEnd,
   filters,
+  query,
 }): Promise<Snapshot> => {
   const context = new QueryContext(
-    callES,
-    heartbeatIndices,
+    uptimeEsClient,
     dateRangeStart,
     dateRangeEnd,
     CONTEXT_DEFAULTS.CURSOR_PAGINATION,
     filters && filters !== '' ? JSON.parse(filters) : null,
-    Infinity
+    Infinity,
+    undefined,
+    query
   );
 
   // Calculate the total, up, and down counts.
@@ -39,13 +43,12 @@ export const getSnapshotCount: UMElasticsearchQueryFn<GetSnapshotCountParams, Sn
 };
 
 const statusCount = async (context: QueryContext): Promise<Snapshot> => {
-  const res = await context.search({
-    index: context.heartbeatIndices,
-    body: statusCountBody(await context.dateAndCustomFilters()),
+  const { body: res } = await context.search({
+    body: statusCountBody(await context.dateAndCustomFilters(), context),
   });
 
   return (
-    res.aggregations?.counts?.value ?? {
+    (res.aggregations?.counts?.value as Snapshot) ?? {
       total: 0,
       up: 0,
       down: 0,
@@ -53,17 +56,32 @@ const statusCount = async (context: QueryContext): Promise<Snapshot> => {
   );
 };
 
-const statusCountBody = (filters: any): any => {
+const statusCountBody = (filters: ESFilter[], context: QueryContext) => {
   return {
     size: 0,
     query: {
       bool: {
+        ...(context.query
+          ? {
+              minimum_should_match: 1,
+              should: [
+                {
+                  multi_match: {
+                    query: escape(context.query),
+                    type: 'phrase_prefix',
+                    fields: ['monitor.id.text', 'monitor.name.text', 'url.full.text'],
+                  },
+                },
+              ],
+            }
+          : {}),
         filter: [
           {
             exists: {
               field: 'summary',
             },
           },
+
           ...filters,
         ],
       },

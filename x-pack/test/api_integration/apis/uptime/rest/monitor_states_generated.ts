@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import expect from '@kbn/expect';
@@ -12,6 +13,8 @@ import { API_URLS } from '../../../../../plugins/uptime/common/constants';
 
 export default function ({ getService }: FtrProviderContext) {
   const supertest = getService('supertest');
+  const retry = getService('retry');
+
   describe('monitor state scoping', async () => {
     const numIps = 4; // Must be > 2 for IP uniqueness checks
 
@@ -23,6 +26,30 @@ export default function ({ getService }: FtrProviderContext) {
 
     before('load heartbeat data', () => getService('esArchiver').load('uptime/blank'));
     after('unload heartbeat index', () => getService('esArchiver').unload('uptime/blank'));
+
+    // In this case we don't actually have any monitors to display
+    // but the query should still return successfully. This has
+    // caused bugs in the past because a bucket of monitor data
+    // was available and the query code assumed at least one
+    // event would be a summary for each monitor.
+    // See https://github.com/elastic/kibana/issues/81950
+    describe('checks with no summaries', async () => {
+      const testMonitorId = 'scope-test-id';
+      before(async () => {
+        const es = getService('es');
+        dateRangeStart = new Date().toISOString();
+        await makeChecksWithStatus(es, testMonitorId, 1, numIps, 1, {}, 'up', (d) => {
+          delete d.summary;
+          return d;
+        });
+      });
+
+      it('should return no monitors and have no errors', async () => {
+        const url = getBaseUrl(dateRangeStart, new Date().toISOString());
+        const apiResponse = await supertest.get(url);
+        expect(apiResponse.status).to.equal(200);
+      });
+    });
 
     describe('query document scoping with mismatched check statuses', async () => {
       let checks: any[] = [];
@@ -37,7 +64,7 @@ export default function ({ getService }: FtrProviderContext) {
       };
 
       before(async () => {
-        const es = getService('legacyEs');
+        const es = getService('es');
         dateRangeStart = new Date().toISOString();
         checks = await makeChecksWithStatus(es, testMonitorId, 1, numIps, 1, {}, 'up', (d) => {
           // turn an all up status into having at least one down
@@ -114,7 +141,7 @@ export default function ({ getService }: FtrProviderContext) {
       before('generate three monitors with up, down, mix state', async () => {
         await getService('esArchiver').load('uptime/blank');
 
-        const es = getService('legacyEs');
+        const es = getService('es');
 
         const observer = {
           geo: {
@@ -168,13 +195,15 @@ export default function ({ getService }: FtrProviderContext) {
       });
 
       it('should not return a monitor with mix state if check status filter is up', async () => {
-        const apiResponse = await supertest.get(
-          getBaseUrl(dateRangeStart, dateRangeEnd) + '&statusFilter=up'
-        );
-        const { summaries } = apiResponse.body;
+        await retry.try(async () => {
+          const apiResponse = await supertest.get(
+            getBaseUrl(dateRangeStart, dateRangeEnd) + '&statusFilter=up'
+          );
+          const { summaries } = apiResponse.body;
 
-        expect(summaries.length).to.eql(1);
-        expect(summaries[0].monitor_id).to.eql(upMonitorId);
+          expect(summaries.length).to.eql(1);
+          expect(summaries[0].monitor_id).to.eql(upMonitorId);
+        });
       });
     });
   });

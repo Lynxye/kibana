@@ -1,39 +1,72 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import React, { ReactNode } from 'react';
-import { i18n } from '@kbn/i18n';
 import {
   EuiButtonEmpty,
   EuiPage,
-  EuiSideNav,
-  EuiPageSideBar,
   EuiPageBody,
+  EuiPageSideBar,
+  EuiSideNav,
+  EuiSpacer,
 } from '@elastic/eui';
-import { HomeLink } from '../../shared/Links/apm/HomeLink';
-import { useLocation } from '../../../hooks/useLocation';
+import { i18n } from '@kbn/i18n';
+import React, { ReactNode, useState } from 'react';
+import { RouteComponentProps } from 'react-router-dom';
+import { HeaderMenuPortal } from '../../../../../observability/public';
+import { ActionMenu } from '../../../application/action_menu';
+import { useApmPluginContext } from '../../../context/apm_plugin/use_apm_plugin_context';
 import { getAPMHref } from '../../shared/Links/apm/APMLink';
-import { useApmPluginContext } from '../../../hooks/useApmPluginContext';
+import { HomeLink } from '../../shared/Links/apm/HomeLink';
 
-export function Settings(props: { children: ReactNode }) {
-  const plugin = useApmPluginContext();
-  const canAccessML = !!plugin.core.application.capabilities.ml?.canAccessML;
-  const { search, pathname } = useLocation();
+interface SettingsProps extends RouteComponentProps<{}> {
+  children: ReactNode;
+}
+
+export function Settings({ children, location }: SettingsProps) {
+  const { appMountParameters, core } = useApmPluginContext();
+  const { basePath } = core.http;
+  const canAccessML = !!core.application.capabilities.ml?.canAccessML;
+  const { search, pathname } = location;
+
+  const [isSideNavOpenOnMobile, setisSideNavOpenOnMobile] = useState(false);
+
+  const toggleOpenOnMobile = () => {
+    setisSideNavOpenOnMobile((prevState) => !prevState);
+  };
+
+  function getSettingsHref(path: string) {
+    return getAPMHref({ basePath, path: `/settings${path}`, search });
+  }
+
   return (
     <>
-      <HomeLink>
-        <EuiButtonEmpty size="s" color="primary" iconType="arrowLeft">
-          {i18n.translate('xpack.apm.settings.returnToOverviewLinkLabel', {
-            defaultMessage: 'Return to overview',
-          })}
-        </EuiButtonEmpty>
-      </HomeLink>
+      <HeaderMenuPortal
+        setHeaderActionMenu={appMountParameters.setHeaderActionMenu}
+      >
+        <ActionMenu />
+      </HeaderMenuPortal>
       <EuiPage>
         <EuiPageSideBar>
+          <HomeLink>
+            <EuiButtonEmpty
+              flush="left"
+              size="s"
+              color="primary"
+              iconType="arrowLeft"
+            >
+              {i18n.translate('xpack.apm.settings.returnLinkLabel', {
+                defaultMessage: 'Return to inventory',
+              })}
+            </EuiButtonEmpty>
+            <EuiSpacer size="s" />
+          </HomeLink>
           <EuiSideNav
+            toggleOpenOnMobile={() => toggleOpenOnMobile()}
+            isOpenOnMobile={isSideNavOpenOnMobile}
             items={[
               {
                 name: i18n.translate('xpack.apm.settings.pageTitle', {
@@ -46,7 +79,7 @@ export function Settings(props: { children: ReactNode }) {
                       defaultMessage: 'Agent Configuration',
                     }),
                     id: '1',
-                    href: getAPMHref('/settings/agent-configuration', search),
+                    href: getSettingsHref('/agent-configuration'),
                     isSelected: pathname.startsWith(
                       '/settings/agent-configuration'
                     ),
@@ -61,10 +94,7 @@ export function Settings(props: { children: ReactNode }) {
                             }
                           ),
                           id: '4',
-                          href: getAPMHref(
-                            '/settings/anomaly-detection',
-                            search
-                          ),
+                          href: getSettingsHref('/anomaly-detection'),
                           isSelected:
                             pathname === '/settings/anomaly-detection',
                         },
@@ -75,7 +105,7 @@ export function Settings(props: { children: ReactNode }) {
                       defaultMessage: 'Customize app',
                     }),
                     id: '3',
-                    href: getAPMHref('/settings/customize-ui', search),
+                    href: getSettingsHref('/customize-ui'),
                     isSelected: pathname === '/settings/customize-ui',
                   },
                   {
@@ -83,7 +113,7 @@ export function Settings(props: { children: ReactNode }) {
                       defaultMessage: 'Indices',
                     }),
                     id: '2',
-                    href: getAPMHref('/settings/apm-indices', search),
+                    href: getSettingsHref('/apm-indices'),
                     isSelected: pathname === '/settings/apm-indices',
                   },
                 ],
@@ -91,7 +121,7 @@ export function Settings(props: { children: ReactNode }) {
             ]}
           />
         </EuiPageSideBar>
-        <EuiPageBody>{props.children}</EuiPageBody>
+        <EuiPageBody>{children}</EuiPageBody>
       </EuiPage>
     </>
   );

@@ -1,8 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import React, { memo, useMemo } from 'react';
 import styled from 'styled-components';
 import {
@@ -27,7 +29,7 @@ import {
  */
 const PolicyResponseConfigAccordion = styled(EuiAccordion)`
   .euiAccordion__triggerWrapper {
-    padding: ${(props) => props.theme.eui.paddingSizes.s};
+    padding: ${(props) => props.theme.eui.paddingSizes.xs};
   }
 
   &.euiAccordion-isOpen {
@@ -90,7 +92,7 @@ const ResponseActions = memo(
             <EuiAccordion
               id={action + index}
               key={action + index}
-              data-test-subj="hostDetailsPolicyResponseActionsAccordion"
+              data-test-subj="endpointDetailsPolicyResponseActionsAccordion"
               className="policyResponseActionsAccordion"
               buttonContent={
                 <EuiText
@@ -150,7 +152,7 @@ export const PolicyResponse = memo(
             <PolicyResponseConfigAccordion
               id={generateId(`id_${key}`)}
               key={generateId(`key_${key}`)}
-              data-test-subj="hostDetailsPolicyResponseConfigAccordion"
+              data-test-subj="endpointDetailsPolicyResponseConfigAccordion"
               buttonContent={
                 <EuiText size="s">
                   <p>{formatResponse(key)}</p>
@@ -162,7 +164,7 @@ export const PolicyResponse = memo(
                 attentionCount > 0 && (
                   <EuiNotificationBadge
                     className="policyResponseAttentionBadge"
-                    data-test-subj="hostDetailsPolicyResponseAttentionBadge"
+                    data-test-subj="endpointDetailsPolicyResponseAttentionBadge"
                   >
                     {attentionCount}
                   </EuiNotificationBadge>

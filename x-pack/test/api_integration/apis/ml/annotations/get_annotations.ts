@@ -1,13 +1,14 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import expect from '@kbn/expect';
 import { omit } from 'lodash';
 import { FtrProviderContext } from '../../../ftr_provider_context';
-import { COMMON_REQUEST_HEADERS } from '../../../../functional/services/ml/common';
+import { COMMON_REQUEST_HEADERS } from '../../../../functional/services/ml/common_api';
 import { USER } from '../../../../functional/services/ml/security_common';
 import { testSetupJobConfigs, jobIds, testSetupAnnotations } from './common_jobs';
 
@@ -25,6 +26,7 @@ export default ({ getService }: FtrProviderContext) => {
       for (let i = 0; i < testSetupJobConfigs.length; i++) {
         const job = testSetupJobConfigs[i];
         const annotationToIndex = testSetupAnnotations[i];
+        // @ts-expect-error not full interface
         await ml.api.createAnomalyDetectionJob(job);
         await ml.api.indexAnnotation(annotationToIndex);
       }
@@ -120,10 +122,10 @@ export default ({ getService }: FtrProviderContext) => {
         .auth(USER.ML_UNAUTHORIZED, ml.securityCommon.getPasswordForUser(USER.ML_UNAUTHORIZED))
         .set(COMMON_REQUEST_HEADERS)
         .send(requestBody)
-        .expect(404);
+        .expect(403);
 
-      expect(body.error).to.eql('Not Found');
-      expect(body.message).to.eql('Not Found');
+      expect(body.error).to.eql('Forbidden');
+      expect(body.message).to.eql('Forbidden');
     });
   });
 };

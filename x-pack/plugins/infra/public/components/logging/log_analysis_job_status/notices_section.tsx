@@ -1,11 +1,12 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React from 'react';
-import { QualityWarning } from '../../../containers/logs/log_analysis/log_analysis_module_types';
+import { QualityWarning } from '../../../../common/log_analysis';
 import { LogAnalysisJobProblemIndicator } from './log_analysis_job_problem_indicator';
 import { CategoryQualityWarnings } from './quality_warning_notices';
 
@@ -41,6 +42,10 @@ export const CategoryJobNoticesSection: React.FC<{
       onRecreateMlJobForReconfiguration={onRecreateMlJobForReconfiguration}
       onRecreateMlJobForUpdate={onRecreateMlJobForUpdate}
     />
-    <CategoryQualityWarnings qualityWarnings={qualityWarnings} />
+    <CategoryQualityWarnings
+      hasSetupCapabilities={hasSetupCapabilities}
+      qualityWarnings={qualityWarnings}
+      onRecreateMlJob={onRecreateMlJobForReconfiguration}
+    />
   </>
 );

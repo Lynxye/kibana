@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { Fragment } from 'react';
@@ -23,15 +24,15 @@ import {
 
 export const AccessDeniedPage = () => (
   <Fragment>
-    <EuiPage>
+    <EuiPage data-test-subj="mlPageAccessDenied">
       <EuiPageBody>
         <EuiPageContentHeader>
           <EuiPageContentHeaderSection>
             <EuiTitle>
               <h1>
                 <FormattedMessage
-                  id="xpack.ml.management.jobsList.accessDeniedTitle"
-                  defaultMessage="Access denied"
+                  id="xpack.ml.management.jobsList.insufficientLicenseTitle"
+                  defaultMessage="Machine Learning"
                 />
               </h1>
             </EuiTitle>
@@ -41,7 +42,7 @@ export const AccessDeniedPage = () => (
           <EuiSpacer size="m" />
           <EuiCallOut
             title={i18n.translate('xpack.ml.management.jobsList.noPermissionToAccessLabel', {
-              defaultMessage: 'You need permission to access ML jobs',
+              defaultMessage: 'Access denied',
             })}
             color="danger"
             iconType="cross"

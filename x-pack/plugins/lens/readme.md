@@ -1,10 +1,17 @@
 # Lens
 
+Visualization editor allowing to quickly and easily configure compelling visualizations to use on dashboards and canvas workpads.
+
+## Embedding
+
+It's possible to embed Lens visualizations in other apps using `EmbeddableComponent` and `navigateToPrefilledEditor`
+exposed via contract. For more information check out the example in `x-pack/examples/embedded_lens_example`.
+
 ## Testing
 
 Run all tests from the `x-pack` root directory
 
-- Unit tests: `node scripts/jest --watch lens`
+- Unit tests: `yarn test:jest x-pack/plugins/lens`
 - Functional tests:
   - Run `node scripts/functional_tests_server`
   - Run `node ../scripts/functional_test_runner.js --config ./test/functional/config.js --grep="lens app"`
@@ -30,7 +37,7 @@ Lens has a lot of UI elements – to make it easier to refer to them in issues o
 * **Config panel** Panel to the right showing configuration of the current chart, separated by layers
   * **Layer panel** One of multiple panels in the config panel, holding configuration for separate layers
     * **Dimension trigger** Chart dimension like "X axis", "Break down by" or "Slice by" in the config panel
-    * **Dimension popover** Popover shown when clicking a dimension trigger
+    * **Dimension container** Container shown when clicking a dimension trigger and contains the dimension settints
     * **Layer settings popover** Popover shown when clicking the button in the top left of a layer panel
 * **Workspace panel** Center panel containing the chart preview, title and toolbar
   * **Chart preview** Full-sized rendered chart in the center of the screen

@@ -1,11 +1,12 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { getSuggestions } from './metric_suggestions';
-import { TableSuggestionColumn, TableSuggestion } from '../index';
+import { TableSuggestionColumn, TableSuggestion } from '../types';
 
 describe('metric_suggestions', () => {
   function numCol(columnId: string): TableSuggestionColumn {
@@ -100,7 +101,7 @@ describe('metric_suggestions', () => {
     expect(rest).toHaveLength(0);
     expect(suggestion).toMatchInlineSnapshot(`
       Object {
-        "previewIcon": "test-file-stub",
+        "previewIcon": [Function],
         "score": 0.1,
         "state": Object {
           "accessor": "bytes",

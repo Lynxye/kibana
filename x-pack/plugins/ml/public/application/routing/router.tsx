@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { useEffect, FC } from 'react';
@@ -12,7 +13,7 @@ import { AppMountParameters, IUiSettingsClient, ChromeStart } from 'kibana/publi
 import { ChromeBreadcrumb } from 'kibana/public';
 import { IndexPatternsContract } from 'src/plugins/data/public';
 
-import { useNavigateToPath } from '../contexts/kibana';
+import { useMlKibana, useNavigateToPath } from '../contexts/kibana';
 import { MlContext, MlContextValue } from '../contexts/ml';
 import { UrlStateProvider } from '../util/url_state';
 
@@ -39,6 +40,7 @@ interface PageDependencies {
   history: AppMountParameters['history'];
   indexPatterns: IndexPatternsContract;
   setBreadcrumbs: ChromeStart['setBreadcrumbs'];
+  redirectToMlAccessDeniedPage: () => Promise<void>;
 }
 
 export const PageLoader: FC<{ context: MlContextValue }> = ({ context, children }) => {
@@ -75,11 +77,16 @@ const MlRoutes: FC<{
   pageDeps: PageDependencies;
 }> = ({ pageDeps }) => {
   const navigateToPath = useNavigateToPath();
+  const {
+    services: {
+      http: { basePath },
+    },
+  } = useMlKibana();
 
   return (
     <>
       {Object.entries(routes).map(([name, routeFactory]) => {
-        const route = routeFactory(navigateToPath);
+        const route = routeFactory(navigateToPath, basePath.get());
 
         return (
           <Route
@@ -111,7 +118,7 @@ export const MlRouter: FC<{
   <Router history={pageDeps.history}>
     <LegacyHashUrlRedirect>
       <UrlStateProvider>
-        <div className="ml-app">
+        <div className="ml-app" data-test-subj="mlApp">
           <MlRoutes pageDeps={pageDeps} />
         </div>
       </UrlStateProvider>

@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -24,9 +25,9 @@ import {
 } from '@elastic/eui';
 
 import { Pipeline } from '../../../../common/types';
-import { BASE_PATH } from '../../../../common/constants';
 import { useKibana, SectionLoading } from '../../../shared_imports';
 import { UIM_PIPELINES_LIST_LOAD } from '../../constants';
+import { getEditPath, getClonePath, getListPath } from '../../services/navigation';
 
 import { EmptyList } from './empty_list';
 import { PipelineTable } from './table';
@@ -51,7 +52,7 @@ export const PipelinesList: React.FunctionComponent<RouteComponentProps> = ({
 
   const [pipelinesToDelete, setPipelinesToDelete] = useState<string[]>([]);
 
-  const { data, isLoading, error, sendRequest } = services.api.useLoadPipelines();
+  const { data, isLoading, error, resendRequest } = services.api.useLoadPipelines();
 
   // Track component loaded
   useEffect(() => {
@@ -67,17 +68,17 @@ export const PipelinesList: React.FunctionComponent<RouteComponentProps> = ({
     }
   }, [pipelineNameFromLocation, data]);
 
-  const goToEditPipeline = (name: string) => {
-    history.push(`${BASE_PATH}/edit/${encodeURIComponent(name)}`);
+  const goToEditPipeline = (pipelineName: string) => {
+    history.push(getEditPath({ pipelineName }));
   };
 
-  const goToClonePipeline = (name: string) => {
-    history.push(`${BASE_PATH}/create/${encodeURIComponent(name)}`);
+  const goToClonePipeline = (clonedPipelineName: string) => {
+    history.push(getClonePath({ clonedPipelineName }));
   };
 
   const goHome = () => {
     setShowFlyout(false);
-    history.push(BASE_PATH);
+    history.push(getListPath());
   };
 
   if (data && data.length === 0) {
@@ -98,7 +99,7 @@ export const PipelinesList: React.FunctionComponent<RouteComponentProps> = ({
   } else if (data?.length) {
     content = (
       <PipelineTable
-        onReloadClick={sendRequest}
+        onReloadClick={resendRequest}
         onEditPipelineClick={goToEditPipeline}
         onDeletePipelineClick={setPipelinesToDelete}
         onClonePipelineClick={goToClonePipeline}
@@ -182,7 +183,7 @@ export const PipelinesList: React.FunctionComponent<RouteComponentProps> = ({
                   defaultMessage="Unable to load pipelines. {reloadLink}"
                   values={{
                     reloadLink: (
-                      <EuiLink onClick={sendRequest}>
+                      <EuiLink onClick={resendRequest}>
                         <FormattedMessage
                           id="xpack.ingestPipelines.list.loadErrorReloadLinkLabel"
                           defaultMessage="Try again."
@@ -204,7 +205,7 @@ export const PipelinesList: React.FunctionComponent<RouteComponentProps> = ({
           callback={(deleteResponse) => {
             if (deleteResponse?.hasDeletedPipelines) {
               // reload pipelines list
-              sendRequest();
+              resendRequest();
               setSelectedPipeline(undefined);
               goHome();
             }

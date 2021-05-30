@@ -1,10 +1,11 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import React, { useCallback, useEffect, memo, useMemo } from 'react';
+import React, { useCallback, useEffect, memo } from 'react';
 import {
   EuiFlyout,
   EuiFlyoutBody,
@@ -14,13 +15,13 @@ import {
   EuiText,
   EuiSpacer,
   EuiEmptyPrompt,
+  EuiToolTip,
 } from '@elastic/eui';
 import { useHistory } from 'react-router-dom';
 import { FormattedMessage } from '@kbn/i18n/react';
 import { i18n } from '@kbn/i18n';
 import { useToasts } from '../../../../../common/lib/kibana';
-import { useHostSelector } from '../hooks';
-import { urlFromQueryParams } from '../url_from_query_params';
+import { useEndpointSelector } from '../hooks';
 import {
   uiQueryParams,
   detailsData,
@@ -32,37 +33,52 @@ import {
   policyResponseFailedOrWarningActionCount,
   policyResponseError,
   policyResponseLoading,
+  policyResponseTimestamp,
+  policyVersionInfo,
+  hostStatusInfo,
+  policyResponseAppliedRevision,
 } from '../../store/selectors';
-import { HostDetails } from './host_details';
+import { EndpointDetails } from './endpoint_details';
 import { PolicyResponse } from './policy_response';
 import { HostMetadata } from '../../../../../../common/endpoint/types';
-import { FlyoutSubHeader, FlyoutSubHeaderProps } from './components/flyout_sub_header';
-import { useNavigateByRouterEventHandler } from '../../../../../common/hooks/endpoint/use_navigate_by_router_event_handler';
-import { getHostListPath } from '../../../../common/routing';
-import { SecurityPageName } from '../../../../../app/types';
-import { useFormatUrl } from '../../../../../common/components/link_to';
+import { PreferenceFormattedDateFromPrimitive } from '../../../../../common/components/formatted_date';
+import { EndpointIsolateFlyoutPanel } from './components/endpoint_isolate_flyout_panel';
+import { BackToEndpointDetailsFlyoutSubHeader } from './components/back_to_endpoint_details_flyout_subheader';
+import { FlyoutBodyNoTopPadding } from './components/flyout_body_no_top_padding';
+import { getEndpointListPath } from '../../../../common/routing';
 
-export const HostDetailsFlyout = memo(() => {
+export const EndpointDetailsFlyout = memo(() => {
   const history = useHistory();
   const toasts = useToasts();
-  const queryParams = useHostSelector(uiQueryParams);
-  const { selected_host: selectedHost, ...queryParamsWithoutSelectedHost } = queryParams;
-  const details = useHostSelector(detailsData);
-  const loading = useHostSelector(detailsLoading);
-  const error = useHostSelector(detailsError);
-  const show = useHostSelector(showView);
+  const queryParams = useEndpointSelector(uiQueryParams);
+  const {
+    selected_endpoint: selectedEndpoint,
+    ...queryParamsWithoutSelectedEndpoint
+  } = queryParams;
+  const details = useEndpointSelector(detailsData);
+  const policyInfo = useEndpointSelector(policyVersionInfo);
+  const hostStatus = useEndpointSelector(hostStatusInfo);
+  const loading = useEndpointSelector(detailsLoading);
+  const error = useEndpointSelector(detailsError);
+  const show = useEndpointSelector(showView);
 
   const handleFlyoutClose = useCallback(() => {
-    history.push(urlFromQueryParams(queryParamsWithoutSelectedHost));
-  }, [history, queryParamsWithoutSelectedHost]);
+    const { show: _show, ...urlSearchParams } = queryParamsWithoutSelectedEndpoint;
+    history.push(
+      getEndpointListPath({
+        name: 'endpointList',
+        ...urlSearchParams,
+      })
+    );
+  }, [history, queryParamsWithoutSelectedEndpoint]);
 
   useEffect(() => {
     if (error !== undefined) {
       toasts.addDanger({
-        title: i18n.translate('xpack.securitySolution.endpoint.host.details.errorTitle', {
+        title: i18n.translate('xpack.securitySolution.endpoint.details.errorTitle', {
           defaultMessage: 'Could not find host',
         }),
-        text: i18n.translate('xpack.securitySolution.endpoint.host.details.errorBody', {
+        text: i18n.translate('xpack.securitySolution.endpoint.details.errorBody', {
           defaultMessage: 'Please exit the flyout and select an available host.',
         }),
       });
@@ -73,99 +89,93 @@ export const HostDetailsFlyout = memo(() => {
     <EuiFlyout
       onClose={handleFlyoutClose}
       style={{ zIndex: 4001 }}
-      data-test-subj="hostDetailsFlyout"
-      size="s"
+      data-test-subj="endpointDetailsFlyout"
+      size="m"
     >
       <EuiFlyoutHeader hasBorder>
-        <EuiTitle size="s">
-          <h2 data-test-subj="hostDetailsFlyoutTitle">
-            {loading ? <EuiLoadingContent lines={1} /> : details?.host?.hostname}
-          </h2>
-        </EuiTitle>
+        {loading ? (
+          <EuiLoadingContent lines={1} />
+        ) : (
+          <EuiToolTip content={details?.host?.hostname} anchorClassName="eui-textTruncate">
+            <EuiTitle size="s">
+              <h2
+                style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}
+                data-test-subj="endpointDetailsFlyoutTitle"
+              >
+                {details?.host?.hostname}
+              </h2>
+            </EuiTitle>
+          </EuiToolTip>
+        )}
       </EuiFlyoutHeader>
       {details === undefined ? (
-        <>
-          <EuiFlyoutBody>
-            <EuiLoadingContent lines={3} /> <EuiSpacer size="l" /> <EuiLoadingContent lines={3} />
-          </EuiFlyoutBody>
-        </>
+        <EuiFlyoutBody>
+          <EuiLoadingContent lines={3} /> <EuiSpacer size="l" /> <EuiLoadingContent lines={3} />
+        </EuiFlyoutBody>
       ) : (
         <>
           {show === 'details' && (
-            <>
-              <EuiFlyoutBody data-test-subj="hostDetailsFlyoutBody">
-                <HostDetails details={details} />
-              </EuiFlyoutBody>
-            </>
+            <EuiFlyoutBody data-test-subj="endpointDetailsFlyoutBody">
+              <EndpointDetails details={details} policyInfo={policyInfo} hostStatus={hostStatus} />
+            </EuiFlyoutBody>
           )}
+
           {show === 'policy_response' && <PolicyResponseFlyoutPanel hostMeta={details} />}
+
+          {show === 'isolate' && <EndpointIsolateFlyoutPanel hostMeta={details} />}
         </>
       )}
     </EuiFlyout>
   );
 });
 
-HostDetailsFlyout.displayName = 'HostDetailsFlyout';
+EndpointDetailsFlyout.displayName = 'EndpointDetailsFlyout';
 
 const PolicyResponseFlyoutPanel = memo<{
   hostMeta: HostMetadata;
 }>(({ hostMeta }) => {
-  const { show, ...queryParams } = useHostSelector(uiQueryParams);
-  const responseConfig = useHostSelector(policyResponseConfigurations);
-  const responseActions = useHostSelector(policyResponseActions);
-  const responseAttentionCount = useHostSelector(policyResponseFailedOrWarningActionCount);
-  const loading = useHostSelector(policyResponseLoading);
-  const error = useHostSelector(policyResponseError);
-  const { formatUrl } = useFormatUrl(SecurityPageName.administration);
-  const [detailsUri, detailsRoutePath] = useMemo(
-    () => [
-      formatUrl(
-        getHostListPath({
-          name: 'hostList',
-          ...queryParams,
-          selected_host: hostMeta.host.id,
-        })
-      ),
-      getHostListPath({
-        name: 'hostList',
-        ...queryParams,
-        selected_host: hostMeta.host.id,
-      }),
-    ],
-    [hostMeta.host.id, formatUrl, queryParams]
-  );
-  const backToDetailsClickHandler = useNavigateByRouterEventHandler(detailsRoutePath);
-  const backButtonProp = useMemo((): FlyoutSubHeaderProps['backButton'] => {
-    return {
-      title: i18n.translate('xpack.securitySolution.endpoint.host.policyResponse.backLinkTitle', {
-        defaultMessage: 'Endpoint Details',
-      }),
-      href: detailsUri,
-      onClick: backToDetailsClickHandler,
-    };
-  }, [backToDetailsClickHandler, detailsUri]);
+  const responseConfig = useEndpointSelector(policyResponseConfigurations);
+  const responseActions = useEndpointSelector(policyResponseActions);
+  const responseAttentionCount = useEndpointSelector(policyResponseFailedOrWarningActionCount);
+  const loading = useEndpointSelector(policyResponseLoading);
+  const error = useEndpointSelector(policyResponseError);
+  const responseTimestamp = useEndpointSelector(policyResponseTimestamp);
+  const responsePolicyRevisionNumber = useEndpointSelector(policyResponseAppliedRevision);
 
   return (
     <>
-      <FlyoutSubHeader
-        backButton={backButtonProp}
-        data-test-subj="hostDetailsPolicyResponseFlyoutHeader"
-      />
-      <EuiFlyoutBody data-test-subj="hostDetailsPolicyResponseFlyoutBody">
-        <EuiText data-test-subj="hostDetailsPolicyResponseFlyoutTitle">
+      <BackToEndpointDetailsFlyoutSubHeader endpointId={hostMeta.agent.id} />
+
+      <FlyoutBodyNoTopPadding
+        data-test-subj="endpointDetailsPolicyResponseFlyoutBody"
+        className="endpointDetailsPolicyResponseFlyoutBody"
+      >
+        <EuiText data-test-subj="endpointDetailsPolicyResponseFlyoutTitle">
           <h4>
             <FormattedMessage
-              id="xpack.securitySolution.endpoint.host.policyResponse.title"
-              defaultMessage="Configuration Response"
+              id="xpack.securitySolution.endpoint.policyResponse.title"
+              defaultMessage="Policy Response"
             />
           </h4>
         </EuiText>
+        <EuiSpacer size="s" />
+        <EuiText size="xs" color="subdued" data-test-subj="endpointDetailsPolicyResponseTimestamp">
+          <FormattedMessage
+            id="xpack.securitySolution.endpoint.policyResponse.appliedOn"
+            defaultMessage="Revision {rev} applied on {date}"
+            values={{
+              rev: responsePolicyRevisionNumber,
+              date: <PreferenceFormattedDateFromPrimitive value={responseTimestamp} />,
+            }}
+          />
+        </EuiText>
+        <EuiSpacer size="s" />
         {error && (
           <EuiEmptyPrompt
             title={
               <FormattedMessage
-                id="xpack.securitySolution.endpoint.hostDetails.noPolicyResponse"
-                defaultMessage="No configuration response available"
+                id="xpack.securitySolution.endpoint.details.noPolicyResponse"
+                defaultMessage="No policy response available"
               />
             }
           />
@@ -178,7 +188,7 @@ const PolicyResponseFlyoutPanel = memo<{
             responseAttentionCount={responseAttentionCount}
           />
         )}
-      </EuiFlyoutBody>
+      </FlyoutBodyNoTopPadding>
     </>
   );
 });

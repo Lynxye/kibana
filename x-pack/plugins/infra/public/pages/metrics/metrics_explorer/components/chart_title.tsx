@@ -1,16 +1,22 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { Fragment } from 'react';
 import { EuiText, EuiFlexGroup, EuiFlexItem } from '@elastic/eui';
+import { i18n } from '@kbn/i18n';
 import { MetricsExplorerSeries } from '../../../../../common/http_api';
 
 interface Props {
   series: MetricsExplorerSeries;
 }
+
+const ALL_TITLE = i18n.translate('xpack.infra.metricsExplorer.everything', {
+  defaultMessage: 'Everything',
+});
 
 export const ChartTitle = ({ series }: Props) => {
   if (series.keys != null) {
@@ -21,7 +27,7 @@ export const ChartTitle = ({ series }: Props) => {
           <Fragment key={name}>
             <EuiFlexItem grow={false}>
               <EuiText size="m" color={keys.length - 1 > i ? 'subdued' : 'default'}>
-                <strong>{name}</strong>
+                <strong>{name === '*' ? ALL_TITLE : name}</strong>
               </EuiText>
             </EuiFlexItem>
             {keys.length - 1 > i && (

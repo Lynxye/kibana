@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 /*
@@ -12,14 +13,15 @@
 import PropTypes from 'prop-types';
 import React from 'react';
 
-import _ from 'lodash';
 import d3 from 'd3';
 import $ from 'jquery';
 import moment from 'moment';
+import { i18n } from '@kbn/i18n';
 
-import { formatHumanReadableDateTime } from '../../util/date_utils';
+import { formatHumanReadableDateTime } from '../../../../common/util/date_utils';
 import { formatValue } from '../../formatters/format_value';
 import {
+  getFormattedSeverityScore,
   getSeverityColor,
   getSeverityWithLow,
   getMultiBucketImpactLabel,
@@ -36,11 +38,7 @@ import {
   showMultiBucketAnomalyTooltip,
 } from '../../util/chart_utils';
 import { LoadingIndicator } from '../../components/loading_indicator/loading_indicator';
-import { getTimeBucketsFromCache } from '../../util/time_buckets';
-import { mlEscape } from '../../util/string_utils';
 import { mlFieldFormatService } from '../../services/field_format_service';
-
-import { i18n } from '@kbn/i18n';
 
 const CONTENT_WRAPPER_HEIGHT = 215;
 const CONTENT_WRAPPER_CLASS = 'ml-explorer-chart-content-wrapper';
@@ -51,6 +49,7 @@ export class ExplorerChartSingleMetric extends React.Component {
     seriesConfig: PropTypes.object,
     severity: PropTypes.number.isRequired,
     tooltipService: PropTypes.object.isRequired,
+    timeBuckets: PropTypes.object.isRequired,
   };
 
   componentDidMount() {
@@ -62,7 +61,7 @@ export class ExplorerChartSingleMetric extends React.Component {
   }
 
   renderChart() {
-    const { tooManyBuckets, tooltipService } = this.props;
+    const { tooManyBuckets, tooltipService, timeBuckets, showSelectedInterval } = this.props;
 
     const element = this.rootNode;
     const config = this.props.seriesConfig;
@@ -189,7 +188,6 @@ export class ExplorerChartSingleMetric extends React.Component {
 
     function drawLineChartAxes() {
       // Get the scaled date format to use for x axis tick labels.
-      const timeBuckets = getTimeBucketsFromCache();
       const bounds = { min: moment(config.plotEarliest), max: moment(config.plotLatest) };
       timeBuckets.setBounds(bounds);
       timeBuckets.setInterval('auto');
@@ -251,6 +249,8 @@ export class ExplorerChartSingleMetric extends React.Component {
     }
 
     function drawLineChartHighlightedSpan() {
+      if (showSelectedInterval === false) return;
+
       // Draws a rectangle which highlights the time span that has been selected for view.
       // Note depending on the overall time range and the bucket span, the selected time
       // span may be longer than the range actually being plotted.
@@ -307,7 +307,7 @@ export class ExplorerChartSingleMetric extends React.Component {
         .on('mouseout', () => tooltipService.hide());
 
       const isAnomalyVisible = (d) =>
-        _.has(d, 'anomalyScore') && Number(d.anomalyScore) >= severity;
+        d.anomalyScore !== undefined && Number(d.anomalyScore) >= severity;
 
       // Update all dots to new positions.
       dots
@@ -380,14 +380,13 @@ export class ExplorerChartSingleMetric extends React.Component {
       const tooltipData = [{ label: formattedDate }];
       const seriesKey = config.detectorLabel;
 
-      if (_.has(marker, 'anomalyScore')) {
+      if (marker.anomalyScore !== undefined) {
         const score = parseInt(marker.anomalyScore);
-        const displayScore = score > 0 ? score : '< 1';
         tooltipData.push({
           label: i18n.translate('xpack.ml.explorer.singleMetricChart.anomalyScoreLabel', {
             defaultMessage: 'anomaly score',
           }),
-          value: displayScore,
+          value: getFormattedSeverityScore(score),
           color: getSeverityColor(score),
           seriesIdentifier: {
             key: seriesKey,
@@ -411,7 +410,7 @@ export class ExplorerChartSingleMetric extends React.Component {
         // Show actual/typical when available except for rare detectors.
         // Rare detectors always have 1 as actual and the probability as typical.
         // Exposing those values in the tooltip with actual/typical labels might irritate users.
-        if (_.has(marker, 'actual') && config.functionDescription !== 'rare') {
+        if (marker.actual !== undefined && config.functionDescription !== 'rare') {
           // Display the record actual in preference to the chart value, which may be
           // different depending on the aggregation interval of the chart.
           tooltipData.push({
@@ -445,7 +444,7 @@ export class ExplorerChartSingleMetric extends React.Component {
             },
             valueAccessor: 'value',
           });
-          if (_.has(marker, 'byFieldName') && _.has(marker, 'numberOfCauses')) {
+          if (marker.byFieldName !== undefined && marker.numberOfCauses !== undefined) {
             tooltipData.push({
               label: i18n.translate(
                 'xpack.ml.explorer.distributionChart.unusualByFieldValuesLabel',
@@ -483,12 +482,12 @@ export class ExplorerChartSingleMetric extends React.Component {
         });
       }
 
-      if (_.has(marker, 'scheduledEvents')) {
+      if (marker.scheduledEvents !== undefined) {
         tooltipData.push({
           label: i18n.translate('xpack.ml.explorer.singleMetricChart.scheduledEventsLabel', {
             defaultMessage: 'Scheduled events',
           }),
-          value: marker.scheduledEvents.map(mlEscape).join('<br/>'),
+          value: marker.scheduledEvents,
           seriesIdentifier: {
             key: seriesKey,
           },

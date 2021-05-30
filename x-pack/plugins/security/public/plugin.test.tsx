@@ -1,21 +1,25 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { Observable } from 'rxjs';
 import BroadcastChannel from 'broadcast-channel';
-import { CoreSetup } from 'src/core/public';
-import { DataPublicPluginStart } from '../../../../src/plugins/data/public';
-import { SessionTimeout } from './session';
-import { PluginStartDependencies, SecurityPlugin } from './plugin';
+import { Observable } from 'rxjs';
 
-import { coreMock } from '../../../../src/core/public/mocks';
-import { managementPluginMock } from '../../../../src/plugins/management/public/mocks';
+import type { CoreSetup } from 'src/core/public';
+import { coreMock } from 'src/core/public/mocks';
+import type { DataPublicPluginStart } from 'src/plugins/data/public';
+import { managementPluginMock } from 'src/plugins/management/public/mocks';
+import { mockSecurityOssPlugin } from 'src/plugins/security_oss/public/mocks';
+
+import type { FeaturesPluginStart } from '../../features/public';
 import { licensingMock } from '../../licensing/public/mocks';
 import { ManagementService } from './management';
-import { FeaturesPluginStart } from '../../features/public';
+import type { PluginStartDependencies } from './plugin';
+import { SecurityPlugin } from './plugin';
+import { SessionTimeout } from './session';
 
 describe('Security Plugin', () => {
   beforeAll(() => {
@@ -30,18 +34,21 @@ describe('Security Plugin', () => {
       const plugin = new SecurityPlugin(coreMock.createPluginInitializerContext());
       expect(
         plugin.setup(
-          coreMock.createSetup({ basePath: '/some-base-path' }) as CoreSetup<
-            PluginStartDependencies
-          >,
+          coreMock.createSetup({
+            basePath: '/some-base-path',
+          }) as CoreSetup<PluginStartDependencies>,
           {
             licensing: licensingMock.createSetup(),
+            securityOss: mockSecurityOssPlugin.createSetup(),
           }
         )
       ).toEqual({
         __legacyCompat: { logoutUrl: '/some-base-path/logout', tenant: '/some-base-path' },
         authc: { getCurrentUser: expect.any(Function), areAPIKeysEnabled: expect.any(Function) },
         license: {
+          isLicenseAvailable: expect.any(Function),
           isEnabled: expect.any(Function),
+          getType: expect.any(Function),
           getFeatures: expect.any(Function),
           features$: expect.any(Observable),
         },
@@ -60,6 +67,7 @@ describe('Security Plugin', () => {
 
       plugin.setup(coreSetupMock as CoreSetup<PluginStartDependencies>, {
         licensing: licensingMock.createSetup(),
+        securityOss: mockSecurityOssPlugin.createSetup(),
         management: managementSetupMock,
       });
 
@@ -67,7 +75,9 @@ describe('Security Plugin', () => {
       expect(setupManagementServiceMock).toHaveBeenCalledWith({
         authc: { getCurrentUser: expect.any(Function), areAPIKeysEnabled: expect.any(Function) },
         license: {
+          isLicenseAvailable: expect.any(Function),
           isEnabled: expect.any(Function),
+          getType: expect.any(Function),
           getFeatures: expect.any(Function),
           features$: expect.any(Observable),
         },
@@ -83,15 +93,25 @@ describe('Security Plugin', () => {
       const plugin = new SecurityPlugin(coreMock.createPluginInitializerContext());
       plugin.setup(
         coreMock.createSetup({ basePath: '/some-base-path' }) as CoreSetup<PluginStartDependencies>,
-        { licensing: licensingMock.createSetup() }
+        { licensing: licensingMock.createSetup(), securityOss: mockSecurityOssPlugin.createSetup() }
       );
 
       expect(
         plugin.start(coreMock.createStart({ basePath: '/some-base-path' }), {
+          securityOss: mockSecurityOssPlugin.createStart(),
           data: {} as DataPublicPluginStart,
           features: {} as FeaturesPluginStart,
         })
-      ).toBeUndefined();
+      ).toEqual({
+        authc: {
+          getCurrentUser: expect.any(Function),
+          areAPIKeysEnabled: expect.any(Function),
+        },
+        navControlService: {
+          getUserMenuLinks$: expect.any(Function),
+          addUserMenuLinks: expect.any(Function),
+        },
+      });
     });
 
     it('starts Management Service if `management` plugin is available', () => {
@@ -108,11 +128,14 @@ describe('Security Plugin', () => {
         coreMock.createSetup({ basePath: '/some-base-path' }) as CoreSetup<PluginStartDependencies>,
         {
           licensing: licensingMock.createSetup(),
+          securityOss: mockSecurityOssPlugin.createSetup(),
           management: managementSetupMock,
         }
       );
 
-      plugin.start(coreMock.createStart({ basePath: '/some-base-path' }), {
+      const coreStart = coreMock.createStart({ basePath: '/some-base-path' });
+      plugin.start(coreStart, {
+        securityOss: mockSecurityOssPlugin.createStart(),
         data: {} as DataPublicPluginStart,
         features: {} as FeaturesPluginStart,
         management: managementStartMock,
@@ -127,7 +150,7 @@ describe('Security Plugin', () => {
       const plugin = new SecurityPlugin(coreMock.createPluginInitializerContext());
       plugin.setup(
         coreMock.createSetup({ basePath: '/some-base-path' }) as CoreSetup<PluginStartDependencies>,
-        { licensing: licensingMock.createSetup() }
+        { licensing: licensingMock.createSetup(), securityOss: mockSecurityOssPlugin.createSetup() }
       );
 
       expect(() => plugin.stop()).not.toThrow();
@@ -138,10 +161,11 @@ describe('Security Plugin', () => {
 
       plugin.setup(
         coreMock.createSetup({ basePath: '/some-base-path' }) as CoreSetup<PluginStartDependencies>,
-        { licensing: licensingMock.createSetup() }
+        { licensing: licensingMock.createSetup(), securityOss: mockSecurityOssPlugin.createSetup() }
       );
 
       plugin.start(coreMock.createStart({ basePath: '/some-base-path' }), {
+        securityOss: mockSecurityOssPlugin.createStart(),
         data: {} as DataPublicPluginStart,
         features: {} as FeaturesPluginStart,
       });

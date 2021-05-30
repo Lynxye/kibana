@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
-jest.mock('ui/new_platform');
+
 import { savedVisualization } from './saved_visualization';
 import { getQueryFilters } from '../../../public/lib/build_embeddable_filters';
 import { ExpressionValueFilter } from '../../../types';
@@ -36,6 +37,7 @@ describe('savedVisualization', () => {
     timerange: null,
     colors: null,
     hideLegend: null,
+    title: null,
   };
 
   it('accepts null context', () => {
@@ -49,5 +51,10 @@ describe('savedVisualization', () => {
     const embeddableFilters = getQueryFilters(filterContext.and);
 
     expect(expression.input.filters).toEqual(embeddableFilters);
+  });
+
+  it('accepts an empty title when title is disabled', () => {
+    const expression = fn(null, { ...args, title: '' }, {} as any);
+    expect(expression.input.title).toEqual('');
   });
 });

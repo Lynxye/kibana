@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
@@ -34,7 +35,7 @@ export const help: FunctionHelp<FunctionFactory<typeof progress>> = {
     }),
     label: i18n.translate('xpack.canvas.functions.progress.args.labelHelpText', {
       defaultMessage:
-        'To show or hide labels, use {BOOLEAN_TRUE} or {BOOLEAN_FALSE}. Alternatively, provide a string to display as a label.',
+        'To show or hide the label, use {BOOLEAN_TRUE} or {BOOLEAN_FALSE}. Alternatively, provide a string to display as a label.',
       values: {
         BOOLEAN_TRUE,
         BOOLEAN_FALSE,

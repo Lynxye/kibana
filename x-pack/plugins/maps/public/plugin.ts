@@ -1,119 +1,103 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { Setup as InspectorSetupContract } from 'src/plugins/inspector/public';
-import {
+import type { Setup as InspectorSetupContract } from 'src/plugins/inspector/public';
+import type { UiActionsStart } from 'src/plugins/ui_actions/public';
+import type { NavigationPublicPluginStart } from 'src/plugins/navigation/public';
+import type { Start as InspectorStartContract } from 'src/plugins/inspector/public';
+import type { DashboardStart } from 'src/plugins/dashboard/public';
+import type {
+  AppMountParameters,
   CoreSetup,
   CoreStart,
   Plugin,
   PluginInitializerContext,
-  DEFAULT_APP_CATEGORIES,
 } from '../../../../src/core/public';
+import { DEFAULT_APP_CATEGORIES } from '../../../../src/core/public';
 // @ts-ignore
 import { MapView } from './inspector/views/map_view';
 import {
-  setAutocompleteService,
-  setCore,
-  setCoreChrome,
-  setCoreI18n,
-  setCoreOverlays,
-  setData,
-  setDocLinks,
-  setFileUpload,
-  setHttp,
-  setIndexPatternSelect,
-  setIndexPatternService,
-  setInspector,
-  setIsGoldPlus,
+  setEMSSettings,
   setKibanaCommonConfig,
   setKibanaVersion,
-  setLicenseId,
   setMapAppConfig,
-  setMapsCapabilities,
-  setNavigation,
-  setSavedObjectsClient,
-  setSearchService,
-  setTimeFilter,
-  setToasts,
-  setUiActions,
-  setUiSettings,
-  setVisualizations,
+  setStartServices,
 } from './kibana_services';
 import { featureCatalogueEntry } from './feature_catalogue_entry';
-// @ts-ignore
 import { getMapsVisTypeAlias } from './maps_vis_type_alias';
-import { HomePublicPluginSetup } from '../../../../src/plugins/home/public';
-import { VisualizationsSetup } from '../../../../src/plugins/visualizations/public';
-import { APP_ICON, APP_ID, MAP_SAVED_OBJECT_TYPE } from '../common/constants';
+import type { HomePublicPluginSetup } from '../../../../src/plugins/home/public';
+import type {
+  VisualizationsSetup,
+  VisualizationsStart,
+} from '../../../../src/plugins/visualizations/public';
+import { APP_ICON_SOLUTION, APP_ID, MAP_SAVED_OBJECT_TYPE } from '../common/constants';
+import { VISUALIZE_GEO_FIELD_TRIGGER } from '../../../../src/plugins/ui_actions/public';
+import {
+  createMapsUrlGenerator,
+  createRegionMapUrlGenerator,
+  createTileMapUrlGenerator,
+} from './url_generator';
+import { visualizeGeoFieldAction } from './trigger_actions/visualize_geo_field_action';
+import { filterByMapExtentAction } from './trigger_actions/filter_by_map_extent_action';
 import { MapEmbeddableFactory } from './embeddable/map_embeddable_factory';
-import { EmbeddableSetup } from '../../../../src/plugins/embeddable/public';
+import type { EmbeddableSetup, EmbeddableStart } from '../../../../src/plugins/embeddable/public';
+import { CONTEXT_MENU_TRIGGER } from '../../../../src/plugins/embeddable/public';
 import { MapsXPackConfig, MapsConfigType } from '../config';
 import { getAppTitle } from '../common/i18n_getters';
-import { ILicense } from '../../licensing/common/types';
 import { lazyLoadMapModules } from './lazy_load_bundle';
-import { MapsStartApi } from './api';
-import { createSecurityLayerDescriptors, registerLayerWizard, registerSource } from './api';
+import {
+  createLayerDescriptors,
+  registerLayerWizard,
+  registerSource,
+  MapsStartApi,
+  suggestEMSTermJoinConfig,
+} from './api';
+import type { SharePluginSetup, SharePluginStart } from '../../../../src/plugins/share/public';
+import type { MapsEmsPluginSetup } from '../../../../src/plugins/maps_ems/public';
+import type { DataPublicPluginStart } from '../../../../src/plugins/data/public';
+import type { LicensingPluginSetup, LicensingPluginStart } from '../../licensing/public';
+import type { FileUploadPluginStart } from '../../file_upload/public';
+import type { SavedObjectsStart } from '../../../../src/plugins/saved_objects/public';
+import type { PresentationUtilPluginStart } from '../../../../src/plugins/presentation_util/public';
+import {
+  getIsEnterprisePlus,
+  registerLicensedFeatures,
+  setLicensingPluginStart,
+} from './licensed_features';
+import { EMSSettings } from '../common/ems_settings';
+import type { SavedObjectTaggingPluginStart } from '../../saved_objects_tagging/public';
+import type { ChartsPluginStart } from '../../../../src/plugins/charts/public';
 
 export interface MapsPluginSetupDependencies {
   inspector: InspectorSetupContract;
-  home: HomePublicPluginSetup;
+  home?: HomePublicPluginSetup;
   visualizations: VisualizationsSetup;
   embeddable: EmbeddableSetup;
-  mapsLegacy: { config: unknown };
+  mapsEms: MapsEmsPluginSetup;
+  share: SharePluginSetup;
+  licensing: LicensingPluginSetup;
 }
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
-export interface MapsPluginStartDependencies {}
 
-export const bindSetupCoreAndPlugins = (
-  core: CoreSetup,
-  plugins: any,
-  config: MapsConfigType,
-  kibanaVersion: string
-) => {
-  const { licensing, mapsLegacy } = plugins;
-  const { uiSettings, http, notifications } = core;
-  if (licensing) {
-    licensing.license$.subscribe(({ uid }: { uid: string }) => setLicenseId(uid));
-  }
-  setHttp(http);
-  setToasts(notifications.toasts);
-  setVisualizations(plugins.visualizations);
-  setUiSettings(uiSettings);
-  setKibanaCommonConfig(mapsLegacy.config);
-  setMapAppConfig(config);
-  setKibanaVersion(kibanaVersion);
-};
-
-export const bindStartCoreAndPlugins = (core: CoreStart, plugins: any) => {
-  const { fileUpload, data, inspector, licensing } = plugins;
-  if (licensing) {
-    licensing.license$.subscribe((license: ILicense) => {
-      const gold = license.check(APP_ID, 'gold');
-      setIsGoldPlus(gold.state === 'valid');
-    });
-  }
-
-  setInspector(inspector);
-  setFileUpload(fileUpload);
-  setIndexPatternSelect(data.ui.IndexPatternSelect);
-  setTimeFilter(data.query.timefilter.timefilter);
-  setSearchService(data.search);
-  setIndexPatternService(data.indexPatterns);
-  setAutocompleteService(data.autocomplete);
-  setCore(core);
-  setSavedObjectsClient(core.savedObjects.client);
-  setCoreChrome(core.chrome);
-  setCoreOverlays(core.overlays);
-  setMapsCapabilities(core.application.capabilities.maps);
-  setDocLinks(core.docLinks);
-  setData(plugins.data);
-  setUiActions(plugins.uiActions);
-  setNavigation(plugins.navigation);
-  setCoreI18n(core.i18n);
-};
+export interface MapsPluginStartDependencies {
+  charts: ChartsPluginStart;
+  data: DataPublicPluginStart;
+  embeddable: EmbeddableStart;
+  fileUpload: FileUploadPluginStart;
+  inspector: InspectorStartContract;
+  licensing: LicensingPluginStart;
+  navigation: NavigationPublicPluginStart;
+  uiActions: UiActionsStart;
+  share: SharePluginStart;
+  visualizations: VisualizationsStart;
+  savedObjects: SavedObjectsStart;
+  dashboard: DashboardStart;
+  savedObjectsTagging?: SavedObjectTaggingPluginStart;
+  presentationUtil: PresentationUtilPluginStart;
+}
 
 /**
  * These are the interfaces with your public contracts. You should export these
@@ -139,39 +123,69 @@ export class MapsPlugin
   }
 
   public setup(core: CoreSetup, plugins: MapsPluginSetupDependencies) {
-    const config = this._initializerContext.config.get<MapsConfigType>();
-    const kibanaVersion = this._initializerContext.env.packageInfo.version;
-    const { inspector, home, visualizations, embeddable } = plugins;
-    bindSetupCoreAndPlugins(core, plugins, config, kibanaVersion);
+    registerLicensedFeatures(plugins.licensing);
 
-    inspector.registerView(MapView);
-    home.featureCatalogue.register(featureCatalogueEntry);
-    visualizations.registerAlias(getMapsVisTypeAlias());
-    embeddable.registerEmbeddableFactory(MAP_SAVED_OBJECT_TYPE, new MapEmbeddableFactory());
+    const config = this._initializerContext.config.get<MapsConfigType>();
+    setKibanaCommonConfig(plugins.mapsEms.config);
+    setMapAppConfig(config);
+    setKibanaVersion(this._initializerContext.env.packageInfo.version);
+
+    const emsSettings = new EMSSettings(plugins.mapsEms.config, getIsEnterprisePlus);
+    setEMSSettings(emsSettings);
+
+    // register url generators
+    const getStartServices = async () => {
+      const [coreStart] = await core.getStartServices();
+      return {
+        appBasePath: coreStart.application.getUrlForApp('maps'),
+        useHashedUrl: coreStart.uiSettings.get('state:storeInSessionStorage'),
+      };
+    };
+    plugins.share.urlGenerators.registerUrlGenerator(createMapsUrlGenerator(getStartServices));
+    plugins.share.urlGenerators.registerUrlGenerator(createTileMapUrlGenerator(getStartServices));
+    plugins.share.urlGenerators.registerUrlGenerator(createRegionMapUrlGenerator(getStartServices));
+
+    plugins.inspector.registerView(MapView);
+    if (plugins.home) {
+      plugins.home.featureCatalogue.register(featureCatalogueEntry);
+    }
+    plugins.visualizations.registerAlias(
+      getMapsVisTypeAlias(plugins.visualizations, config.showMapVisualizationTypes)
+    );
+    plugins.embeddable.registerEmbeddableFactory(MAP_SAVED_OBJECT_TYPE, new MapEmbeddableFactory());
 
     core.application.register({
       id: APP_ID,
       title: getAppTitle(),
       order: 4000,
       icon: `plugins/${APP_ID}/icon.svg`,
-      euiIconType: APP_ICON,
+      euiIconType: APP_ICON_SOLUTION,
       category: DEFAULT_APP_CATEGORIES.kibana,
-      // @ts-expect-error
-      async mount(context, params) {
-        const [coreStart, startPlugins] = await core.getStartServices();
-        bindStartCoreAndPlugins(coreStart, startPlugins);
+      async mount(params: AppMountParameters) {
         const { renderApp } = await lazyLoadMapModules();
-        return renderApp(context, params);
+        return renderApp(params);
       },
     });
   }
 
-  public start(core: CoreStart, plugins: any): MapsStartApi {
-    bindStartCoreAndPlugins(core, plugins);
+  public start(core: CoreStart, plugins: MapsPluginStartDependencies): MapsStartApi {
+    setLicensingPluginStart(plugins.licensing);
+    setStartServices(core, plugins);
+
+    if (core.application.capabilities.maps.show) {
+      plugins.uiActions.addTriggerAction(VISUALIZE_GEO_FIELD_TRIGGER, visualizeGeoFieldAction);
+    }
+    plugins.uiActions.addTriggerAction(CONTEXT_MENU_TRIGGER, filterByMapExtentAction);
+
+    if (!core.application.capabilities.maps.save) {
+      plugins.visualizations.unRegisterAlias(APP_ID);
+    }
+
     return {
-      createSecurityLayerDescriptors,
+      createLayerDescriptors,
       registerLayerWizard,
       registerSource,
+      suggestEMSTermJoinConfig,
     };
   }
 }

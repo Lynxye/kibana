@@ -1,218 +1,439 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { getOr, uniqBy } from 'lodash/fp';
-import memoizeOne from 'memoize-one';
-import React from 'react';
-import { Query } from 'react-apollo';
-import { compose, Dispatch } from 'redux';
-import { connect, ConnectedProps } from 'react-redux';
+import deepEqual from 'fast-deep-equal';
+import { isEmpty, noop } from 'lodash/fp';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useDispatch } from 'react-redux';
+import { Subscription } from 'rxjs';
 
-import { DEFAULT_INDEX_KEY } from '../../../common/constants';
-import { IIndexPattern } from '../../../../../../src/plugins/data/common/index_patterns';
-import {
-  GetTimelineQuery,
-  PageInfo,
-  SortField,
-  TimelineEdges,
-  TimelineItem,
-} from '../../graphql/types';
-import { inputsModel, inputsSelectors, State } from '../../common/store';
-import { withKibana, WithKibanaProps } from '../../common/lib/kibana';
+import { ESQuery } from '../../../common/typed_json';
+import { isCompleteResponse, isErrorResponse } from '../../../../../../src/plugins/data/public';
+import { useIsExperimentalFeatureEnabled } from '../../common/hooks/use_experimental_features';
+import { inputsModel, KueryFilterQueryKind } from '../../common/store';
+import { useKibana } from '../../common/lib/kibana';
 import { createFilter } from '../../common/containers/helpers';
-import { QueryTemplate, QueryTemplateProps } from '../../common/containers/query_template';
-import { EventType } from '../../timelines/store/timeline/model';
-import { timelineQuery } from './index.gql_query';
 import { timelineActions } from '../../timelines/store/timeline';
 import { detectionsTimelineIds, skipQueryForDetectionsPage } from './helpers';
+import { getInspectResponse } from '../../helpers';
+import {
+  Direction,
+  PaginationInputPaginated,
+  TimelineEventsQueries,
+  TimelineEventsAllStrategyResponse,
+  TimelineEventsAllRequestOptions,
+  TimelineEdges,
+  TimelineItem,
+  TimelineRequestSortField,
+  DocValueFields,
+} from '../../../common/search_strategy';
+import { InspectResponse } from '../../types';
+import * as i18n from './translations';
+import { TimelineId } from '../../../common/types/timeline';
+import { useRouteSpy } from '../../common/utils/route/use_route_spy';
+import { activeTimeline } from './active_timeline_context';
+import {
+  EqlOptionsSelected,
+  TimelineEqlRequestOptions,
+  TimelineEqlResponse,
+} from '../../../common/search_strategy/timeline/events/eql';
+import { useAppToasts } from '../../common/hooks/use_app_toasts';
 
 export interface TimelineArgs {
   events: TimelineItem[];
   id: string;
-  inspect: inputsModel.InspectQuery;
-  loading: boolean;
-  loadMore: (cursor: string, tieBreaker: string) => void;
-  pageInfo: PageInfo;
+  inspect: InspectResponse;
+  loadPage: LoadPage;
+  pageInfo: Pick<PaginationInputPaginated, 'activePage' | 'querySize'>;
   refetch: inputsModel.Refetch;
   totalCount: number;
-  getUpdatedAt: () => number;
+  updatedAt: number;
 }
 
-export interface CustomReduxProps {
-  clearSignalsState: ({ id }: { id?: string }) => void;
-}
+type LoadPage = (newActivePage: number) => void;
 
-export interface OwnProps extends QueryTemplateProps {
-  children?: (args: TimelineArgs) => React.ReactNode;
+type TimelineRequest<T extends KueryFilterQueryKind> = T extends 'kuery'
+  ? TimelineEventsAllRequestOptions
+  : T extends 'lucene'
+  ? TimelineEventsAllRequestOptions
+  : T extends 'eql'
+  ? TimelineEqlRequestOptions
+  : TimelineEventsAllRequestOptions;
+
+type TimelineResponse<T extends KueryFilterQueryKind> = T extends 'kuery'
+  ? TimelineEventsAllStrategyResponse
+  : T extends 'lucene'
+  ? TimelineEventsAllStrategyResponse
+  : T extends 'eql'
+  ? TimelineEqlResponse
+  : TimelineEventsAllStrategyResponse;
+
+export interface UseTimelineEventsProps {
+  docValueFields?: DocValueFields[];
+  filterQuery?: ESQuery | string;
+  skip?: boolean;
   endDate: string;
-  eventType?: EventType;
+  eqlOptions?: EqlOptionsSelected;
   id: string;
-  indexPattern?: IIndexPattern;
-  indexToAdd?: string[];
-  limit: number;
-  sortField: SortField;
   fields: string[];
+  indexNames: string[];
+  language?: KueryFilterQueryKind;
+  limit: number;
+  sort?: TimelineRequestSortField[];
   startDate: string;
-  queryDeduplication: string;
+  timerangeKind?: 'absolute' | 'relative';
 }
 
-type TimelineQueryProps = OwnProps & PropsFromRedux & WithKibanaProps & CustomReduxProps;
+const getTimelineEvents = (timelineEdges: TimelineEdges[]): TimelineItem[] =>
+  timelineEdges.map((e: TimelineEdges) => e.node);
 
-class TimelineQueryComponent extends QueryTemplate<
-  TimelineQueryProps,
-  GetTimelineQuery.Query,
-  GetTimelineQuery.Variables
-> {
-  private updatedDate: number = Date.now();
-  private memoizedTimelineEvents: (variables: string, events: TimelineEdges[]) => TimelineItem[];
+const ID = 'timelineEventsQuery';
+export const initSortDefault = [
+  {
+    field: '@timestamp',
+    direction: Direction.asc,
+    type: 'number',
+  },
+];
 
-  constructor(props: TimelineQueryProps) {
-    super(props);
-    this.memoizedTimelineEvents = memoizeOne(this.getTimelineEvents);
-  }
+const deStructureEqlOptions = (eqlOptions?: EqlOptionsSelected) => ({
+  ...(!isEmpty(eqlOptions?.eventCategoryField)
+    ? {
+        eventCategoryField: eqlOptions?.eventCategoryField,
+      }
+    : {}),
+  ...(!isEmpty(eqlOptions?.size)
+    ? {
+        size: eqlOptions?.size,
+      }
+    : {}),
+  ...(!isEmpty(eqlOptions?.tiebreakerField)
+    ? {
+        tiebreakerField: eqlOptions?.tiebreakerField,
+      }
+    : {}),
+  ...(!isEmpty(eqlOptions?.timestampField)
+    ? {
+        timestampField: eqlOptions?.timestampField,
+      }
+    : {}),
+});
 
-  public render() {
-    const {
-      children,
-      clearSignalsState,
-      docValueFields,
-      endDate,
-      eventType = 'raw',
-      id,
-      indexPattern,
-      indexToAdd = [],
-      isInspected,
-      kibana,
-      limit,
-      fields,
-      filterQuery,
-      sourceId,
-      sortField,
-      startDate,
-      queryDeduplication,
-    } = this.props;
-    const defaultKibanaIndex = kibana.services.uiSettings.get<string[]>(DEFAULT_INDEX_KEY);
-    const defaultIndex =
-      indexPattern == null || (indexPattern != null && indexPattern.title === '')
-        ? [
-            ...(['all', 'raw'].includes(eventType) ? defaultKibanaIndex : []),
-            ...(['all', 'alert', 'signal'].includes(eventType) ? indexToAdd : []),
-          ]
-        : indexPattern?.title.split(',') ?? [];
-    // Fun fact: When using this hook multiple times within a component (e.g. add_exception_modal & edit_exception_modal),
-    // the apolloClient will perform queryDeduplication and prevent the first query from executing. A deep compare is not
-    // performed on `indices`, so another field must be passed to circumvent this.
-    // For details, see https://github.com/apollographql/react-apollo/issues/2202
-    const variables: GetTimelineQuery.Variables & { queryDeduplication: string } = {
-      fieldRequested: fields,
-      filterQuery: createFilter(filterQuery),
-      sourceId,
-      timerange: {
-        interval: '12h',
-        from: startDate,
-        to: endDate,
-      },
-      pagination: { limit, cursor: null, tiebreaker: null },
-      sortField,
-      defaultIndex,
-      docValueFields: docValueFields ?? [],
-      inspect: isInspected,
-      queryDeduplication,
-    };
+export const useTimelineEvents = ({
+  docValueFields,
+  endDate,
+  eqlOptions = undefined,
+  id = ID,
+  indexNames,
+  fields,
+  filterQuery,
+  startDate,
+  language = 'kuery',
+  limit,
+  sort = initSortDefault,
+  skip = false,
+  timerangeKind,
+}: UseTimelineEventsProps): [boolean, TimelineArgs] => {
+  const [{ pageName }] = useRouteSpy();
+  const dispatch = useDispatch();
+  const { data } = useKibana().services;
+  const refetch = useRef<inputsModel.Refetch>(noop);
+  const abortCtrl = useRef(new AbortController());
+  const searchSubscription$ = useRef(new Subscription());
+  const [loading, setLoading] = useState(false);
+  const [activePage, setActivePage] = useState(
+    id === TimelineId.active ? activeTimeline.getActivePage() : 0
+  );
+  const [timelineRequest, setTimelineRequest] = useState<TimelineRequest<typeof language> | null>(
+    null
+  );
+  const prevTimelineRequest = useRef<TimelineRequest<typeof language> | null>(null);
 
-    return (
-      <Query<GetTimelineQuery.Query, GetTimelineQuery.Variables>
-        query={timelineQuery}
-        fetchPolicy="network-only"
-        notifyOnNetworkStatusChange
-        skip={skipQueryForDetectionsPage(id, defaultIndex)}
-        variables={variables}
-      >
-        {({ data, loading, fetchMore, refetch }) => {
-          this.setRefetch(refetch);
-          this.setExecuteBeforeRefetch(clearSignalsState);
-          this.setExecuteBeforeFetchMore(clearSignalsState);
-
-          const timelineEdges = getOr([], 'source.Timeline.edges', data);
-          this.setFetchMore(fetchMore);
-          this.setFetchMoreOptions((newCursor: string, tiebreaker?: string) => ({
-            variables: {
-              pagination: {
-                cursor: newCursor,
-                tiebreaker,
-                limit,
-              },
-            },
-            updateQuery: (prev, { fetchMoreResult }) => {
-              if (!fetchMoreResult) {
-                return prev;
-              }
-              return {
-                ...fetchMoreResult,
-                source: {
-                  ...fetchMoreResult.source,
-                  Timeline: {
-                    ...fetchMoreResult.source.Timeline,
-                    edges: uniqBy('node._id', [
-                      ...prev.source.Timeline.edges,
-                      ...fetchMoreResult.source.Timeline.edges,
-                    ]),
-                  },
-                },
-              };
-            },
-          }));
-          this.updatedDate = Date.now();
-          return children!({
-            id,
-            inspect: getOr(null, 'source.Timeline.inspect', data),
-            refetch: this.wrappedRefetch,
-            loading,
-            totalCount: getOr(0, 'source.Timeline.totalCount', data),
-            pageInfo: getOr({}, 'source.Timeline.pageInfo', data),
-            events: this.memoizedTimelineEvents(JSON.stringify(variables), timelineEdges),
-            loadMore: this.wrappedLoadMore,
-            getUpdatedAt: this.getUpdatedAt,
-          });
-        }}
-      </Query>
-    );
-  }
-
-  private getUpdatedAt = () => this.updatedDate;
-
-  private getTimelineEvents = (variables: string, timelineEdges: TimelineEdges[]): TimelineItem[] =>
-    timelineEdges.map((e: TimelineEdges) => e.node);
-}
-
-const makeMapStateToProps = () => {
-  const getQuery = inputsSelectors.timelineQueryByIdSelector();
-  const mapStateToProps = (state: State, { id }: OwnProps) => {
-    const { isInspected } = getQuery(state, id);
-    return {
-      isInspected,
-    };
-  };
-  return mapStateToProps;
-};
-
-const mapDispatchToProps = (dispatch: Dispatch) => ({
-  clearSignalsState: ({ id }: { id?: string }) => {
+  const clearSignalsState = useCallback(() => {
     if (id != null && detectionsTimelineIds.some((timelineId) => timelineId === id)) {
       dispatch(timelineActions.clearEventsLoading({ id }));
       dispatch(timelineActions.clearEventsDeleted({ id }));
     }
-  },
-});
+  }, [dispatch, id]);
 
-const connector = connect(makeMapStateToProps, mapDispatchToProps);
+  const wrappedLoadPage = useCallback(
+    (newActivePage: number) => {
+      clearSignalsState();
 
-type PropsFromRedux = ConnectedProps<typeof connector>;
+      if (id === TimelineId.active) {
+        activeTimeline.setExpandedDetail({});
+        activeTimeline.setActivePage(newActivePage);
+      }
+      setActivePage(newActivePage);
+    },
+    [clearSignalsState, id]
+  );
 
-export const TimelineQuery = compose<React.ComponentClass<OwnProps>>(
-  connector,
-  withKibana
-)(TimelineQueryComponent);
+  const refetchGrid = useCallback(() => {
+    if (refetch.current != null) {
+      refetch.current();
+    }
+    wrappedLoadPage(0);
+  }, [wrappedLoadPage]);
+
+  const [timelineResponse, setTimelineResponse] = useState<TimelineArgs>({
+    id,
+    inspect: {
+      dsl: [],
+      response: [],
+    },
+    refetch: refetchGrid,
+    totalCount: -1,
+    pageInfo: {
+      activePage: 0,
+      querySize: 0,
+    },
+    events: [],
+    loadPage: wrappedLoadPage,
+    updatedAt: 0,
+  });
+  const { addError, addWarning } = useAppToasts();
+
+  // TODO: Once we are past experimental phase this code should be removed
+  const ruleRegistryEnabled = useIsExperimentalFeatureEnabled('ruleRegistryEnabled');
+
+  const timelineSearch = useCallback(
+    (request: TimelineRequest<typeof language> | null) => {
+      if (request == null || pageName === '' || skip) {
+        return;
+      }
+
+      const asyncSearch = async () => {
+        prevTimelineRequest.current = request;
+        abortCtrl.current = new AbortController();
+        setLoading(true);
+        searchSubscription$.current = data.search
+          .search<TimelineRequest<typeof language>, TimelineResponse<typeof language>>(request, {
+            strategy:
+              request.language === 'eql'
+                ? 'securitySolutionTimelineEqlSearchStrategy'
+                : 'securitySolutionTimelineSearchStrategy',
+            abortSignal: abortCtrl.current.signal,
+          })
+          .subscribe({
+            next: (response) => {
+              if (isCompleteResponse(response)) {
+                setLoading(false);
+                setTimelineResponse((prevResponse) => {
+                  const newTimelineResponse = {
+                    ...prevResponse,
+                    events: getTimelineEvents(response.edges),
+                    inspect: getInspectResponse(response, prevResponse.inspect),
+                    pageInfo: response.pageInfo,
+                    totalCount: response.totalCount,
+                    updatedAt: Date.now(),
+                  };
+                  if (id === TimelineId.active) {
+                    activeTimeline.setExpandedDetail({});
+                    activeTimeline.setPageName(pageName);
+                    if (request.language === 'eql') {
+                      activeTimeline.setEqlRequest(request as TimelineEqlRequestOptions);
+                      activeTimeline.setEqlResponse(newTimelineResponse);
+                    } else {
+                      activeTimeline.setRequest(request);
+                      activeTimeline.setResponse(newTimelineResponse);
+                    }
+                  }
+                  return newTimelineResponse;
+                });
+                searchSubscription$.current.unsubscribe();
+              } else if (isErrorResponse(response)) {
+                setLoading(false);
+                addWarning(i18n.ERROR_TIMELINE_EVENTS);
+                searchSubscription$.current.unsubscribe();
+              }
+            },
+            error: (msg) => {
+              setLoading(false);
+              addError(msg, {
+                title: i18n.FAIL_TIMELINE_EVENTS,
+              });
+              searchSubscription$.current.unsubscribe();
+            },
+          });
+      };
+
+      if (
+        id === TimelineId.active &&
+        activeTimeline.getPageName() !== '' &&
+        pageName !== activeTimeline.getPageName()
+      ) {
+        activeTimeline.setPageName(pageName);
+        abortCtrl.current.abort();
+        setLoading(false);
+
+        if (request.language === 'eql') {
+          prevTimelineRequest.current = activeTimeline.getEqlRequest();
+          refetch.current = asyncSearch.bind(null, activeTimeline.getEqlRequest());
+        } else {
+          prevTimelineRequest.current = activeTimeline.getRequest();
+          refetch.current = asyncSearch.bind(null, activeTimeline.getRequest());
+        }
+
+        setTimelineResponse((prevResp) => {
+          const resp =
+            request.language === 'eql'
+              ? activeTimeline.getEqlResponse()
+              : activeTimeline.getResponse();
+          if (resp != null) {
+            return {
+              ...resp,
+              refetch: refetchGrid,
+              loadPage: wrappedLoadPage,
+            };
+          }
+          return prevResp;
+        });
+        if (request.language !== 'eql' && activeTimeline.getResponse() != null) {
+          return;
+        } else if (request.language === 'eql' && activeTimeline.getEqlResponse() != null) {
+          return;
+        }
+      }
+
+      searchSubscription$.current.unsubscribe();
+      abortCtrl.current.abort();
+      asyncSearch();
+      refetch.current = asyncSearch;
+    },
+    [data.search, id, addWarning, addError, pageName, refetchGrid, skip, wrappedLoadPage]
+  );
+
+  useEffect(() => {
+    if (
+      skipQueryForDetectionsPage(id, indexNames, ruleRegistryEnabled) ||
+      indexNames.length === 0
+    ) {
+      return;
+    }
+
+    setTimelineRequest((prevRequest) => {
+      const prevEqlRequest = prevRequest as TimelineEqlRequestOptions;
+      const prevSearchParameters = {
+        defaultIndex: prevRequest?.defaultIndex ?? [],
+        filterQuery: prevRequest?.filterQuery ?? '',
+        querySize: prevRequest?.pagination.querySize ?? 0,
+        sort: prevRequest?.sort ?? initSortDefault,
+        timerange: prevRequest?.timerange ?? {},
+        ...deStructureEqlOptions(prevEqlRequest),
+      };
+
+      const currentSearchParameters = {
+        defaultIndex: indexNames,
+        filterQuery: createFilter(filterQuery),
+        querySize: limit,
+        sort,
+        timerange: {
+          interval: '12h',
+          from: startDate,
+          to: endDate,
+        },
+        ...deStructureEqlOptions(eqlOptions),
+      };
+
+      const newActivePage = deepEqual(prevSearchParameters, currentSearchParameters)
+        ? activePage
+        : 0;
+
+      const currentRequest = {
+        defaultIndex: indexNames,
+        docValueFields: docValueFields ?? [],
+        factoryQueryType: TimelineEventsQueries.all,
+        fieldRequested: fields,
+        fields: [],
+        filterQuery: createFilter(filterQuery),
+        pagination: {
+          activePage: newActivePage,
+          querySize: limit,
+        },
+        language,
+        sort,
+        timerange: {
+          interval: '12h',
+          from: startDate,
+          to: endDate,
+        },
+        ...(eqlOptions ? eqlOptions : {}),
+      };
+
+      if (activePage !== newActivePage) {
+        setActivePage(newActivePage);
+        if (id === TimelineId.active) {
+          activeTimeline.setActivePage(newActivePage);
+        }
+      }
+      if (
+        !skipQueryForDetectionsPage(id, indexNames, ruleRegistryEnabled) &&
+        !deepEqual(prevRequest, currentRequest)
+      ) {
+        return currentRequest;
+      }
+      return prevRequest;
+    });
+  }, [
+    dispatch,
+    indexNames,
+    activePage,
+    docValueFields,
+    endDate,
+    eqlOptions,
+    filterQuery,
+    id,
+    language,
+    limit,
+    ruleRegistryEnabled,
+    startDate,
+    sort,
+    fields,
+  ]);
+
+  useEffect(() => {
+    if (
+      id !== TimelineId.active ||
+      timerangeKind === 'absolute' ||
+      !deepEqual(prevTimelineRequest.current, timelineRequest)
+    ) {
+      timelineSearch(timelineRequest);
+    }
+    return () => {
+      searchSubscription$.current.unsubscribe();
+      abortCtrl.current.abort();
+    };
+  }, [id, timelineRequest, timelineSearch, timerangeKind]);
+
+  /*
+    cleanup timeline events response when the filters were removed completely
+    to avoid displaying previous query results
+  */
+  useEffect(() => {
+    if (isEmpty(filterQuery)) {
+      setTimelineResponse({
+        id,
+        inspect: {
+          dsl: [],
+          response: [],
+        },
+        refetch: refetchGrid,
+        totalCount: -1,
+        pageInfo: {
+          activePage: 0,
+          querySize: 0,
+        },
+        events: [],
+        loadPage: wrappedLoadPage,
+        updatedAt: 0,
+      });
+    }
+  }, [filterQuery, id, refetchGrid, wrappedLoadPage]);
+
+  return [loading, timelineResponse];
+};

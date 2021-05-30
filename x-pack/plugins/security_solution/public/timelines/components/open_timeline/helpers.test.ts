@@ -1,20 +1,21 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
-import { cloneDeep, omit } from 'lodash/fp';
+
+import { cloneDeep, getOr, omit } from 'lodash/fp';
 import { Dispatch } from 'redux';
 
 import {
   mockTimelineResults,
-  mockTimelineResult,
   mockTimelineModel,
-} from '../../../common/mock/timeline_results';
+  mockGetOneTimelineResult,
+} from '../../../common/mock';
 import { timelineDefaults } from '../../store/timeline/defaults';
 import { setTimelineRangeDatePicker as dispatchSetTimelineRangeDatePicker } from '../../../common/store/inputs/actions';
 import {
-  setKqlFilterQueryDraft as dispatchSetKqlFilterQueryDraft,
   applyKqlFilterQuery as dispatchApplyKqlFilterQuery,
   addTimeline as dispatchAddTimeline,
   addNote as dispatchAddGlobalTimelineNote,
@@ -30,13 +31,26 @@ import {
   isUntitled,
   omitTypenameInTimeline,
   dispatchUpdateTimeline,
+  queryTimelineById,
+  QueryTimelineById,
+  formatTimelineResultToModel,
 } from './helpers';
 import { OpenTimelineResult, DispatchUpdateTimeline } from './types';
-import { KueryFilterQueryKind } from '../../../common/store/model';
+import { KueryFilterQueryKind } from '../../../common/store';
 import { Note } from '../../../common/lib/note';
 import moment from 'moment';
 import sinon from 'sinon';
-import { TimelineType, TimelineStatus } from '../../../../common/types/timeline';
+import {
+  TimelineId,
+  TimelineType,
+  TimelineStatus,
+  TimelineTabs,
+} from '../../../../common/types/timeline';
+import {
+  mockTimeline as mockSelectedTimeline,
+  mockTemplate as mockSelectedTemplate,
+} from './__mocks__';
+import { getTimeline } from '../../containers/api';
 
 jest.mock('../../../common/store/inputs/actions');
 jest.mock('../../../common/components/url_state/normalize_time_range.ts');
@@ -48,6 +62,17 @@ jest.mock('uuid', () => {
     v4: jest.fn(() => 'uuid.v4()'),
   };
 });
+
+jest.mock('../../../common/utils/default_date_settings', () => {
+  const actual = jest.requireActual('../../../common/utils/default_date_settings');
+  return {
+    ...actual,
+    DEFAULT_FROM_MOMENT: new Date('2020-10-27T11:37:31.655Z'),
+    DEFAULT_TO_MOMENT: new Date('2020-10-28T11:37:31.655Z'),
+  };
+});
+
+jest.mock('../../containers/api');
 
 describe('helpers', () => {
   let mockResults: OpenTimelineResult[];
@@ -220,59 +245,71 @@ describe('helpers', () => {
 
       const newTimeline = defaultTimelineToTimelineModel(timeline, false);
       expect(newTimeline).toEqual({
+        activeTab: TimelineTabs.query,
+        prevActiveTab: TimelineTabs.query,
         columns: [
           {
             columnHeaderType: 'not-filtered',
             id: '@timestamp',
-            width: 190,
+            type: 'number',
+            initialWidth: 190,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'message',
-            width: 180,
+            initialWidth: 180,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'event.category',
-            width: 180,
+            initialWidth: 180,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'event.action',
-            width: 180,
+            initialWidth: 180,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'host.name',
-            width: 180,
+            initialWidth: 180,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'source.ip',
-            width: 180,
+            initialWidth: 180,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'destination.ip',
-            width: 180,
+            initialWidth: 180,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'user.name',
-            width: 180,
+            initialWidth: 180,
           },
         ],
         dataProviders: [],
         dateRange: { start: '2020-07-07T08:20:18.966Z', end: '2020-07-08T08:20:18.966Z' },
         description: '',
         deletedEventIds: [],
+        eqlOptions: {
+          eventCategoryField: 'event.category',
+          tiebreakerField: '',
+          timestampField: '@timestamp',
+          query: '',
+          size: 100,
+        },
         eventIdToNoteIds: {},
         eventType: 'all',
         excludedRowRendererIds: [],
+        expandedDetail: {},
         filters: [],
         highlightedDropAndProviderId: '',
         historyIds: [],
         id: 'savedObject-1',
+        indexNames: [],
         isFavorite: false,
         isLive: false,
         isSelectAllChecked: false,
@@ -283,7 +320,6 @@ describe('helpers', () => {
         kqlMode: 'filter',
         kqlQuery: {
           filterQuery: null,
-          filterQueryDraft: null,
         },
         loadingEventIds: [],
         noteIds: [],
@@ -293,17 +329,19 @@ describe('helpers', () => {
         selectedEventIds: {},
         show: false,
         showCheckboxes: false,
-        sort: {
-          columnId: '@timestamp',
-          sortDirection: 'desc',
-        },
+        sort: [
+          {
+            columnId: '@timestamp',
+            columnType: 'number',
+            sortDirection: 'desc',
+          },
+        ],
         status: TimelineStatus.draft,
         title: '',
         timelineType: TimelineType.default,
         templateTimelineId: null,
         templateTimelineVersion: null,
         version: '1',
-        width: 1100,
       });
     });
 
@@ -318,59 +356,71 @@ describe('helpers', () => {
 
       const newTimeline = defaultTimelineToTimelineModel(timeline, false, TimelineType.template);
       expect(newTimeline).toEqual({
+        activeTab: TimelineTabs.query,
+        prevActiveTab: TimelineTabs.query,
         columns: [
           {
             columnHeaderType: 'not-filtered',
             id: '@timestamp',
-            width: 190,
+            type: 'number',
+            initialWidth: 190,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'message',
-            width: 180,
+            initialWidth: 180,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'event.category',
-            width: 180,
+            initialWidth: 180,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'event.action',
-            width: 180,
+            initialWidth: 180,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'host.name',
-            width: 180,
+            initialWidth: 180,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'source.ip',
-            width: 180,
+            initialWidth: 180,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'destination.ip',
-            width: 180,
+            initialWidth: 180,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'user.name',
-            width: 180,
+            initialWidth: 180,
           },
         ],
         dataProviders: [],
         dateRange: { start: '2020-07-07T08:20:18.966Z', end: '2020-07-08T08:20:18.966Z' },
         description: '',
         deletedEventIds: [],
+        eqlOptions: {
+          eventCategoryField: 'event.category',
+          tiebreakerField: '',
+          timestampField: '@timestamp',
+          query: '',
+          size: 100,
+        },
         eventIdToNoteIds: {},
         eventType: 'all',
         excludedRowRendererIds: [],
+        expandedDetail: {},
         filters: [],
         highlightedDropAndProviderId: '',
         historyIds: [],
         id: 'savedObject-1',
+        indexNames: [],
         isFavorite: false,
         isLive: false,
         isSelectAllChecked: false,
@@ -381,7 +431,6 @@ describe('helpers', () => {
         kqlMode: 'filter',
         kqlQuery: {
           filterQuery: null,
-          filterQueryDraft: null,
         },
         loadingEventIds: [],
         noteIds: [],
@@ -391,17 +440,19 @@ describe('helpers', () => {
         selectedEventIds: {},
         show: false,
         showCheckboxes: false,
-        sort: {
-          columnId: '@timestamp',
-          sortDirection: 'desc',
-        },
+        sort: [
+          {
+            columnId: '@timestamp',
+            columnType: 'number',
+            sortDirection: 'desc',
+          },
+        ],
         status: TimelineStatus.draft,
         title: '',
         timelineType: TimelineType.template,
         templateTimelineId: null,
         templateTimelineVersion: null,
         version: '1',
-        width: 1100,
       });
     });
 
@@ -416,59 +467,71 @@ describe('helpers', () => {
 
       const newTimeline = defaultTimelineToTimelineModel(timeline, false, TimelineType.default);
       expect(newTimeline).toEqual({
+        activeTab: TimelineTabs.query,
+        prevActiveTab: TimelineTabs.query,
         columns: [
           {
             columnHeaderType: 'not-filtered',
             id: '@timestamp',
-            width: 190,
+            type: 'number',
+            initialWidth: 190,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'message',
-            width: 180,
+            initialWidth: 180,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'event.category',
-            width: 180,
+            initialWidth: 180,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'event.action',
-            width: 180,
+            initialWidth: 180,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'host.name',
-            width: 180,
+            initialWidth: 180,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'source.ip',
-            width: 180,
+            initialWidth: 180,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'destination.ip',
-            width: 180,
+            initialWidth: 180,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'user.name',
-            width: 180,
+            initialWidth: 180,
           },
         ],
         dataProviders: [],
         dateRange: { start: '2020-07-07T08:20:18.966Z', end: '2020-07-08T08:20:18.966Z' },
         description: '',
         deletedEventIds: [],
+        eqlOptions: {
+          eventCategoryField: 'event.category',
+          tiebreakerField: '',
+          timestampField: '@timestamp',
+          query: '',
+          size: 100,
+        },
         eventIdToNoteIds: {},
         eventType: 'all',
         excludedRowRendererIds: [],
+        expandedDetail: {},
         filters: [],
         highlightedDropAndProviderId: '',
         historyIds: [],
         id: 'savedObject-1',
+        indexNames: [],
         isFavorite: false,
         isLive: false,
         isSelectAllChecked: false,
@@ -479,7 +542,6 @@ describe('helpers', () => {
         kqlMode: 'filter',
         kqlQuery: {
           filterQuery: null,
-          filterQueryDraft: null,
         },
         loadingEventIds: [],
         noteIds: [],
@@ -489,17 +551,19 @@ describe('helpers', () => {
         selectedEventIds: {},
         show: false,
         showCheckboxes: false,
-        sort: {
-          columnId: '@timestamp',
-          sortDirection: 'desc',
-        },
+        sort: [
+          {
+            columnId: '@timestamp',
+            columnType: 'number',
+            sortDirection: 'desc',
+          },
+        ],
         status: TimelineStatus.draft,
         title: '',
         timelineType: TimelineType.default,
         templateTimelineId: null,
         templateTimelineVersion: null,
         version: '1',
-        width: 1100,
       });
     });
 
@@ -512,58 +576,70 @@ describe('helpers', () => {
 
       const newTimeline = defaultTimelineToTimelineModel(timeline, false);
       expect(newTimeline).toEqual({
+        activeTab: TimelineTabs.query,
+        prevActiveTab: TimelineTabs.query,
         columns: [
           {
             columnHeaderType: 'not-filtered',
             id: '@timestamp',
-            width: 190,
+            type: 'number',
+            initialWidth: 190,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'message',
-            width: 180,
+            initialWidth: 180,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'event.category',
-            width: 180,
+            initialWidth: 180,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'event.action',
-            width: 180,
+            initialWidth: 180,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'host.name',
-            width: 180,
+            initialWidth: 180,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'source.ip',
-            width: 180,
+            initialWidth: 180,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'destination.ip',
-            width: 180,
+            initialWidth: 180,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'user.name',
-            width: 180,
+            initialWidth: 180,
           },
         ],
         dataProviders: [],
         dateRange: { start: '2020-07-07T08:20:18.966Z', end: '2020-07-08T08:20:18.966Z' },
         description: '',
         deletedEventIds: [],
+        eqlOptions: {
+          eventCategoryField: 'event.category',
+          tiebreakerField: '',
+          timestampField: '@timestamp',
+          query: '',
+          size: 100,
+        },
         eventIdToNoteIds: {},
         eventType: 'all',
         excludedRowRendererIds: [],
+        expandedDetail: {},
         filters: [],
         highlightedDropAndProviderId: '',
         historyIds: [],
+        indexNames: [],
         id: 'savedObject-1',
         isFavorite: false,
         isLive: false,
@@ -575,7 +651,6 @@ describe('helpers', () => {
         kqlMode: 'filter',
         kqlQuery: {
           filterQuery: null,
-          filterQueryDraft: null,
         },
         loadingEventIds: [],
         noteIds: [],
@@ -585,17 +660,19 @@ describe('helpers', () => {
         selectedEventIds: {},
         show: false,
         showCheckboxes: false,
-        sort: {
-          columnId: '@timestamp',
-          sortDirection: 'desc',
-        },
+        sort: [
+          {
+            columnId: '@timestamp',
+            columnType: 'number',
+            sortDirection: 'desc',
+          },
+        ],
         status: TimelineStatus.draft,
         title: '',
         timelineType: TimelineType.default,
         templateTimelineId: null,
         templateTimelineVersion: null,
         version: '1',
-        width: 1100,
       });
     });
 
@@ -608,6 +685,8 @@ describe('helpers', () => {
 
       const newTimeline = defaultTimelineToTimelineModel(timeline, false);
       expect(newTimeline).toEqual({
+        activeTab: TimelineTabs.query,
+        prevActiveTab: TimelineTabs.query,
         savedObjectId: 'savedObject-1',
         columns: [
           {
@@ -618,8 +697,8 @@ describe('helpers', () => {
             example: undefined,
             id: '@timestamp',
             placeholder: undefined,
-            type: undefined,
-            width: 190,
+            type: 'number',
+            initialWidth: 190,
           },
           {
             aggregatable: undefined,
@@ -630,7 +709,7 @@ describe('helpers', () => {
             id: 'message',
             placeholder: undefined,
             type: undefined,
-            width: 180,
+            initialWidth: 180,
           },
           {
             aggregatable: undefined,
@@ -641,7 +720,7 @@ describe('helpers', () => {
             id: 'event.category',
             placeholder: undefined,
             type: undefined,
-            width: 180,
+            initialWidth: 180,
           },
           {
             aggregatable: undefined,
@@ -652,7 +731,7 @@ describe('helpers', () => {
             id: 'host.name',
             placeholder: undefined,
             type: undefined,
-            width: 180,
+            initialWidth: 180,
           },
           {
             aggregatable: undefined,
@@ -663,7 +742,7 @@ describe('helpers', () => {
             id: 'source.ip',
             placeholder: undefined,
             type: undefined,
-            width: 180,
+            initialWidth: 180,
           },
           {
             aggregatable: undefined,
@@ -674,7 +753,7 @@ describe('helpers', () => {
             id: 'destination.ip',
             placeholder: undefined,
             type: undefined,
-            width: 180,
+            initialWidth: 180,
           },
           {
             aggregatable: undefined,
@@ -685,7 +764,7 @@ describe('helpers', () => {
             id: 'user.name',
             placeholder: undefined,
             type: undefined,
-            width: 180,
+            initialWidth: 180,
           },
         ],
         version: '1',
@@ -693,12 +772,21 @@ describe('helpers', () => {
         dateRange: { start: '2020-07-07T08:20:18.966Z', end: '2020-07-08T08:20:18.966Z' },
         description: '',
         deletedEventIds: [],
+        eqlOptions: {
+          eventCategoryField: 'event.category',
+          tiebreakerField: '',
+          timestampField: '@timestamp',
+          query: '',
+          size: 100,
+        },
         eventIdToNoteIds: {},
         eventType: 'all',
         excludedRowRendererIds: [],
+        expandedDetail: {},
         filters: [],
         highlightedDropAndProviderId: '',
         historyIds: [],
+        indexNames: [],
         isFavorite: false,
         isLive: false,
         isSelectAllChecked: false,
@@ -709,7 +797,6 @@ describe('helpers', () => {
         kqlMode: 'filter',
         kqlQuery: {
           filterQuery: null,
-          filterQueryDraft: null,
         },
         loadingEventIds: [],
         title: '',
@@ -722,12 +809,14 @@ describe('helpers', () => {
         selectedEventIds: {},
         show: false,
         showCheckboxes: false,
-        sort: {
-          columnId: '@timestamp',
-          sortDirection: 'desc',
-        },
+        sort: [
+          {
+            columnId: '@timestamp',
+            columnType: 'number',
+            sortDirection: 'desc',
+          },
+        ],
         status: TimelineStatus.draft,
-        width: 1100,
         id: 'savedObject-1',
       });
     });
@@ -773,42 +862,45 @@ describe('helpers', () => {
 
       const newTimeline = defaultTimelineToTimelineModel(timeline, false);
       expect(newTimeline).toEqual({
+        activeTab: TimelineTabs.query,
+        prevActiveTab: TimelineTabs.query,
         savedObjectId: 'savedObject-1',
         columns: [
           {
             columnHeaderType: 'not-filtered',
             id: '@timestamp',
-            width: 190,
+            type: 'number',
+            initialWidth: 190,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'message',
-            width: 180,
+            initialWidth: 180,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'event.category',
-            width: 180,
+            initialWidth: 180,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'host.name',
-            width: 180,
+            initialWidth: 180,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'source.ip',
-            width: 180,
+            initialWidth: 180,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'destination.ip',
-            width: 180,
+            initialWidth: 180,
           },
           {
             columnHeaderType: 'not-filtered',
             id: 'user.name',
-            width: 180,
+            initialWidth: 180,
           },
         ],
         version: '1',
@@ -816,9 +908,17 @@ describe('helpers', () => {
         dataProviders: [],
         description: '',
         deletedEventIds: [],
+        eqlOptions: {
+          eventCategoryField: 'event.category',
+          tiebreakerField: '',
+          timestampField: '@timestamp',
+          query: '',
+          size: 100,
+        },
         eventIdToNoteIds: {},
         eventType: 'all',
         excludedRowRendererIds: [],
+        expandedDetail: {},
         filters: [
           {
             $state: {
@@ -865,6 +965,7 @@ describe('helpers', () => {
         ],
         highlightedDropAndProviderId: '',
         historyIds: [],
+        indexNames: [],
         isFavorite: false,
         isLive: false,
         isSelectAllChecked: false,
@@ -875,7 +976,6 @@ describe('helpers', () => {
         kqlMode: 'filter',
         kqlQuery: {
           filterQuery: null,
-          filterQueryDraft: null,
         },
         loadingEventIds: [],
         title: '',
@@ -888,27 +988,436 @@ describe('helpers', () => {
         selectedEventIds: {},
         show: false,
         showCheckboxes: false,
-        sort: {
-          columnId: '@timestamp',
-          sortDirection: 'desc',
-        },
+        sort: [
+          {
+            columnId: '@timestamp',
+            columnType: 'number',
+            sortDirection: 'desc',
+          },
+        ],
         status: TimelineStatus.draft,
-        width: 1100,
         id: 'savedObject-1',
+      });
+    });
+
+    test('should override timerange if given an Elastic prebuilt template', () => {
+      const timeline = {
+        savedObjectId: 'savedObject-1',
+        title: 'Awesome Timeline',
+        version: '1',
+        status: TimelineStatus.immutable,
+        timelineType: TimelineType.template,
+      };
+
+      const newTimeline = defaultTimelineToTimelineModel(timeline, false, TimelineType.template);
+      expect(newTimeline).toEqual({
+        activeTab: TimelineTabs.query,
+        prevActiveTab: TimelineTabs.query,
+        columns: [
+          {
+            columnHeaderType: 'not-filtered',
+            id: '@timestamp',
+            type: 'number',
+            initialWidth: 190,
+          },
+          {
+            columnHeaderType: 'not-filtered',
+            id: 'message',
+            initialWidth: 180,
+          },
+          {
+            columnHeaderType: 'not-filtered',
+            id: 'event.category',
+            initialWidth: 180,
+          },
+          {
+            columnHeaderType: 'not-filtered',
+            id: 'event.action',
+            initialWidth: 180,
+          },
+          {
+            columnHeaderType: 'not-filtered',
+            id: 'host.name',
+            initialWidth: 180,
+          },
+          {
+            columnHeaderType: 'not-filtered',
+            id: 'source.ip',
+            initialWidth: 180,
+          },
+          {
+            columnHeaderType: 'not-filtered',
+            id: 'destination.ip',
+            initialWidth: 180,
+          },
+          {
+            columnHeaderType: 'not-filtered',
+            id: 'user.name',
+            initialWidth: 180,
+          },
+        ],
+        dataProviders: [],
+        dateRange: { end: '2020-10-28T11:37:31.655Z', start: '2020-10-27T11:37:31.655Z' },
+        description: '',
+        deletedEventIds: [],
+        eqlOptions: {
+          eventCategoryField: 'event.category',
+          tiebreakerField: '',
+          timestampField: '@timestamp',
+          query: '',
+          size: 100,
+        },
+        eventIdToNoteIds: {},
+        eventType: 'all',
+        excludedRowRendererIds: [],
+        expandedDetail: {},
+        filters: [],
+        highlightedDropAndProviderId: '',
+        historyIds: [],
+        id: 'savedObject-1',
+        indexNames: [],
+        isFavorite: false,
+        isLive: false,
+        isSelectAllChecked: false,
+        isLoading: false,
+        isSaving: false,
+        itemsPerPage: 25,
+        itemsPerPageOptions: [10, 25, 50, 100],
+        kqlMode: 'filter',
+        kqlQuery: {
+          filterQuery: null,
+        },
+        loadingEventIds: [],
+        noteIds: [],
+        pinnedEventIds: {},
+        pinnedEventsSaveObject: {},
+        savedObjectId: 'savedObject-1',
+        selectedEventIds: {},
+        show: false,
+        showCheckboxes: false,
+        sort: [
+          {
+            columnId: '@timestamp',
+            columnType: 'number',
+            sortDirection: 'desc',
+          },
+        ],
+        status: TimelineStatus.immutable,
+        title: 'Awesome Timeline',
+        timelineType: TimelineType.template,
+        templateTimelineId: null,
+        templateTimelineVersion: null,
+        version: '1',
+      });
+    });
+
+    test('should not override timerange if given a custom template or timeline', () => {
+      const timeline = {
+        savedObjectId: 'savedObject-1',
+        title: 'Awesome Timeline',
+        version: '1',
+        status: TimelineStatus.active,
+        timelineType: TimelineType.default,
+      };
+
+      const newTimeline = defaultTimelineToTimelineModel(timeline, false, TimelineType.default);
+      expect(newTimeline).toEqual({
+        activeTab: TimelineTabs.query,
+        prevActiveTab: TimelineTabs.query,
+        columns: [
+          {
+            columnHeaderType: 'not-filtered',
+            id: '@timestamp',
+            type: 'number',
+            initialWidth: 190,
+          },
+          {
+            columnHeaderType: 'not-filtered',
+            id: 'message',
+            initialWidth: 180,
+          },
+          {
+            columnHeaderType: 'not-filtered',
+            id: 'event.category',
+            initialWidth: 180,
+          },
+          {
+            columnHeaderType: 'not-filtered',
+            id: 'event.action',
+            initialWidth: 180,
+          },
+          {
+            columnHeaderType: 'not-filtered',
+            id: 'host.name',
+            initialWidth: 180,
+          },
+          {
+            columnHeaderType: 'not-filtered',
+            id: 'source.ip',
+            initialWidth: 180,
+          },
+          {
+            columnHeaderType: 'not-filtered',
+            id: 'destination.ip',
+            initialWidth: 180,
+          },
+          {
+            columnHeaderType: 'not-filtered',
+            id: 'user.name',
+            initialWidth: 180,
+          },
+        ],
+        dataProviders: [],
+        dateRange: { end: '2020-07-08T08:20:18.966Z', start: '2020-07-07T08:20:18.966Z' },
+        description: '',
+        deletedEventIds: [],
+        eqlOptions: {
+          eventCategoryField: 'event.category',
+          tiebreakerField: '',
+          timestampField: '@timestamp',
+          query: '',
+          size: 100,
+        },
+        eventIdToNoteIds: {},
+        eventType: 'all',
+        excludedRowRendererIds: [],
+        expandedDetail: {},
+        filters: [],
+        highlightedDropAndProviderId: '',
+        historyIds: [],
+        id: 'savedObject-1',
+        indexNames: [],
+        isFavorite: false,
+        isLive: false,
+        isSelectAllChecked: false,
+        isLoading: false,
+        isSaving: false,
+        itemsPerPage: 25,
+        itemsPerPageOptions: [10, 25, 50, 100],
+        kqlMode: 'filter',
+        kqlQuery: {
+          filterQuery: null,
+        },
+        loadingEventIds: [],
+        noteIds: [],
+        pinnedEventIds: {},
+        pinnedEventsSaveObject: {},
+        savedObjectId: 'savedObject-1',
+        selectedEventIds: {},
+        show: false,
+        showCheckboxes: false,
+        sort: [
+          {
+            columnId: '@timestamp',
+            columnType: 'number',
+            sortDirection: 'desc',
+          },
+        ],
+        status: TimelineStatus.active,
+        title: 'Awesome Timeline',
+        timelineType: TimelineType.default,
+        templateTimelineId: null,
+        templateTimelineVersion: null,
+        version: '1',
+      });
+    });
+  });
+
+  describe('queryTimelineById', () => {
+    describe('open a timeline', () => {
+      const updateIsLoading = jest.fn();
+      const selectedTimeline = {
+        ...mockSelectedTimeline,
+      };
+      const onOpenTimeline = jest.fn();
+      const args = {
+        duplicate: false,
+        graphEventId: '',
+        timelineId: '',
+        timelineType: TimelineType.default,
+        onOpenTimeline,
+        openTimeline: true,
+        updateIsLoading,
+        updateTimeline: jest.fn(),
+      };
+
+      beforeAll(async () => {
+        (getTimeline as jest.Mock).mockResolvedValue(selectedTimeline);
+        await queryTimelineById<{}>((args as unknown) as QueryTimelineById<{}>);
+      });
+
+      afterAll(() => {
+        jest.clearAllMocks();
+      });
+
+      test('dispatch updateIsLoading to true', () => {
+        expect(updateIsLoading.mock.calls[0][0]).toEqual({
+          id: TimelineId.active,
+          isLoading: true,
+        });
+      });
+
+      test('get timeline by Id', () => {
+        expect(getTimeline).toHaveBeenCalled();
+      });
+
+      test('Do not override daterange if TimelineStatus is active', () => {
+        const { timeline } = formatTimelineResultToModel(
+          omitTypenameInTimeline(getOr({}, 'data.getOneTimeline', selectedTimeline)),
+          args.duplicate,
+          args.timelineType
+        );
+        expect(onOpenTimeline).toBeCalledWith({
+          ...timeline,
+        });
+      });
+
+      test('dispatch updateIsLoading to false', () => {
+        expect(updateIsLoading.mock.calls[1][0]).toEqual({
+          id: TimelineId.active,
+          isLoading: false,
+        });
+      });
+    });
+
+    describe('update a timeline', () => {
+      const updateIsLoading = jest.fn();
+      const updateTimeline = jest.fn().mockImplementation(() => jest.fn());
+      const selectedTimeline = { ...mockSelectedTimeline };
+
+      const args = {
+        duplicate: false,
+        graphEventId: '',
+        timelineId: '',
+        timelineType: TimelineType.default,
+        openTimeline: true,
+        updateIsLoading,
+        updateTimeline,
+      };
+
+      beforeAll(async () => {
+        (getTimeline as jest.Mock).mockResolvedValue(selectedTimeline);
+        await queryTimelineById<{}>((args as unknown) as QueryTimelineById<{}>);
+      });
+
+      afterAll(() => {
+        jest.clearAllMocks();
+      });
+
+      test('dispatch updateIsLoading to true', () => {
+        expect(updateIsLoading.mock.calls[0][0]).toEqual({
+          id: TimelineId.active,
+          isLoading: true,
+        });
+      });
+
+      test('get timeline by Id', () => {
+        expect(getTimeline).toHaveBeenCalled();
+      });
+
+      test('should not override daterange if TimelineStatus is active', () => {
+        const { timeline } = formatTimelineResultToModel(
+          omitTypenameInTimeline(getOr({}, 'data.getOneTimeline', selectedTimeline)),
+          args.duplicate,
+          args.timelineType
+        );
+
+        expect(updateTimeline).toBeCalledWith({
+          timeline: {
+            ...timeline,
+            graphEventId: '',
+            show: true,
+            dateRange: {
+              start: '2020-07-07T08:20:18.966Z',
+              end: '2020-07-08T08:20:18.966Z',
+            },
+          },
+          duplicate: false,
+          from: '2020-07-07T08:20:18.966Z',
+          to: '2020-07-08T08:20:18.966Z',
+          notes: [],
+          id: TimelineId.active,
+        });
+      });
+
+      test('dispatch updateIsLoading to false', () => {
+        expect(updateIsLoading.mock.calls[1][0]).toEqual({
+          id: TimelineId.active,
+          isLoading: false,
+        });
+      });
+    });
+
+    describe('open an immutable template', () => {
+      const updateIsLoading = jest.fn();
+      const template = { ...mockSelectedTemplate };
+      const onOpenTimeline = jest.fn();
+      const args = {
+        duplicate: false,
+        graphEventId: '',
+        timelineId: '',
+        timelineType: TimelineType.template,
+        onOpenTimeline,
+        openTimeline: true,
+        updateIsLoading,
+        updateTimeline: jest.fn(),
+      };
+
+      beforeAll(async () => {
+        (getTimeline as jest.Mock).mockResolvedValue(template);
+        await queryTimelineById<{}>((args as unknown) as QueryTimelineById<{}>);
+      });
+
+      afterAll(() => {
+        (getTimeline as jest.Mock).mockReset();
+        jest.clearAllMocks();
+      });
+
+      test('dispatch updateIsLoading to true', () => {
+        expect(updateIsLoading.mock.calls[0][0]).toEqual({
+          id: TimelineId.active,
+          isLoading: true,
+        });
+      });
+
+      test('get timeline by Id', () => {
+        expect(getTimeline).toHaveBeenCalled();
+      });
+
+      test('override daterange if TimelineStatus is immutable', () => {
+        const { timeline } = formatTimelineResultToModel(
+          omitTypenameInTimeline(getOr({}, 'data.getOneTimeline', template)),
+          args.duplicate,
+          args.timelineType
+        );
+        expect(onOpenTimeline).toBeCalledWith({
+          ...timeline,
+          dateRange: {
+            end: '2020-10-28T11:37:31.655Z',
+            start: '2020-10-27T11:37:31.655Z',
+          },
+        });
+      });
+
+      test('dispatch updateIsLoading to false', () => {
+        expect(updateIsLoading.mock.calls[1][0]).toEqual({
+          id: TimelineId.active,
+          isLoading: false,
+        });
       });
     });
   });
 
   describe('omitTypenameInTimeline', () => {
     test('it does not modify the passed in timeline if no __typename exists', () => {
-      const result = omitTypenameInTimeline(mockTimelineResult);
+      const result = omitTypenameInTimeline(mockGetOneTimelineResult);
 
-      expect(result).toEqual(mockTimelineResult);
+      expect(result).toEqual(mockGetOneTimelineResult);
     });
 
     test('it returns timeline with __typename removed when it exists', () => {
       const mockTimeline = {
-        ...mockTimelineResult,
+        ...mockGetOneTimelineResult,
         __typename: 'something, something',
       };
       const result = omitTypenameInTimeline(mockTimeline);
@@ -942,7 +1451,7 @@ describe('helpers', () => {
     test('it invokes date range picker dispatch', () => {
       timelineDispatch({
         duplicate: true,
-        id: 'timeline-1',
+        id: TimelineId.active,
         from: '2020-03-26T14:35:56.356Z',
         to: '2020-03-26T14:41:56.356Z',
         notes: [],
@@ -958,7 +1467,7 @@ describe('helpers', () => {
     test('it invokes add timeline dispatch', () => {
       timelineDispatch({
         duplicate: true,
-        id: 'timeline-1',
+        id: TimelineId.active,
         from: '2020-03-26T14:35:56.356Z',
         to: '2020-03-26T14:41:56.356Z',
         notes: [],
@@ -966,7 +1475,7 @@ describe('helpers', () => {
       })();
 
       expect(dispatchAddTimeline).toHaveBeenCalledWith({
-        id: 'timeline-1',
+        id: TimelineId.active,
         savedTimeline: true,
         timeline: mockTimelineModel,
       });
@@ -975,21 +1484,20 @@ describe('helpers', () => {
     test('it does not invoke kql filter query dispatches if timeline.kqlQuery.filterQuery is null', () => {
       timelineDispatch({
         duplicate: true,
-        id: 'timeline-1',
+        id: TimelineId.active,
         from: '2020-03-26T14:35:56.356Z',
         to: '2020-03-26T14:41:56.356Z',
         notes: [],
         timeline: mockTimelineModel,
       })();
 
-      expect(dispatchSetKqlFilterQueryDraft).not.toHaveBeenCalled();
       expect(dispatchApplyKqlFilterQuery).not.toHaveBeenCalled();
     });
 
     test('it does not invoke notes dispatch if duplicate is true', () => {
       timelineDispatch({
         duplicate: true,
-        id: 'timeline-1',
+        id: TimelineId.active,
         from: '2020-03-26T14:35:56.356Z',
         to: '2020-03-26T14:41:56.356Z',
         notes: [],
@@ -1007,19 +1515,17 @@ describe('helpers', () => {
             kuery: null,
             serializedQuery: 'some-serialized-query',
           },
-          filterQueryDraft: null,
         },
       };
       timelineDispatch({
         duplicate: true,
-        id: 'timeline-1',
+        id: TimelineId.active,
         from: '2020-03-26T14:35:56.356Z',
         to: '2020-03-26T14:41:56.356Z',
         notes: [],
         timeline: mockTimeline,
       })();
 
-      expect(dispatchSetKqlFilterQueryDraft).not.toHaveBeenCalled();
       expect(dispatchApplyKqlFilterQuery).not.toHaveBeenCalled();
     });
 
@@ -1031,27 +1537,19 @@ describe('helpers', () => {
             kuery: { expression: 'expression', kind: 'kuery' as KueryFilterQueryKind },
             serializedQuery: 'some-serialized-query',
           },
-          filterQueryDraft: null,
         },
       };
       timelineDispatch({
         duplicate: true,
-        id: 'timeline-1',
+        id: TimelineId.active,
         from: '2020-03-26T14:35:56.356Z',
         to: '2020-03-26T14:41:56.356Z',
         notes: [],
         timeline: mockTimeline,
       })();
 
-      expect(dispatchSetKqlFilterQueryDraft).toHaveBeenCalledWith({
-        id: 'timeline-1',
-        filterQueryDraft: {
-          kind: 'kuery',
-          expression: 'expression',
-        },
-      });
       expect(dispatchApplyKqlFilterQuery).toHaveBeenCalledWith({
-        id: 'timeline-1',
+        id: TimelineId.active,
         filterQuery: {
           kuery: {
             kind: 'kuery',
@@ -1065,7 +1563,7 @@ describe('helpers', () => {
     test('it invokes dispatchAddNotes if duplicate is false', () => {
       timelineDispatch({
         duplicate: false,
-        id: 'timeline-1',
+        id: TimelineId.active,
         from: '2020-03-26T14:35:56.356Z',
         to: '2020-03-26T14:41:56.356Z',
         notes: [
@@ -1085,11 +1583,13 @@ describe('helpers', () => {
         notes: [
           {
             created: new Date('2020-03-26T14:35:56.356Z'),
+            eventId: null,
             id: 'note-id',
             lastEdit: new Date('2020-03-26T14:35:56.356Z'),
             note: 'I am a note',
             user: 'unknown',
             saveObjectId: 'note-id',
+            timelineId: null,
             version: undefined,
           },
         ],
@@ -1099,7 +1599,7 @@ describe('helpers', () => {
     test('it invokes dispatch to create a timeline note if duplicate is true and ruleNote exists', () => {
       timelineDispatch({
         duplicate: true,
-        id: 'timeline-1',
+        id: TimelineId.active,
         from: '2020-03-26T14:35:56.356Z',
         to: '2020-03-26T14:41:56.356Z',
         notes: [],
@@ -1119,7 +1619,7 @@ describe('helpers', () => {
       expect(dispatchAddNotes).not.toHaveBeenCalled();
       expect(dispatchUpdateNote).toHaveBeenCalledWith({ note: expectedNote });
       expect(dispatchAddGlobalTimelineNote).toHaveBeenLastCalledWith({
-        id: 'timeline-1',
+        id: TimelineId.active,
         noteId: 'uuid.v4()',
       });
     });

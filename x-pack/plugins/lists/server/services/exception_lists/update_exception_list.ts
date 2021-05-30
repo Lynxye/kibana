@@ -1,38 +1,40 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { SavedObjectsClientContract } from 'kibana/server';
-
-import {
+import type {
   DescriptionOrUndefined,
   ExceptionListSchema,
-  ExceptionListSoSchema,
   ExceptionListTypeOrUndefined,
   IdOrUndefined,
   ListIdOrUndefined,
   MetaOrUndefined,
   NameOrUndefined,
   NamespaceType,
+  OsTypeArray,
   TagsOrUndefined,
-  VersionOrUndefined,
-  _TagsOrUndefined,
   _VersionOrUndefined,
-} from '../../../common/schemas';
+} from '@kbn/securitysolution-io-ts-list-types';
+import { VersionOrUndefined } from '@kbn/securitysolution-io-ts-types';
+import { getSavedObjectType } from '@kbn/securitysolution-list-utils';
 
-import { getSavedObjectType, transformSavedObjectUpdateToExceptionList } from './utils';
+import { ExceptionListSoSchema } from '../../schemas/saved_objects';
+
+import { transformSavedObjectUpdateToExceptionList } from './utils';
 import { getExceptionList } from './get_exception_list';
 
 interface UpdateExceptionListOptions {
   id: IdOrUndefined;
-  _tags: _TagsOrUndefined;
   _version: _VersionOrUndefined;
   name: NameOrUndefined;
   description: DescriptionOrUndefined;
   savedObjectsClient: SavedObjectsClientContract;
   namespaceType: NamespaceType;
+  osTypes: OsTypeArray;
   listId: ListIdOrUndefined;
   meta: MetaOrUndefined;
   user: string;
@@ -43,7 +45,6 @@ interface UpdateExceptionListOptions {
 }
 
 export const updateExceptionList = async ({
-  _tags,
   _version,
   id,
   savedObjectsClient,
@@ -67,7 +68,6 @@ export const updateExceptionList = async ({
       savedObjectType,
       exceptionList.id,
       {
-        _tags,
         description,
         meta,
         name,

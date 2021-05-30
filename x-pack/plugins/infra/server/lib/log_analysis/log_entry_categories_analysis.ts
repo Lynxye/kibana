@@ -1,17 +1,21 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
+import type { estypes } from '@elastic/elasticsearch';
 import type { ILegacyScopedClusterClient } from 'src/core/server';
-import { LogEntryContext } from '../../../common/http_api';
 import {
   compareDatasetsByMaximumAnomalyScore,
   getJobId,
   jobCustomSettingsRT,
   logEntryCategoriesJobTypes,
+  CategoriesSort,
 } from '../../../common/log_analysis';
+import { LogEntryContext } from '../../../common/log_entry';
+import type { ResolvedLogSourceConfiguration } from '../../../common/log_sources';
 import { startTracingSpan } from '../../../common/performance_tracing';
 import { decodeOrThrow } from '../../../common/runtime_types';
 import type { MlAnomalyDetectors, MlSystem } from '../../types';
@@ -23,6 +27,7 @@ import {
 } from './queries/log_entry_categories';
 import {
   createLogEntryCategoryExamplesQuery,
+  LogEntryCategoryExampleHit,
   logEntryCategoryExamplesResponseRT,
 } from './queries/log_entry_category_examples';
 import {
@@ -33,7 +38,6 @@ import {
   createTopLogEntryCategoriesQuery,
   topLogEntryCategoriesResponseRT,
 } from './queries/top_log_entry_categories';
-import { InfraSource } from '../sources';
 import { fetchMlJob, getLogEntryDatasets } from './common';
 
 export async function getTopLogEntryCategories(
@@ -48,7 +52,8 @@ export async function getTopLogEntryCategories(
   endTime: number,
   categoryCount: number,
   datasets: string[],
-  histograms: HistogramParameters[]
+  histograms: HistogramParameters[],
+  sort: CategoriesSort
 ) {
   const finalizeTopLogEntryCategoriesSpan = startTracingSpan('get top categories');
 
@@ -67,7 +72,8 @@ export async function getTopLogEntryCategories(
     startTime,
     endTime,
     categoryCount,
-    datasets
+    datasets,
+    sort
   );
 
   const categoryIds = topLogEntryCategories.map(({ categoryId }) => categoryId);
@@ -142,7 +148,7 @@ export async function getLogEntryCategoryExamples(
   endTime: number,
   categoryId: number,
   exampleCount: number,
-  sourceConfiguration: InfraSource
+  resolvedSourceConfiguration: ResolvedLogSourceConfiguration
 ) {
   const finalizeLogEntryCategoryExamplesSpan = startTracingSpan('get category example log entries');
 
@@ -160,7 +166,7 @@ export async function getLogEntryCategoryExamples(
   const customSettings = decodeOrThrow(jobCustomSettingsRT)(mlJob.custom_settings);
   const indices = customSettings?.logs_source_config?.indexPattern;
   const timestampField = customSettings?.logs_source_config?.timestampField;
-  const tiebreakerField = sourceConfiguration.configuration.fields.tiebreaker;
+  const { tiebreakerField, runtimeMappings } = resolvedSourceConfiguration;
 
   if (indices == null || timestampField == null) {
     throw new InsufficientLogAnalysisMlJobConfigurationError(
@@ -184,6 +190,7 @@ export async function getLogEntryCategoryExamples(
   } = await fetchLogEntryCategoryExamples(
     context,
     indices,
+    runtimeMappings,
     timestampField,
     tiebreakerField,
     startTime,
@@ -213,7 +220,8 @@ async function fetchTopLogEntryCategories(
   startTime: number,
   endTime: number,
   categoryCount: number,
-  datasets: string[]
+  datasets: string[],
+  sort: CategoriesSort
 ) {
   const finalizeEsSearchSpan = startTracingSpan('Fetch top categories from ES');
 
@@ -224,8 +232,10 @@ async function fetchTopLogEntryCategories(
         startTime,
         endTime,
         categoryCount,
-        datasets
-      )
+        datasets,
+        sort
+      ),
+      [logEntryCategoriesCountJobId]
     )
   );
 
@@ -283,7 +293,8 @@ export async function fetchLogEntryCategories(
 
   const logEntryCategoriesResponse = decodeOrThrow(logEntryCategoriesResponseRT)(
     await context.infra.mlSystem.mlAnomalySearch(
-      createLogEntryCategoriesQuery(logEntryCategoriesCountJobId, categoryIds)
+      createLogEntryCategoriesQuery(logEntryCategoriesCountJobId, categoryIds),
+      [logEntryCategoriesCountJobId]
     )
   );
 
@@ -332,7 +343,8 @@ async function fetchTopLogEntryCategoryHistograms(
             startTime,
             endTime,
             bucketCount
-          )
+          ),
+          [logEntryCategoriesCountJobId]
         )
         .then(decodeOrThrow(logEntryCategoryHistogramsResponseRT))
         .then((response) => ({
@@ -392,6 +404,7 @@ async function fetchTopLogEntryCategoryHistograms(
 async function fetchLogEntryCategoryExamples(
   requestContext: { core: { elasticsearch: { legacy: { client: ILegacyScopedClusterClient } } } },
   indices: string,
+  runtimeMappings: estypes.RuntimeFields,
   timestampField: string,
   tiebreakerField: string,
   startTime: number,
@@ -408,6 +421,7 @@ async function fetchLogEntryCategoryExamples(
       'search',
       createLogEntryCategoryExamplesQuery(
         indices,
+        runtimeMappings,
         timestampField,
         tiebreakerField,
         startTime,
@@ -423,11 +437,11 @@ async function fetchLogEntryCategoryExamples(
   return {
     examples: hits.map((hit) => ({
       id: hit._id,
-      dataset: hit._source.event?.dataset ?? '',
-      message: hit._source.message ?? '',
+      dataset: hit.fields['event.dataset']?.[0] ?? '',
+      message: hit.fields.message?.[0] ?? '',
       timestamp: hit.sort[0],
       tiebreaker: hit.sort[1],
-      context: getContextFromSource(hit._source),
+      context: getContextFromFields(hit.fields),
     })),
     timing: {
       spans: [esSearchSpan],
@@ -437,10 +451,10 @@ async function fetchLogEntryCategoryExamples(
 
 const parseCategoryId = (rawCategoryId: string) => parseInt(rawCategoryId, 10);
 
-const getContextFromSource = (source: any): LogEntryContext => {
-  const containerId = source.container?.id;
-  const hostName = source.host?.name;
-  const logFilePath = source.log?.file?.path;
+const getContextFromFields = (fields: LogEntryCategoryExampleHit['fields']): LogEntryContext => {
+  const containerId = fields['container.id']?.[0];
+  const hostName = fields['host.name']?.[0];
+  const logFilePath = fields['log.file.path']?.[0];
 
   if (typeof containerId === 'string') {
     return { 'container.id': containerId };

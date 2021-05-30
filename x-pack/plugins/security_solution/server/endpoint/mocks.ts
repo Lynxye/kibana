@@ -1,18 +1,24 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { ILegacyScopedClusterClient, SavedObjectsClientContract } from 'kibana/server';
-import { loggingSystemMock, savedObjectsServiceMock } from 'src/core/server/mocks';
-import { xpackMocks } from '../../../../mocks';
+import { loggingSystemMock, savedObjectsServiceMock } from '../../../../../src/core/server/mocks';
+import { IScopedClusterClient, SavedObjectsClientContract } from '../../../../../src/core/server';
+import { listMock } from '../../../lists/server/mocks';
+import { securityMock } from '../../../security/server/mocks';
+import { alertsMock } from '../../../alerting/server/mocks';
+import { xpackMocks } from '../fixtures';
+import { FleetStartContract, ExternalCallback, PackageService } from '../../../fleet/server';
 import {
-  AgentService,
-  IngestManagerStartContract,
-  ExternalCallback,
-} from '../../../ingest_manager/server';
-import { createPackageConfigServiceMock } from '../../../ingest_manager/server/mocks';
+  createPackagePolicyServiceMock,
+  createMockAgentPolicyService,
+  createMockAgentService,
+  createArtifactsClientMock,
+} from '../../../fleet/server/mocks';
+import { AppClientFactory } from '../client';
 import { createMockConfig } from '../lib/detection_engine/routes/__mocks__';
 import {
   EndpointAppContextService,
@@ -21,6 +27,10 @@ import {
 import { ManifestManager } from './services/artifacts/manifest_manager/manifest_manager';
 import { getManifestManagerMock } from './services/artifacts/manifest_manager/manifest_manager.mock';
 import { EndpointAppContext } from './types';
+import { MetadataRequestContext } from './routes/metadata/handlers';
+import { LicenseService } from '../../common/license';
+import { SecuritySolutionRequestHandlerContext } from '../types';
+import { parseExperimentalConfigValue } from '../../common/experimental_features';
 
 /**
  * Creates a mocked EndpointAppContext.
@@ -32,6 +42,7 @@ export const createMockEndpointAppContext = (
     logFactory: loggingSystemMock.create(),
     config: () => Promise.resolve(createMockConfig()),
     service: createMockEndpointAppContextService(mockManifestManager),
+    experimentalFeatures: parseExperimentalConfigValue(createMockConfig().enableExperimental),
   };
 };
 
@@ -44,7 +55,9 @@ export const createMockEndpointAppContextService = (
   return ({
     start: jest.fn(),
     stop: jest.fn(),
+    getExperimentalFeatures: jest.fn(),
     getAgentService: jest.fn(),
+    getAgentPolicyService: jest.fn(),
     getManifestManager: jest.fn().mockReturnValue(mockManifestManager ?? jest.fn()),
     getScopedSavedObjectsClient: jest.fn(),
   } as unknown) as jest.Mocked<EndpointAppContextService>;
@@ -53,59 +66,79 @@ export const createMockEndpointAppContextService = (
 /**
  * Creates a mocked input contract for the `EndpointAppContextService#start()` method
  */
-export const createMockEndpointAppContextServiceStartContract = (): jest.Mocked<
-  EndpointAppContextServiceStartContract
-> => {
+export const createMockEndpointAppContextServiceStartContract = (): jest.Mocked<EndpointAppContextServiceStartContract> => {
+  const factory = new AppClientFactory();
+  const config = createMockConfig();
+  factory.setup({ getSpaceId: () => 'mockSpace', config });
   return {
     agentService: createMockAgentService(),
+    packageService: createMockPackageService(),
     logger: loggingSystemMock.create().get('mock_endpoint_app_context'),
     savedObjectsStart: savedObjectsServiceMock.createStartContract(),
     manifestManager: getManifestManagerMock(),
+    appClientFactory: factory,
+    security: securityMock.createStart(),
+    alerting: alertsMock.createStart(),
+    config,
+    licenseService: new LicenseService(),
     registerIngestCallback: jest.fn<
-      ReturnType<IngestManagerStartContract['registerExternalCallback']>,
-      Parameters<IngestManagerStartContract['registerExternalCallback']>
+      ReturnType<FleetStartContract['registerExternalCallback']>,
+      Parameters<FleetStartContract['registerExternalCallback']>
     >(),
+    exceptionListsClient: listMock.getExceptionListClient(),
+    packagePolicyService: createPackagePolicyServiceMock(),
+    cases: {
+      getCasesClientWithRequestAndContext: jest.fn(),
+    },
   };
 };
 
 /**
- * Creates a mock AgentService
+ * Create mock PackageService
  */
-export const createMockAgentService = (): jest.Mocked<AgentService> => {
+
+export const createMockPackageService = (): jest.Mocked<PackageService> => {
   return {
-    getAgentStatusById: jest.fn(),
-    authenticateAgentWithAccessToken: jest.fn(),
-    getAgent: jest.fn(),
-    listAgents: jest.fn(),
+    getInstalledEsAssetReferences: jest.fn(),
   };
 };
 
 /**
- * Creates a mock IndexPatternService for use in tests that need to interact with the Ingest Manager's
+ * Creates a mock IndexPatternService for use in tests that need to interact with the Fleet's
  * ESIndexPatternService.
  *
  * @param indexPattern a string index pattern to return when called by a test
  * @returns the same value as `indexPattern` parameter
  */
-export const createMockIngestManagerStartContract = (
-  indexPattern: string
-): IngestManagerStartContract => {
+export const createMockFleetStartContract = (indexPattern: string): FleetStartContract => {
   return {
+    fleetSetupCompleted: jest.fn().mockResolvedValue(undefined),
     esIndexPatternService: {
       getESIndexPattern: jest.fn().mockResolvedValue(indexPattern),
     },
     agentService: createMockAgentService(),
+    packageService: createMockPackageService(),
+    agentPolicyService: createMockAgentPolicyService(),
     registerExternalCallback: jest.fn((...args: ExternalCallback) => {}),
-    packageConfigService: createPackageConfigServiceMock(),
+    packagePolicyService: createPackagePolicyServiceMock(),
+    createArtifactsClient: jest.fn().mockReturnValue(createArtifactsClientMock()),
+  };
+};
+
+export const createMockMetadataRequestContext = (): jest.Mocked<MetadataRequestContext> => {
+  return {
+    endpointAppContextService: createMockEndpointAppContextService(),
+    logger: loggingSystemMock.create().get('mock_endpoint_app_context'),
+    requestHandlerContext: (xpackMocks.createRequestHandlerContext() as unknown) as jest.Mocked<SecuritySolutionRequestHandlerContext>,
   };
 };
 
 export function createRouteHandlerContext(
-  dataClient: jest.Mocked<ILegacyScopedClusterClient>,
+  dataClient: jest.Mocked<IScopedClusterClient>,
   savedObjectsClient: jest.Mocked<SavedObjectsClientContract>
 ) {
-  const context = xpackMocks.createRequestHandlerContext();
-  context.core.elasticsearch.legacy.client = dataClient;
+  const context = (xpackMocks.createRequestHandlerContext() as unknown) as jest.Mocked<SecuritySolutionRequestHandlerContext>;
+  context.core.elasticsearch.client = dataClient;
   context.core.savedObjects.client = savedObjectsClient;
   return context;
 }

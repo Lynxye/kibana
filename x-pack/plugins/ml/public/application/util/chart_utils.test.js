@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import seriesConfig from '../explorer/explorer_charts/__mocks__/mock_series_config_filebeat';
@@ -35,7 +36,6 @@ import { render } from '@testing-library/react';
 import {
   chartLimits,
   getChartType,
-  getExploreSeriesLink,
   getTickValues,
   getXTransform,
   isLabelLengthAboveThreshold,
@@ -235,20 +235,6 @@ describe('ML - chart utils', () => {
 
     test('returns population distribution chart type as expected for configs', () => {
       expect(getChartType(populationConfig)).toBe(CHART_TYPE.POPULATION_DISTRIBUTION);
-    });
-  });
-
-  describe('getExploreSeriesLink', () => {
-    test('get timeseriesexplorer link', () => {
-      const link = getExploreSeriesLink(seriesConfig);
-      const expectedLink =
-        `#/timeseriesexplorer?_g=(ml:(jobIds:!(population-03)),` +
-        `refreshInterval:(display:Off,pause:!f,value:0),time:(from:'2017-02-23T00:00:00.000Z',mode:absolute,` +
-        `to:'2017-02-23T23:59:59.999Z'))&_a=(mlTimeSeriesExplorer%3A(detectorIndex%3A0%2Centities%3A` +
-        `(nginx.access.remote_ip%3A'72.57.0.53')%2Czoom%3A(from%3A'2017-02-19T20%3A00%3A00.000Z'%2Cto%3A'2017-02-27T04%3A00%3A00.000Z'))` +
-        `%2Cquery%3A(query_string%3A(analyze_wildcard%3A!t%2Cquery%3A'*')))`;
-
-      expect(link).toBe(expectedLink);
     });
   });
 

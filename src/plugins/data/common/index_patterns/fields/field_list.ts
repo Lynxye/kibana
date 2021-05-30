@@ -1,61 +1,45 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import { findIndex } from 'lodash';
-import { IIndexPattern } from '../../types';
-import { IFieldType } from '../../../common';
-import { Field } from './field';
-import { OnNotification, FieldSpec } from '../types';
-import { FieldFormatsStartCommon } from '../../field_formats';
+import { IFieldType } from './types';
+import { IndexPatternField } from './index_pattern_field';
+import { FieldSpec, IndexPatternFieldMap } from '../types';
+import { IndexPattern } from '../index_patterns';
 
-type FieldMap = Map<Field['name'], Field>;
+type FieldMap = Map<IndexPatternField['name'], IndexPatternField>;
 
-interface FieldListDependencies {
-  fieldFormats: FieldFormatsStartCommon;
-  onNotification: OnNotification;
-}
-
-export interface IIndexPatternFieldList extends Array<Field> {
-  getByName(name: Field['name']): Field | undefined;
-  getByType(type: Field['type']): Field[];
+export interface IIndexPatternFieldList extends Array<IndexPatternField> {
   add(field: FieldSpec): void;
+  getAll(): IndexPatternField[];
+  getByName(name: IndexPatternField['name']): IndexPatternField | undefined;
+  getByType(type: IndexPatternField['type']): IndexPatternField[];
   remove(field: IFieldType): void;
+  removeAll(): void;
+  replaceAll(specs: FieldSpec[]): void;
   update(field: FieldSpec): void;
+  toSpec(options?: {
+    getFormatterForField?: IndexPattern['getFormatterForField'];
+  }): IndexPatternFieldMap;
 }
 
-export type CreateIndexPatternFieldList = (
-  indexPattern: IIndexPattern,
-  specs?: FieldSpec[],
-  shortDotsEnable?: boolean
-) => IIndexPatternFieldList;
-
-export const getIndexPatternFieldListCreator = ({
-  fieldFormats,
-  onNotification,
-}: FieldListDependencies): CreateIndexPatternFieldList => (...fieldListParams) => {
-  class FieldList extends Array<Field> implements IIndexPatternFieldList {
+// extending the array class and using a constructor doesn't work well
+// when calling filter and similar so wrapping in a callback.
+// to be removed in the future
+export const fieldList = (
+  specs: FieldSpec[] = [],
+  shortDotsEnable = false
+): IIndexPatternFieldList => {
+  class FldList extends Array<IndexPatternField> implements IIndexPatternFieldList {
     private byName: FieldMap = new Map();
-    private groups: Map<Field['type'], FieldMap> = new Map();
-    private indexPattern: IIndexPattern;
-    private shortDotsEnable: boolean;
-    private setByName = (field: Field) => this.byName.set(field.name, field);
-    private setByGroup = (field: Field) => {
+    private groups: Map<IndexPatternField['type'], FieldMap> = new Map();
+    private setByName = (field: IndexPatternField) => this.byName.set(field.name, field);
+    private setByGroup = (field: IndexPatternField) => {
       if (typeof this.groups.get(field.type) === 'undefined') {
         this.groups.set(field.type, new Map());
       }
@@ -63,27 +47,24 @@ export const getIndexPatternFieldListCreator = ({
     };
     private removeByGroup = (field: IFieldType) => this.groups.get(field.type)!.delete(field.name);
 
-    constructor(indexPattern: IIndexPattern, specs: FieldSpec[] = [], shortDotsEnable = false) {
+    constructor() {
       super();
-      this.indexPattern = indexPattern;
-      this.shortDotsEnable = shortDotsEnable;
-
       specs.map((field) => this.add(field));
     }
 
-    getByName = (name: Field['name']) => this.byName.get(name);
-    getByType = (type: Field['type']) => [...(this.groups.get(type) || new Map()).values()];
-    add = (field: FieldSpec) => {
-      const newField = new Field(this.indexPattern, field, this.shortDotsEnable, {
-        fieldFormats,
-        onNotification,
-      });
+    public readonly getAll = () => [...this.byName.values()];
+    public readonly getByName = (name: IndexPatternField['name']) => this.byName.get(name);
+    public readonly getByType = (type: IndexPatternField['type']) => [
+      ...(this.groups.get(type) || new Map()).values(),
+    ];
+    public readonly add = (field: FieldSpec) => {
+      const newField = new IndexPatternField({ ...field, shortDotsEnable });
       this.push(newField);
       this.setByName(newField);
       this.setByGroup(newField);
     };
 
-    remove = (field: IFieldType) => {
+    public readonly remove = (field: IFieldType) => {
       this.removeByGroup(field);
       this.byName.delete(field.name);
 
@@ -91,11 +72,8 @@ export const getIndexPatternFieldListCreator = ({
       this.splice(fieldIndex, 1);
     };
 
-    update = (field: FieldSpec) => {
-      const newField = new Field(this.indexPattern, field, this.shortDotsEnable, {
-        fieldFormats,
-        onNotification,
-      });
+    public readonly update = (field: FieldSpec) => {
+      const newField = new IndexPatternField(field);
       const index = this.findIndex((f) => f.name === newField.name);
       this.splice(index, 1, newField);
       this.setByName(newField);
@@ -103,10 +81,30 @@ export const getIndexPatternFieldListCreator = ({
       this.setByGroup(newField);
     };
 
-    toSpec = () => {
-      return [...this.map((field) => field.toSpec())];
+    public readonly removeAll = () => {
+      this.length = 0;
+      this.byName.clear();
+      this.groups.clear();
     };
+
+    public readonly replaceAll = (spcs: FieldSpec[] = []) => {
+      this.removeAll();
+      spcs.forEach(this.add);
+    };
+
+    public toSpec({
+      getFormatterForField,
+    }: {
+      getFormatterForField?: IndexPattern['getFormatterForField'];
+    } = {}) {
+      return {
+        ...this.reduce<IndexPatternFieldMap>((collector, field) => {
+          collector[field.name] = field.toSpec({ getFormatterForField });
+          return collector;
+        }, {}),
+      };
+    }
   }
 
-  return new FieldList(...fieldListParams);
+  return new FldList();
 };

@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
@@ -9,7 +10,8 @@ import uuid from 'uuid/v4';
 import React from 'react';
 import { GeoJsonProperties } from 'geojson';
 import { AbstractSource, ImmutableSourceProperty, SourceEditorArgs } from '../source';
-import { BoundsFilters, GeoJsonWithMeta, ITiledSingleLayerVectorSource } from '../vector_source';
+import { BoundsFilters, GeoJsonWithMeta } from '../vector_source';
+import { ITiledSingleLayerVectorSource } from '../tiled_single_layer_vector_source';
 import {
   FIELD_ORIGIN,
   MAX_ZOOM,
@@ -28,6 +30,8 @@ import {
 import { MVTField } from '../../fields/mvt_field';
 import { UpdateSourceEditor } from './update_source_editor';
 import { ITooltipProperty, TooltipProperty } from '../../tooltips/tooltip_property';
+import { Adapters } from '../../../../../../../src/plugins/inspector/common/adapters';
+import { ITiledSingleLayerMvtParams } from '../tiled_single_layer_vector_source/tiled_single_layer_vector_source';
 
 export const sourceTitle = i18n.translate(
   'xpack.maps.source.MVTSingleLayerVectorSource.sourceTitle',
@@ -36,7 +40,8 @@ export const sourceTitle = i18n.translate(
   }
 );
 
-export class MVTSingleLayerVectorSource extends AbstractSource
+export class MVTSingleLayerVectorSource
+  extends AbstractSource
   implements ITiledSingleLayerVectorSource {
   static createDescriptor({
     urlTemplate,
@@ -65,7 +70,7 @@ export class MVTSingleLayerVectorSource extends AbstractSource
 
   constructor(
     sourceDescriptor: TiledSingleLayerVectorSourceDescriptor,
-    inspectorAdapters?: object
+    inspectorAdapters?: Adapters
   ) {
     super(sourceDescriptor, inspectorAdapters);
     this._descriptor = MVTSingleLayerVectorSource.createDescriptor(sourceDescriptor);
@@ -151,7 +156,7 @@ export class MVTSingleLayerVectorSource extends AbstractSource
     return this.getLayerName();
   }
 
-  async getUrlTemplateWithMeta() {
+  async getUrlTemplateWithMeta(): Promise<ITiledSingleLayerMvtParams> {
     return {
       urlTemplate: this._descriptor.urlTemplate,
       layerName: this._descriptor.layerName,
@@ -164,22 +169,22 @@ export class MVTSingleLayerVectorSource extends AbstractSource
     return [VECTOR_SHAPE_TYPE.POINT, VECTOR_SHAPE_TYPE.LINE, VECTOR_SHAPE_TYPE.POLYGON];
   }
 
-  canFormatFeatureProperties() {
+  hasTooltipProperties(): boolean {
     return !!this._tooltipFields.length;
   }
 
-  getMinZoom() {
+  getMinZoom(): number {
     return this._descriptor.minSourceZoom;
   }
 
-  getMaxZoom() {
+  getMaxZoom(): number {
     return this._descriptor.maxSourceZoom;
   }
 
-  getBoundsForFilters(
+  async getBoundsForFilters(
     boundsFilters: BoundsFilters,
-    registerCancelCallback: (requestToken: symbol, callback: () => void) => void
-  ): MapExtent | null {
+    registerCancelCallback: (callback: () => void) => void
+  ): Promise<MapExtent | null> {
     return null;
   }
 
@@ -187,11 +192,19 @@ export class MVTSingleLayerVectorSource extends AbstractSource
     return null;
   }
 
-  getApplyGlobalQuery(): boolean {
+  isBoundsAware() {
     return false;
   }
 
-  async filterAndFormatPropertiesToHtml(
+  getSourceTooltipContent() {
+    return { tooltipContent: null, areResultsTrimmed: false };
+  }
+
+  async getLeftJoinFields() {
+    return [];
+  }
+
+  async getTooltipProperties(
     properties: GeoJsonProperties,
     featureId?: string | number
   ): Promise<ITooltipProperty[]> {

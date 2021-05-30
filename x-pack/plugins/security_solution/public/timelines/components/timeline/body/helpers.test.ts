@@ -1,10 +1,9 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
-
-import { Ecs } from '../../../../graphql/types';
 
 import {
   eventHasNotes,
@@ -14,6 +13,7 @@ import {
   stringifyEvent,
   isInvestigateInResolverActionEnabled,
 } from './helpers';
+import { Ecs } from '../../../../../common/ecs';
 import { TimelineType } from '../../../../../common/types/timeline';
 
 describe('helpers', () => {
@@ -145,11 +145,7 @@ describe('helpers', () => {
       };
       const toStringify: Ecs = {
         _id: '4',
-        timestamp: null,
-        host: {
-          name: null,
-          ip: null,
-        },
+        host: {},
         event: {
           id: ['4'],
           category: ['theory'],

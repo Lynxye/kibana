@@ -1,23 +1,22 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import {
-  transformValidate,
-  transformValidateFindAlerts,
-  transformValidateBulkError,
-} from './validate';
-import { getResult } from '../__mocks__/request_responses';
-import { FindResult } from '../../../../../../alerts/server';
+import { transformValidate, transformValidateBulkError } from './validate';
 import { BulkError } from '../utils';
-import { RulesSchema } from '../../../../../common/detection_engine/schemas/response/rules_schema';
+import { RulesSchema } from '../../../../../common/detection_engine/schemas/response';
+import { getAlertMock, getFindResultStatus } from '../__mocks__/request_responses';
 import { getListArrayMock } from '../../../../../common/detection_engine/schemas/types/lists.mock';
+import { getThreatMock } from '../../../../../common/detection_engine/schemas/types/threat.mock';
+import { getQueryRuleParams } from '../../schemas/rule_schemas.mock';
 
-export const ruleOutput: RulesSchema = {
+export const ruleOutput = (): RulesSchema => ({
   actions: [],
   author: ['Elastic'],
+  building_block_type: 'default',
   created_at: '2019-12-13T16:40:33.400Z',
   updated_at: '2019-12-13T16:40:33.400Z',
   created_by: 'elastic',
@@ -32,12 +31,12 @@ export const ruleOutput: RulesSchema = {
   language: 'kuery',
   license: 'Elastic License',
   output_index: '.siem-signals',
-  max_signals: 100,
+  max_signals: 10000,
   risk_score: 50,
   risk_score_mapping: [],
   name: 'Detect Root/Admin Users',
   query: 'user.name: root or user.name: admin',
-  references: ['http://www.example.com', 'https://ww.example.com'],
+  references: ['http://example.com', 'https://example.com'],
   severity: 'high',
   severity_mapping: [],
   updated_by: 'elastic',
@@ -45,23 +44,7 @@ export const ruleOutput: RulesSchema = {
   to: 'now',
   type: 'query',
   throttle: 'no_actions',
-  threat: [
-    {
-      framework: 'MITRE ATT&CK',
-      tactic: {
-        id: 'TA0040',
-        name: 'impact',
-        reference: 'https://attack.mitre.org/tactics/TA0040/',
-      },
-      technique: [
-        {
-          id: 'T1499',
-          name: 'endpoint denial of service',
-          reference: 'https://attack.mitre.org/techniques/T1499/',
-        },
-      ],
-    },
-  ],
+  threat: getThreatMock(),
   version: 1,
   filters: [
     {
@@ -80,19 +63,20 @@ export const ruleOutput: RulesSchema = {
   note: '# Investigative notes',
   timeline_title: 'some-timeline-title',
   timeline_id: 'some-timeline-id',
-};
+});
 
 describe('validate', () => {
   describe('transformValidate', () => {
     test('it should do a validation correctly of a partial alert', () => {
-      const ruleAlert = getResult();
+      const ruleAlert = getAlertMock(getQueryRuleParams());
       const [validated, errors] = transformValidate(ruleAlert);
-      expect(validated).toEqual(ruleOutput);
+      expect(validated).toEqual(ruleOutput());
       expect(errors).toEqual(null);
     });
 
     test('it should do an in-validation correctly of a partial alert', () => {
-      const ruleAlert = getResult();
+      const ruleAlert = getAlertMock(getQueryRuleParams());
+      // @ts-expect-error
       delete ruleAlert.name;
       const [validated, errors] = transformValidate(ruleAlert);
       expect(validated).toEqual(null);
@@ -100,37 +84,50 @@ describe('validate', () => {
     });
   });
 
-  describe('transformValidateFindAlerts', () => {
-    test('it should do a validation correctly of a find alert', () => {
-      const findResult: FindResult = { data: [getResult()], page: 1, perPage: 0, total: 0 };
-      const [validated, errors] = transformValidateFindAlerts(findResult, []);
-      expect(validated).toEqual({ data: [ruleOutput], page: 1, perPage: 0, total: 0 });
-      expect(errors).toEqual(null);
-    });
-
-    test('it should do an in-validation correctly of a partial alert', () => {
-      const findResult: FindResult = { data: [getResult()], page: 1, perPage: 0, total: 0 };
-      delete findResult.page;
-      const [validated, errors] = transformValidateFindAlerts(findResult, []);
-      expect(validated).toEqual(null);
-      expect(errors).toEqual('Invalid value "undefined" supplied to "page"');
-    });
-  });
-
   describe('transformValidateBulkError', () => {
     test('it should do a validation correctly of a rule id', () => {
-      const ruleAlert = getResult();
+      const ruleAlert = getAlertMock(getQueryRuleParams());
       const validatedOrError = transformValidateBulkError('rule-1', ruleAlert);
-      expect(validatedOrError).toEqual(ruleOutput);
+      expect(validatedOrError).toEqual(ruleOutput());
     });
 
     test('it should do an in-validation correctly of a rule id', () => {
-      const ruleAlert = getResult();
+      const ruleAlert = getAlertMock(getQueryRuleParams());
+      // @ts-expect-error
       delete ruleAlert.name;
       const validatedOrError = transformValidateBulkError('rule-1', ruleAlert);
       const expected: BulkError = {
         error: {
           message: 'Invalid value "undefined" supplied to "name"',
+          status_code: 500,
+        },
+        rule_id: 'rule-1',
+      };
+      expect(validatedOrError).toEqual(expected);
+    });
+
+    test('it should do a validation correctly of a rule id with ruleStatus passed in', () => {
+      const ruleStatus = getFindResultStatus();
+      const ruleAlert = getAlertMock(getQueryRuleParams());
+      const validatedOrError = transformValidateBulkError('rule-1', ruleAlert, null, ruleStatus);
+      const expected: RulesSchema = {
+        ...ruleOutput(),
+        status: 'succeeded',
+        status_date: '2020-02-18T15:26:49.783Z',
+        last_success_at: '2020-02-18T15:26:49.783Z',
+        last_success_message: 'succeeded',
+      };
+      expect(validatedOrError).toEqual(expected);
+    });
+
+    test('it should return error object if "alert" is not expected alert type', () => {
+      const ruleAlert = getAlertMock(getQueryRuleParams());
+      // @ts-expect-error
+      delete ruleAlert.alertTypeId;
+      const validatedOrError = transformValidateBulkError('rule-1', ruleAlert);
+      const expected: BulkError = {
+        error: {
+          message: 'Internal error transforming',
           status_code: 500,
         },
         rule_id: 'rule-1',

@@ -1,21 +1,14 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
- */
-/*
- * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { sum, round } from 'lodash';
 import theme from '@elastic/eui/dist/eui_theme_light.json';
-import {
-  Setup,
-  SetupTimeRange,
-  SetupUIFilters,
-} from '../../../../helpers/setup_request';
+import { isFiniteNumber } from '../../../../../../common/utils/is_finite_number';
+import { Setup, SetupTimeRange } from '../../../../helpers/setup_request';
 import { getMetricsDateHistogramParams } from '../../../../helpers/metrics';
 import { ChartBase } from '../../../types';
 import { getMetricsProjection } from '../../../../../projections/metrics';
@@ -30,23 +23,29 @@ import { getBucketSize } from '../../../../helpers/get_bucket_size';
 import { getVizColorForIndex } from '../../../../../../common/viz_colors';
 
 export async function fetchAndTransformGcMetrics({
+  environment,
+  kuery,
   setup,
   serviceName,
   serviceNodeName,
   chartBase,
   fieldName,
 }: {
-  setup: Setup & SetupTimeRange & SetupUIFilters;
+  environment?: string;
+  kuery?: string;
+  setup: Setup & SetupTimeRange;
   serviceName: string;
   serviceNodeName?: string;
   chartBase: ChartBase;
   fieldName: typeof METRIC_JAVA_GC_COUNT | typeof METRIC_JAVA_GC_TIME;
 }) {
-  const { start, end, apmEventClient } = setup;
+  const { start, end, apmEventClient, config } = setup;
 
-  const { bucketSize } = getBucketSize(start, end, 'auto');
+  const { bucketSize } = getBucketSize({ start, end });
 
   const projection = getMetricsProjection({
+    environment,
+    kuery,
     setup,
     serviceName,
     serviceNodeName,
@@ -74,8 +73,12 @@ export async function fetchAndTransformGcMetrics({
             field: `${LABEL_NAME}`,
           },
           aggs: {
-            over_time: {
-              date_histogram: getMetricsDateHistogramParams(start, end),
+            timeseries: {
+              date_histogram: getMetricsDateHistogramParams(
+                start,
+                end,
+                config['xpack.apm.metricsInterval']
+              ),
               aggs: {
                 // get the max value
                 max: {
@@ -119,15 +122,14 @@ export async function fetchAndTransformGcMetrics({
 
   const series = aggregations.per_pool.buckets.map((poolBucket, i) => {
     const label = poolBucket.key as string;
-    const timeseriesData = poolBucket.over_time;
+    const timeseriesData = poolBucket.timeseries;
 
     const data = timeseriesData.buckets.map((bucket) => {
       // derivative/value will be undefined for the first hit and if the `max` value is null
       const bucketValue = bucket.value?.value;
-      const y =
-        bucketValue !== null && bucketValue !== undefined && bucket.value
-          ? round(bucketValue * (60 / bucketSize), 1)
-          : null;
+      const y = isFiniteNumber(bucketValue)
+        ? round(bucketValue * (60 / bucketSize), 1)
+        : null;
 
       return {
         y,

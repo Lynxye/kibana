@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
@@ -12,7 +13,7 @@ import { ELASTICSEARCH, DATEMATH, MOMENTJS_TIMEZONE_URL } from '../../constants'
 
 export const help: FunctionHelp<FunctionFactory<ReturnType<typeof timelionFunctionFactory>>> = {
   help: i18n.translate('xpack.canvas.functions.timelionHelpText', {
-    defaultMessage: 'Use Timelion to extract one or more timeseries from many sources.',
+    defaultMessage: 'Uses Timelion to extract one or more time series from many sources.',
   }),
   args: {
     query: i18n.translate('xpack.canvas.functions.timelion.args.query', {

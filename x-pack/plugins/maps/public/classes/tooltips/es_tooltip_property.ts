@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import _ from 'lodash';
@@ -10,8 +11,8 @@ import { IField } from '../fields/field';
 import {
   esFilters,
   Filter,
-  IFieldType,
   IndexPattern,
+  IndexPatternField,
 } from '../../../../../../src/plugins/data/public';
 
 export class ESTooltipProperty implements ITooltipProperty {
@@ -37,7 +38,7 @@ export class ESTooltipProperty implements ITooltipProperty {
     return this._tooltipProperty.getRawValue();
   }
 
-  _getIndexPatternField(): IFieldType | undefined {
+  _getIndexPatternField(): IndexPatternField | undefined {
     return this._indexPattern.fields.getByName(this._field.getRootName());
   }
 
@@ -56,10 +57,11 @@ export class ESTooltipProperty implements ITooltipProperty {
       }
     }
 
-    const htmlConverter = indexPatternField.format.getConverterFor('html');
+    const formatter = this._indexPattern.getFormatterForField(indexPatternField);
+    const htmlConverter = formatter.getConverterFor('html');
     return htmlConverter
       ? htmlConverter(this.getRawValue())
-      : indexPatternField.format.convert(this.getRawValue());
+      : formatter.convert(this.getRawValue());
   }
 
   isFilterable(): boolean {

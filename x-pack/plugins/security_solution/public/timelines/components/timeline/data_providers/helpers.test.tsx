@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { DataProvider, DataProvidersAnd } from './data_provider';
@@ -112,7 +113,7 @@ describe('helpers', () => {
           })
         ).toEqual({
           updatedDestinationGroup: [sourceGroup[moveProviderFromSourceIndex]],
-          updatedSourceGroup: sourceGroup.filter((_, i) => i !== moveProviderFromSourceIndex),
+          updatedSourcererScope: sourceGroup.filter((_, i) => i !== moveProviderFromSourceIndex),
         });
       })
     );
@@ -138,7 +139,7 @@ describe('helpers', () => {
                   : [...acc, sourceGroup[moveProviderFromSourceIndex], p],
               []
             ),
-            updatedSourceGroup: sourceGroup.filter((_, i) => i !== moveProviderFromSourceIndex),
+            updatedSourcererScope: sourceGroup.filter((_, i) => i !== moveProviderFromSourceIndex),
           });
         })
       )
@@ -171,7 +172,7 @@ describe('helpers', () => {
                   p.id !== sourceGroup[moveProviderFromSourceIndex].id ||
                   i === moveProviderToDestinationIndex
               ),
-            updatedSourceGroup: sourceGroup.filter((_, i) => i !== moveProviderFromSourceIndex),
+            updatedSourcererScope: sourceGroup.filter((_, i) => i !== moveProviderFromSourceIndex),
           });
         })
       )

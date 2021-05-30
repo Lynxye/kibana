@@ -1,21 +1,11 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
+
 import url from 'url';
 import expect from '@kbn/expect';
 import { PluginFunctionalProviderContext } from '../../services';
@@ -28,12 +18,14 @@ export default function ({ getService, getPageObjects }: PluginFunctionalProvide
   const testSubjects = getService('testSubjects');
   const find = getService('find');
   const retry = getService('retry');
+  const deployment = getService('deployment');
+  const esArchiver = getService('esArchiver');
 
   const loadingScreenNotShown = async () =>
     expect(await testSubjects.exists('kbnLoadingMessage')).to.be(false);
 
   const getAppWrapperHeight = async () => {
-    const wrapper = await find.byClassName('app-wrapper');
+    const wrapper = await find.byClassName('kbnAppWrapper');
     return (await wrapper.getSize()).height;
   };
 
@@ -54,12 +46,25 @@ export default function ({ getService, getPageObjects }: PluginFunctionalProvide
     });
   };
 
+  const navigateTo = async (path: string) =>
+    await browser.navigateTo(`${deployment.getHostPort()}${path}`);
+
   describe('ui applications', function describeIndexTests() {
     before(async () => {
+      await esArchiver.emptyKibanaIndex();
       await PageObjects.common.navigateToApp('foo');
     });
 
     it('starts on home page', async () => {
+      await testSubjects.existOrFail('fooAppHome');
+    });
+
+    it('redirects and renders correctly regardless of trailing slash', async () => {
+      await navigateTo(`/app/foo`);
+      await waitForUrlToBe('/app/foo/home');
+      await testSubjects.existOrFail('fooAppHome');
+      await navigateTo(`/app/foo/`);
+      await waitForUrlToBe('/app/foo/home');
       await testSubjects.existOrFail('fooAppHome');
     });
 
@@ -72,7 +77,7 @@ export default function ({ getService, getPageObjects }: PluginFunctionalProvide
 
       // Go to home page
       await testSubjects.click('fooNavHome');
-      await waitForUrlToBe('/app/foo');
+      await waitForUrlToBe('/app/foo/home');
       await loadingScreenNotShown();
       await testSubjects.existOrFail('fooAppHome');
     });
@@ -86,7 +91,7 @@ export default function ({ getService, getPageObjects }: PluginFunctionalProvide
 
     it('navigates to app root when navlink is clicked', async () => {
       await appsMenu.clickLink('Foo');
-      await waitForUrlToBe('/app/foo');
+      await waitForUrlToBe('/app/foo/home');
       // await loadingScreenNotShown();
       await testSubjects.existOrFail('fooAppHome');
     });
@@ -105,7 +110,7 @@ export default function ({ getService, getPageObjects }: PluginFunctionalProvide
 
     it('can use the back button to navigate back to previous app', async () => {
       await browser.goBack();
-      await waitForUrlToBe('/app/foo');
+      await waitForUrlToBe('/app/foo/home');
       await loadingScreenNotShown();
       await testSubjects.existOrFail('fooAppHome');
     });
@@ -132,17 +137,6 @@ export default function ({ getService, getPageObjects }: PluginFunctionalProvide
       const wrapperHeight = await getAppWrapperHeight();
       const windowHeight = (await browser.getWindowSize()).height;
       expect(wrapperHeight).to.be.below(windowHeight);
-    });
-
-    // Not sure if we need this test or not. If yes, we need to find another legacy app
-    it.skip('can navigate from NP apps to legacy apps', async () => {
-      await appsMenu.clickLink('Stack Management');
-      await testSubjects.existOrFail('managementNav');
-    });
-
-    it('can navigate from legacy apps to NP apps', async () => {
-      await appsMenu.clickLink('Foo');
-      await testSubjects.existOrFail('fooAppHome');
     });
   });
 }

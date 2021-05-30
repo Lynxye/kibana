@@ -1,51 +1,47 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import _ from 'lodash';
 import { IStorageWrapper } from 'src/plugins/kibana_utils/public';
-import { SavedObjectsClientContract, SavedObjectAttributes, HttpSetup } from 'kibana/public';
-import { SimpleSavedObject } from 'kibana/public';
-import { StateSetter } from '../types';
+import { HttpSetup, SavedObjectReference } from 'kibana/public';
+import { InitializationOptions, StateSetter } from '../types';
 import {
   IndexPattern,
   IndexPatternRef,
   IndexPatternPersistedState,
   IndexPatternPrivateState,
   IndexPatternField,
+  IndexPatternLayer,
 } from './types';
-import { updateLayerIndexPattern } from './state_helpers';
+import { updateLayerIndexPattern, translateToOperationName } from './operations';
 import { DateRange, ExistingFields } from '../../common/types';
 import { BASE_API_URL } from '../../common';
-import { documentField } from './document_field';
 import {
+  IndexPatternsContract,
+  IndexPattern as IndexPatternInstance,
   indexPatterns as indexPatternsUtils,
-  IFieldType,
-  IndexPatternTypeMeta,
 } from '../../../../../src/plugins/data/public';
+import { VisualizeFieldContext } from '../../../../../src/plugins/ui_actions/public';
+import { documentField } from './document_field';
 import { readFromStorage, writeToStorage } from '../settings_storage';
-
-interface SavedIndexPatternAttributes extends SavedObjectAttributes {
-  title: string;
-  timeFieldName: string | null;
-  fields: string;
-  fieldFormatMap: string;
-  typeMeta: string;
-}
+import { getFieldByNameFactory } from './pure_helpers';
+import { memoizedGetAvailableOperationsByMetadata } from './operations';
 
 type SetState = StateSetter<IndexPatternPrivateState>;
-type SavedObjectsClient = Pick<SavedObjectsClientContract, 'find' | 'bulkGet'>;
+type IndexPatternsService = Pick<IndexPatternsContract, 'get' | 'getIdsWithTitle'>;
 type ErrorHandler = (err: Error) => void;
 
 export async function loadIndexPatterns({
+  indexPatternsService,
   patterns,
-  savedObjectsClient,
   cache,
 }: {
+  indexPatternsService: IndexPatternsService;
   patterns: string[];
-  savedObjectsClient: SavedObjectsClient;
   cache: Record<string, IndexPattern>;
 }) {
   const missingIds = patterns.filter((id) => !cache[id]);
@@ -54,20 +50,100 @@ export async function loadIndexPatterns({
     return cache;
   }
 
-  const resp = await savedObjectsClient.bulkGet(
-    missingIds.map((id) => ({ id, type: 'index-pattern' }))
-  );
+  if (memoizedGetAvailableOperationsByMetadata.cache.clear) {
+    // clear operations meta data cache because index pattern reference may change
+    memoizedGetAvailableOperationsByMetadata.cache.clear();
+  }
 
-  return resp.savedObjects.reduce(
-    (acc, savedObject) => {
-      const indexPattern = fromSavedObject(
-        savedObject as SimpleSavedObject<SavedIndexPatternAttributes>
-      );
-      acc[indexPattern.id] = indexPattern;
-      return acc;
+  const allIndexPatterns = await Promise.allSettled(
+    missingIds.map((id) => indexPatternsService.get(id))
+  );
+  // ignore rejected indexpatterns here, they're already handled at the app level
+  const indexPatterns = allIndexPatterns
+    .filter(
+      (response): response is PromiseFulfilledResult<IndexPatternInstance> =>
+        response.status === 'fulfilled'
+    )
+    .map((response) => response.value);
+
+  const indexPatternsObject = indexPatterns.reduce(
+    (acc, indexPattern) => {
+      const newFields = indexPattern.fields
+        .filter(
+          (field) =>
+            !indexPatternsUtils.isNestedField(field) && (!!field.aggregatable || !!field.scripted)
+        )
+        .map(
+          (field): IndexPatternField => {
+            // Convert the getters on the index pattern service into plain JSON
+            const base = {
+              name: field.name,
+              displayName: field.displayName,
+              type: field.type,
+              aggregatable: field.aggregatable,
+              searchable: field.searchable,
+              meta: indexPattern.metaFields.includes(field.name),
+              esTypes: field.esTypes,
+              scripted: field.scripted,
+              runtime: Boolean(field.runtimeField),
+            };
+
+            // Simplifies tests by hiding optional properties instead of undefined
+            return base.scripted
+              ? {
+                  ...base,
+                  lang: field.lang,
+                  script: field.script,
+                }
+              : base;
+          }
+        )
+        .concat(documentField);
+
+      const { typeMeta, title, timeFieldName, fieldFormatMap } = indexPattern;
+      if (typeMeta?.aggs) {
+        const aggs = Object.keys(typeMeta.aggs);
+        newFields.forEach((field, index) => {
+          const restrictionsObj: IndexPatternField['aggregationRestrictions'] = {};
+          aggs.forEach((agg) => {
+            const restriction =
+              typeMeta.aggs && typeMeta.aggs[agg] && typeMeta.aggs[agg][field.name];
+            if (restriction) {
+              restrictionsObj[translateToOperationName(agg)] = restriction;
+            }
+          });
+          if (Object.keys(restrictionsObj).length) {
+            newFields[index] = { ...field, aggregationRestrictions: restrictionsObj };
+          }
+        });
+      }
+
+      const currentIndexPattern: IndexPattern = {
+        id: indexPattern.id!, // id exists for sure because we got index patterns by id
+        title,
+        timeFieldName,
+        fieldFormatMap:
+          fieldFormatMap &&
+          Object.fromEntries(
+            Object.entries(fieldFormatMap).map(([id, format]) => [
+              id,
+              'toJSON' in format ? format.toJSON() : format,
+            ])
+          ),
+        fields: newFields,
+        getFieldByName: getFieldByNameFactory(newFields),
+        hasRestrictions: !!typeMeta?.aggs,
+      };
+
+      return {
+        [currentIndexPattern.id]: currentIndexPattern,
+        ...acc,
+      };
     },
     { ...cache }
   );
+
+  return indexPatternsObject;
 }
 
 const getLastUsedIndexPatternId = (
@@ -82,35 +158,109 @@ const setLastUsedIndexPatternId = (storage: IStorageWrapper, value: string) => {
   writeToStorage(storage, 'indexPatternId', value);
 };
 
+const CURRENT_PATTERN_REFERENCE_NAME = 'indexpattern-datasource-current-indexpattern';
+function getLayerReferenceName(layerId: string) {
+  return `indexpattern-datasource-layer-${layerId}`;
+}
+
+export function extractReferences({ currentIndexPatternId, layers }: IndexPatternPrivateState) {
+  const savedObjectReferences: SavedObjectReference[] = [];
+  savedObjectReferences.push({
+    type: 'index-pattern',
+    id: currentIndexPatternId,
+    name: CURRENT_PATTERN_REFERENCE_NAME,
+  });
+  const persistableLayers: Record<string, Omit<IndexPatternLayer, 'indexPatternId'>> = {};
+  Object.entries(layers).forEach(([layerId, { indexPatternId, ...persistableLayer }]) => {
+    savedObjectReferences.push({
+      type: 'index-pattern',
+      id: indexPatternId,
+      name: getLayerReferenceName(layerId),
+    });
+    persistableLayers[layerId] = persistableLayer;
+  });
+  return { savedObjectReferences, state: { layers: persistableLayers } };
+}
+
+export function injectReferences(
+  state: IndexPatternPersistedState,
+  references: SavedObjectReference[]
+) {
+  const layers: Record<string, IndexPatternLayer> = {};
+  Object.entries(state.layers).forEach(([layerId, persistedLayer]) => {
+    layers[layerId] = {
+      ...persistedLayer,
+      indexPatternId: references.find(({ name }) => name === getLayerReferenceName(layerId))!.id,
+    };
+  });
+  return {
+    currentIndexPatternId: references.find(({ name }) => name === CURRENT_PATTERN_REFERENCE_NAME)!
+      .id,
+    layers,
+  };
+}
+
 export async function loadInitialState({
-  state,
-  savedObjectsClient,
+  persistedState,
+  references,
   defaultIndexPatternId,
   storage,
+  indexPatternsService,
+  initialContext,
+  options,
 }: {
-  state?: IndexPatternPersistedState;
-  savedObjectsClient: SavedObjectsClient;
+  persistedState?: IndexPatternPersistedState;
+  references?: SavedObjectReference[];
   defaultIndexPatternId?: string;
   storage: IStorageWrapper;
+  indexPatternsService: IndexPatternsService;
+  initialContext?: VisualizeFieldContext;
+  options?: InitializationOptions;
 }): Promise<IndexPatternPrivateState> {
-  const indexPatternRefs = await loadIndexPatternRefs(savedObjectsClient);
+  const { isFullEditor } = options ?? {};
+  // make it explicit or TS will infer never[] and break few lines down
+  const indexPatternRefs: IndexPatternRef[] = await (isFullEditor
+    ? loadIndexPatternRefs(indexPatternsService)
+    : []);
   const lastUsedIndexPatternId = getLastUsedIndexPatternId(storage, indexPatternRefs);
 
-  const requiredPatterns = _.uniq(
+  const state =
+    persistedState && references ? injectReferences(persistedState, references) : undefined;
+
+  const requiredPatterns: string[] = _.uniq(
     state
       ? Object.values(state.layers)
           .map((l) => l.indexPatternId)
           .concat(state.currentIndexPatternId)
-      : [lastUsedIndexPatternId || defaultIndexPatternId || indexPatternRefs[0].id]
-  );
+      : [lastUsedIndexPatternId || defaultIndexPatternId || indexPatternRefs[0]?.id]
+  )
+    // take out the undefined from the list
+    .filter(Boolean);
 
-  const currentIndexPatternId = requiredPatterns[0];
-  setLastUsedIndexPatternId(storage, currentIndexPatternId);
+  const availableIndexPatterns = new Set(indexPatternRefs.map(({ id }: IndexPatternRef) => id));
+  // Priority list:
+  // * start with the indexPattern in context
+  // * then fallback to the required ones
+  // * then as last resort use a random one from the available list
+  const availableIndexPatternIds = [
+    initialContext?.indexPatternId,
+    ...requiredPatterns,
+    indexPatternRefs[0]?.id,
+  ].filter((id) => id != null && availableIndexPatterns.has(id));
 
+  const currentIndexPatternId = availableIndexPatternIds[0]!;
+
+  if (currentIndexPatternId) {
+    setLastUsedIndexPatternId(storage, currentIndexPatternId);
+  }
+
+  if (!requiredPatterns.includes(currentIndexPatternId)) {
+    requiredPatterns.push(currentIndexPatternId);
+  }
   const indexPatterns = await loadIndexPatterns({
-    savedObjectsClient,
+    indexPatternsService,
     cache: {},
-    patterns: requiredPatterns,
+    patterns: initialContext ? [initialContext.indexPatternId] : requiredPatterns,
   });
   if (state) {
     return {
@@ -135,26 +285,30 @@ export async function loadInitialState({
 
 export async function changeIndexPattern({
   id,
-  savedObjectsClient,
   state,
   setState,
   onError,
   storage,
+  indexPatternsService,
 }: {
   id: string;
-  savedObjectsClient: SavedObjectsClient;
   state: IndexPatternPrivateState;
   setState: SetState;
   onError: ErrorHandler;
   storage: IStorageWrapper;
+  indexPatternsService: IndexPatternsService;
 }) {
-  try {
-    const indexPatterns = await loadIndexPatterns({
-      savedObjectsClient,
-      cache: state.indexPatterns,
-      patterns: [id],
-    });
+  const indexPatterns = await loadIndexPatterns({
+    indexPatternsService,
+    cache: state.indexPatterns,
+    patterns: [id],
+  });
 
+  if (indexPatterns[id] == null) {
+    return onError(Error('Missing indexpatterns'));
+  }
+
+  try {
     setState((s) => ({
       ...s,
       layers: isSingleEmptyLayer(state.layers)
@@ -175,29 +329,32 @@ export async function changeIndexPattern({
 export async function changeLayerIndexPattern({
   indexPatternId,
   layerId,
-  savedObjectsClient,
   state,
   setState,
   onError,
   replaceIfPossible,
   storage,
+  indexPatternsService,
 }: {
   indexPatternId: string;
   layerId: string;
-  savedObjectsClient: SavedObjectsClient;
   state: IndexPatternPrivateState;
   setState: SetState;
   onError: ErrorHandler;
   replaceIfPossible?: boolean;
   storage: IStorageWrapper;
+  indexPatternsService: IndexPatternsService;
 }) {
-  try {
-    const indexPatterns = await loadIndexPatterns({
-      savedObjectsClient,
-      cache: state.indexPatterns,
-      patterns: [indexPatternId],
-    });
+  const indexPatterns = await loadIndexPatterns({
+    indexPatternsService,
+    cache: state.indexPatterns,
+    patterns: [indexPatternId],
+  });
+  if (indexPatterns[indexPatternId] == null) {
+    return onError(Error('Missing indexpatterns'));
+  }
 
+  try {
     setState((s) => ({
       ...s,
       layers: {
@@ -217,22 +374,13 @@ export async function changeLayerIndexPattern({
 }
 
 async function loadIndexPatternRefs(
-  savedObjectsClient: SavedObjectsClient
+  indexPatternsService: IndexPatternsService
 ): Promise<IndexPatternRef[]> {
-  const result = await savedObjectsClient.find<{ title: string }>({
-    type: 'index-pattern',
-    fields: ['title'],
-    perPage: 10000,
-  });
+  const indexPatterns = await indexPatternsService.getIdsWithTitle();
 
-  return result.savedObjects
-    .map((o) => ({
-      id: String(o.id),
-      title: (o.attributes as { title: string }).title,
-    }))
-    .sort((a, b) => {
-      return a.title.localeCompare(b.title);
-    });
+  return indexPatterns.sort((a, b) => {
+    return a.title.localeCompare(b.title);
+  });
 }
 
 export async function syncExistingFields({
@@ -251,6 +399,7 @@ export async function syncExistingFields({
     title: string;
     fields: IndexPatternField[];
     timeFieldName?: string | null;
+    hasRestrictions: boolean;
   }>;
   fetchJson: HttpSetup['post'];
   setState: SetState;
@@ -260,6 +409,12 @@ export async function syncExistingFields({
   showNoDataPopover: () => void;
 }) {
   const existenceRequests = indexPatterns.map((pattern) => {
+    if (pattern.hasRestrictions) {
+      return {
+        indexPatternTitle: pattern.title,
+        existingFieldNames: pattern.fields.map((field) => field.name),
+      };
+    }
     const body: Record<string, string | object> = {
       dslQuery,
       fromDate: dateRange.fromDate,
@@ -290,16 +445,18 @@ export async function syncExistingFields({
       ...state,
       isFirstExistenceFetch: false,
       existenceFetchFailed: false,
+      existenceFetchTimeout: false,
       existingFields: emptinessInfo.reduce((acc, info) => {
         acc[info.indexPatternTitle] = booleanMap(info.existingFieldNames);
         return acc;
       }, state.existingFields),
     }));
   } catch (e) {
-    // show all fields as available if fetch failed
+    // show all fields as available if fetch failed or timed out
     setState((state) => ({
       ...state,
-      existenceFetchFailed: true,
+      existenceFetchFailed: e.res?.status !== 408,
+      existenceFetchTimeout: e.res?.status === 408,
       existingFields: indexPatterns.reduce((acc, pattern) => {
         acc[pattern.title] = booleanMap(pattern.fields.map((field) => field.name));
         return acc;
@@ -318,56 +475,4 @@ function booleanMap(keys: string[]) {
 function isSingleEmptyLayer(layerMap: IndexPatternPrivateState['layers']) {
   const layers = Object.values(layerMap);
   return layers.length === 1 && layers[0].columnOrder.length === 0;
-}
-
-function fromSavedObject(
-  savedObject: SimpleSavedObject<SavedIndexPatternAttributes>
-): IndexPattern {
-  const { id, attributes, type } = savedObject;
-  const indexPattern = {
-    ...attributes,
-    id,
-    type,
-    title: attributes.title,
-    fields: (JSON.parse(attributes.fields) as IFieldType[])
-      .filter(
-        (field) =>
-          !indexPatternsUtils.isNestedField(field) && (!!field.aggregatable || !!field.scripted)
-      )
-      .concat(documentField) as IndexPatternField[],
-    typeMeta: attributes.typeMeta
-      ? (JSON.parse(attributes.typeMeta) as IndexPatternTypeMeta)
-      : undefined,
-    fieldFormatMap: attributes.fieldFormatMap ? JSON.parse(attributes.fieldFormatMap) : undefined,
-  };
-
-  const { typeMeta } = indexPattern;
-  if (!typeMeta) {
-    return indexPattern;
-  }
-
-  const newFields = [...(indexPattern.fields as IndexPatternField[])];
-
-  if (typeMeta.aggs) {
-    const aggs = Object.keys(typeMeta.aggs);
-    newFields.forEach((field, index) => {
-      const restrictionsObj: IndexPatternField['aggregationRestrictions'] = {};
-      aggs.forEach((agg) => {
-        const restriction = typeMeta.aggs && typeMeta.aggs[agg] && typeMeta.aggs[agg][field.name];
-        if (restriction) {
-          restrictionsObj[agg] = restriction;
-        }
-      });
-      if (Object.keys(restrictionsObj).length) {
-        newFields[index] = { ...field, aggregationRestrictions: restrictionsObj };
-      }
-    });
-  }
-
-  return {
-    id: indexPattern.id,
-    title: indexPattern.title,
-    timeFieldName: indexPattern.timeFieldName || undefined,
-    fields: newFields,
-  };
 }

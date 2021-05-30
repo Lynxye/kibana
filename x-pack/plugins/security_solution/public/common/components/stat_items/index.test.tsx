@@ -1,12 +1,12 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 /* eslint-disable react/display-name */
 
-import euiDarkVars from '@elastic/eui/dist/eui_theme_dark.json';
 import { mount, ReactWrapper } from 'enzyme';
 import React from 'react';
 import { ThemeProvider } from 'styled-components';
@@ -23,7 +23,7 @@ import {
 import { BarChart } from '../charts/barchart';
 import { AreaChart } from '../charts/areachart';
 import { EuiHorizontalRule } from '@elastic/eui';
-import { fieldTitleChartMapping } from '../../../network/components/kpi_network';
+import { fieldsMapping as fieldTitleChartMapping } from '../../../network/components/kpi_network/unique_private_ips';
 import {
   mockData,
   mockEnableChartsData,
@@ -31,15 +31,18 @@ import {
   mockNarrowDateRange,
 } from '../../../network/components/kpi_network/mock';
 import {
-  mockGlobalState,
-  apolloClientObservable,
-  SUB_PLUGINS_REDUCER,
-  kibanaObservable,
   createSecuritySolutionStorageMock,
+  kibanaObservable,
+  mockGlobalState,
+  SUB_PLUGINS_REDUCER,
 } from '../../mock';
 import { State, createStore } from '../../store';
 import { Provider as ReduxStoreProvider } from 'react-redux';
-import { KpiNetworkData, KpiHostsData } from '../../../graphql/types';
+import {
+  HostsKpiStrategyResponse,
+  NetworkKpiStrategyResponse,
+} from '../../../../common/search_strategy';
+import { getMockTheme } from '../../lib/kibana/kibana_react.mock';
 
 const from = '2019-06-15T06:00:00.000Z';
 const to = '2019-06-18T06:00:00.000Z';
@@ -53,28 +56,21 @@ jest.mock('../charts/barchart', () => {
 });
 
 describe('Stat Items Component', () => {
-  const theme = () => ({ eui: euiDarkVars, darkMode: true });
+  const mockTheme = getMockTheme({ eui: { euiColorMediumShade: '#ece' } });
   const state: State = mockGlobalState;
   const { storage } = createSecuritySolutionStorageMock();
-  const store = createStore(
-    state,
-    SUB_PLUGINS_REDUCER,
-    apolloClientObservable,
-    kibanaObservable,
-    storage
-  );
+  const store = createStore(state, SUB_PLUGINS_REDUCER, kibanaObservable, storage);
 
   describe.each([
     [
       mount(
-        <ThemeProvider theme={theme}>
+        <ThemeProvider theme={mockTheme}>
           <ReduxStoreProvider store={store}>
             <StatItemsComponent
               description="HOSTS"
               fields={[{ key: 'hosts', value: null, color: '#6092C0', icon: 'cross' }]}
               from={from}
               id="statItems"
-              index={0}
               key="mock-keys"
               to={to}
               narrowDateRange={mockNarrowDateRange}
@@ -85,7 +81,7 @@ describe('Stat Items Component', () => {
     ],
     [
       mount(
-        <ThemeProvider theme={theme}>
+        <ThemeProvider theme={mockTheme}>
           <ReduxStoreProvider store={store}>
             <StatItemsComponent
               areaChart={[]}
@@ -94,7 +90,6 @@ describe('Stat Items Component', () => {
               fields={[{ key: 'hosts', value: null, color: '#6092C0', icon: 'cross' }]}
               from={from}
               id="statItems"
-              index={0}
               key="mock-keys"
               to={to}
               narrowDateRange={mockNarrowDateRange}
@@ -176,7 +171,6 @@ describe('Stat Items Component', () => {
       ],
       from,
       id: 'statItems',
-      index: 0,
       key: 'mock-keys',
       to,
       narrowDateRange: mockNarrowDateRange,
@@ -214,41 +208,37 @@ describe('Stat Items Component', () => {
 
 describe('addValueToFields', () => {
   const mockNetworkMappings = fieldTitleChartMapping[0];
-  const mockKpiNetworkData = mockData.KpiNetwork;
   test('should update value from data', () => {
-    const result = addValueToFields(mockNetworkMappings.fields, mockKpiNetworkData);
+    const result = addValueToFields(mockNetworkMappings.fields, mockData);
     expect(result).toEqual(mockEnableChartsData.fields);
   });
 });
 
 describe('addValueToAreaChart', () => {
   const mockNetworkMappings = fieldTitleChartMapping[0];
-  const mockKpiNetworkData = mockData.KpiNetwork;
   test('should add areaChart from data', () => {
-    const result = addValueToAreaChart(mockNetworkMappings.fields, mockKpiNetworkData);
+    const result = addValueToAreaChart(mockNetworkMappings.fields, mockData);
     expect(result).toEqual(mockEnableChartsData.areaChart);
   });
 });
 
 describe('addValueToBarChart', () => {
   const mockNetworkMappings = fieldTitleChartMapping[0];
-  const mockKpiNetworkData = mockData.KpiNetwork;
   test('should add areaChart from data', () => {
-    const result = addValueToBarChart(mockNetworkMappings.fields, mockKpiNetworkData);
+    const result = addValueToBarChart(mockNetworkMappings.fields, mockData);
     expect(result).toEqual(mockEnableChartsData.barChart);
   });
 });
 
 describe('useKpiMatrixStatus', () => {
   const mockNetworkMappings = fieldTitleChartMapping;
-  const mockKpiNetworkData = mockData.KpiNetwork;
   const MockChildComponent = (mappedStatItemProps: StatItemsProps) => <span />;
   const MockHookWrapperComponent = ({
     fieldsMapping,
     data,
   }: {
     fieldsMapping: Readonly<StatItems[]>;
-    data: KpiNetworkData | KpiHostsData;
+    data: NetworkKpiStrategyResponse | HostsKpiStrategyResponse;
   }) => {
     const statItemsProps: StatItemsProps[] = useKpiMatrixStatus(
       fieldsMapping,
@@ -271,7 +261,7 @@ describe('useKpiMatrixStatus', () => {
   test('it updates status correctly', () => {
     const wrapper = mount(
       <>
-        <MockHookWrapperComponent fieldsMapping={mockNetworkMappings} data={mockKpiNetworkData} />
+        <MockHookWrapperComponent fieldsMapping={mockNetworkMappings} data={mockData} />
       </>
     );
 
@@ -281,7 +271,7 @@ describe('useKpiMatrixStatus', () => {
   test('it should not append areaChart if enableAreaChart is off', () => {
     const wrapper = mount(
       <>
-        <MockHookWrapperComponent fieldsMapping={mockNoChartMappings} data={mockKpiNetworkData} />
+        <MockHookWrapperComponent fieldsMapping={mockNoChartMappings} data={mockData} />
       </>
     );
 
@@ -291,7 +281,7 @@ describe('useKpiMatrixStatus', () => {
   test('it should not append barChart if enableBarChart is off', () => {
     const wrapper = mount(
       <>
-        <MockHookWrapperComponent fieldsMapping={mockNoChartMappings} data={mockKpiNetworkData} />
+        <MockHookWrapperComponent fieldsMapping={mockNoChartMappings} data={mockData} />
       </>
     );
 

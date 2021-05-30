@@ -1,15 +1,17 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
+export const ADD_COMMENT_INPUT = '[data-test-subj="add-comment"] textarea';
 
 export const BACK_TO_CASES_BTN = '[data-test-subj="backToCases"]';
 
-export const DESCRIPTION_INPUT =
-  '[data-test-subj="caseDescription"] [data-test-subj="textAreaInput"]';
+export const DESCRIPTION_INPUT = '[data-test-subj="caseDescription"] textarea';
 
-export const INSERT_TIMELINE_BTN = '[data-test-subj="insert-timeline-button"]';
+export const INSERT_TIMELINE_BTN = '.euiMarkdownEditorToolbar [aria-label="Insert timeline link"]';
 
 export const LOADING_SPINNER = '[data-test-subj="create-case-loading-spinner"]';
 

@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { HTMLAttributes, ReactNode } from 'react';
@@ -26,11 +27,14 @@ interface Props {
    * aria-label for accessibility
    */
   'aria-label'?: string;
+
+  maxWidth?: string;
 }
 
 export function ChartWrapper({
   loading = false,
   height = '100%',
+  maxWidth,
   children,
   ...rest
 }: Props) {
@@ -43,6 +47,7 @@ export function ChartWrapper({
           height,
           opacity,
           transition: 'opacity 0.2s',
+          ...(maxWidth ? { maxWidth } : {}),
         }}
         {...(rest as HTMLAttributes<HTMLDivElement>)}
       >
@@ -52,7 +57,12 @@ export function ChartWrapper({
         <EuiFlexGroup
           justifyContent="spaceAround"
           alignItems="center"
-          style={{ height, marginTop: `-${height}`, marginBottom: 0 }}
+          style={{
+            height,
+            marginTop: `-${height}`,
+            marginBottom: 0,
+            ...(maxWidth ? { maxWidth } : {}),
+          }}
         >
           <EuiFlexItem grow={false}>
             <EuiLoadingChart size="xl" />

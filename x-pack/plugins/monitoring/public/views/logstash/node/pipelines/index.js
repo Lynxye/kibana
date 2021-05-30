@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 /*
@@ -81,6 +82,7 @@ uiRoutes.when('/logstash/node/:uuid/pipelines', {
         $scope,
         $injector,
         fetchDataImmediately: false, // We want to apply pagination before sending the first request
+        telemetryPageViewTitle: 'logstash_node_pipelines',
       });
 
       $scope.$watch(
@@ -93,6 +95,15 @@ uiRoutes.when('/logstash/node/:uuid/pipelines', {
           this.setTitle(
             i18n.translate('xpack.monitoring.logstash.node.pipelines.routeTitle', {
               defaultMessage: 'Logstash - {nodeName} - Pipelines',
+              values: {
+                nodeName: data.nodeSummary.name,
+              },
+            })
+          );
+
+          this.setPageTitle(
+            i18n.translate('xpack.monitoring.logstash.node.pipelines.pageTitle', {
+              defaultMessage: 'Logstash node pipelines: {nodeName}',
               values: {
                 nodeName: data.nodeSummary.name,
               },

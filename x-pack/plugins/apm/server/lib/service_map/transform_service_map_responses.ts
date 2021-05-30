@@ -1,8 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import { sortBy, pickBy, identity } from 'lodash';
 import { ValuesType } from 'utility-types';
 import {
@@ -16,9 +18,11 @@ import {
   ConnectionNode,
   ServiceConnectionNode,
   ExternalConnectionNode,
+  ConnectionElement,
 } from '../../../common/service_map';
 import { ConnectionsResponse, ServicesResponse } from './get_service_map';
 import { ServiceAnomaliesResponse } from './get_service_anomalies';
+import { groupResourceNodes } from './group_resource_nodes';
 
 function getConnectionNodeId(node: ConnectionNode): string {
   if ('span.destination.service.resource' in node) {
@@ -108,7 +112,9 @@ export function transformServiceMapResponses(response: ServiceMapResponse) {
     const mergedServiceNode = Object.assign({}, ...matchedServiceNodes);
 
     const serviceAnomalyStats = serviceName
-      ? anomalies.serviceAnomalies[serviceName]
+      ? anomalies.serviceAnomalies.find(
+          (item) => item.serviceName === serviceName
+        )
       : null;
 
     if (matchedServiceNodes.length) {
@@ -213,9 +219,12 @@ export function transformServiceMapResponses(response: ServiceMapResponse) {
   }, []);
 
   // Put everything together in elements, with everything in the "data" property
-  const elements = [...dedupedConnections, ...dedupedNodes].map((element) => ({
+  const elements: ConnectionElement[] = [
+    ...dedupedConnections,
+    ...dedupedNodes,
+  ].map((element) => ({
     data: element,
   }));
 
-  return { elements };
+  return groupResourceNodes({ elements });
 }

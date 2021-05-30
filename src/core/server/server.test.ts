@@ -1,20 +1,9 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import {
@@ -31,25 +20,26 @@ import {
   mockMetricsService,
   mockStatusService,
   mockLoggingService,
-  mockAuditTrailService,
+  mockI18nService,
 } from './server.test.mocks';
 
 import { BehaviorSubject } from 'rxjs';
+import { REPO_ROOT } from '@kbn/dev-utils';
+import { rawConfigServiceMock, getEnvOptions } from './config/mocks';
 import { Env } from './config';
 import { Server } from './server';
 
-import { getEnvOptions } from './config/__mocks__/env';
 import { loggingSystemMock } from './logging/logging_system.mock';
-import { rawConfigServiceMock } from './config/raw_config_service.mock';
 
-const env = new Env('.', getEnvOptions());
+const env = Env.createDefault(REPO_ROOT, getEnvOptions());
 const logger = loggingSystemMock.create();
 const rawConfigService = rawConfigServiceMock.create({});
 
 beforeEach(() => {
   mockConfigService.atPath.mockReturnValue(new BehaviorSubject({ autoListen: true }));
   mockPluginsService.discover.mockResolvedValue({
-    pluginTree: new Map(),
+    pluginTree: { asOpaqueIds: new Map(), asNames: new Map() },
+    pluginPaths: [],
     uiPlugins: { internal: new Map(), public: new Map(), browserConfigs: new Map() },
   });
 });
@@ -71,7 +61,7 @@ test('sets up services on "setup"', async () => {
   expect(mockMetricsService.setup).not.toHaveBeenCalled();
   expect(mockStatusService.setup).not.toHaveBeenCalled();
   expect(mockLoggingService.setup).not.toHaveBeenCalled();
-  expect(mockAuditTrailService.setup).not.toHaveBeenCalled();
+  expect(mockI18nService.setup).not.toHaveBeenCalled();
 
   await server.setup();
 
@@ -85,7 +75,7 @@ test('sets up services on "setup"', async () => {
   expect(mockMetricsService.setup).toHaveBeenCalledTimes(1);
   expect(mockStatusService.setup).toHaveBeenCalledTimes(1);
   expect(mockLoggingService.setup).toHaveBeenCalledTimes(1);
-  expect(mockAuditTrailService.setup).toHaveBeenCalledTimes(1);
+  expect(mockI18nService.setup).toHaveBeenCalledTimes(1);
 });
 
 test('injects legacy dependency to context#setup()', async () => {
@@ -98,7 +88,8 @@ test('injects legacy dependency to context#setup()', async () => {
     [pluginB, [pluginA]],
   ]);
   mockPluginsService.discover.mockResolvedValue({
-    pluginTree: pluginDependencies,
+    pluginTree: { asOpaqueIds: pluginDependencies, asNames: new Map() },
+    pluginPaths: [],
     uiPlugins: { internal: new Map(), public: new Map(), browserConfigs: new Map() },
   });
 
@@ -108,7 +99,6 @@ test('injects legacy dependency to context#setup()', async () => {
     pluginDependencies: new Map([
       [pluginA, []],
       [pluginB, [pluginA]],
-      [mockLegacyService.legacyId, [pluginA, pluginB]],
     ]),
   });
 });
@@ -117,25 +107,20 @@ test('runs services on "start"', async () => {
   const server = new Server(rawConfigService, env, logger);
 
   expect(mockHttpService.setup).not.toHaveBeenCalled();
-  expect(mockLegacyService.start).not.toHaveBeenCalled();
 
   await server.setup();
 
   expect(mockHttpService.start).not.toHaveBeenCalled();
-  expect(mockLegacyService.start).not.toHaveBeenCalled();
   expect(mockSavedObjectsService.start).not.toHaveBeenCalled();
   expect(mockUiSettingsService.start).not.toHaveBeenCalled();
   expect(mockMetricsService.start).not.toHaveBeenCalled();
-  expect(mockAuditTrailService.start).not.toHaveBeenCalled();
 
   await server.start();
 
   expect(mockHttpService.start).toHaveBeenCalledTimes(1);
-  expect(mockLegacyService.start).toHaveBeenCalledTimes(1);
   expect(mockSavedObjectsService.start).toHaveBeenCalledTimes(1);
   expect(mockUiSettingsService.start).toHaveBeenCalledTimes(1);
   expect(mockMetricsService.start).toHaveBeenCalledTimes(1);
-  expect(mockAuditTrailService.start).toHaveBeenCalledTimes(1);
 });
 
 test('does not fail on "setup" if there are unused paths detected', async () => {
@@ -160,7 +145,6 @@ test('stops services on "stop"', async () => {
   expect(mockMetricsService.stop).not.toHaveBeenCalled();
   expect(mockStatusService.stop).not.toHaveBeenCalled();
   expect(mockLoggingService.stop).not.toHaveBeenCalled();
-  expect(mockAuditTrailService.stop).not.toHaveBeenCalled();
 
   await server.stop();
 
@@ -173,28 +157,9 @@ test('stops services on "stop"', async () => {
   expect(mockMetricsService.stop).toHaveBeenCalledTimes(1);
   expect(mockStatusService.stop).toHaveBeenCalledTimes(1);
   expect(mockLoggingService.stop).toHaveBeenCalledTimes(1);
-  expect(mockAuditTrailService.stop).toHaveBeenCalledTimes(1);
 });
 
 test(`doesn't setup core services if config validation fails`, async () => {
-  mockConfigService.validate.mockImplementationOnce(() => {
-    return Promise.reject(new Error('invalid config'));
-  });
-  const server = new Server(rawConfigService, env, logger);
-  await expect(server.setup()).rejects.toThrowErrorMatchingInlineSnapshot(`"invalid config"`);
-
-  expect(mockHttpService.setup).not.toHaveBeenCalled();
-  expect(mockElasticsearchService.setup).not.toHaveBeenCalled();
-  expect(mockPluginsService.setup).not.toHaveBeenCalled();
-  expect(mockLegacyService.setup).not.toHaveBeenCalled();
-  expect(mockUiSettingsService.setup).not.toHaveBeenCalled();
-  expect(mockRenderingService.setup).not.toHaveBeenCalled();
-  expect(mockMetricsService.setup).not.toHaveBeenCalled();
-  expect(mockStatusService.setup).not.toHaveBeenCalled();
-  expect(mockLoggingService.setup).not.toHaveBeenCalled();
-});
-
-test(`doesn't setup core services if legacy config validation fails`, async () => {
   mockEnsureValidConfiguration.mockImplementation(() => {
     throw new Error('Unknown configuration keys');
   });
@@ -214,4 +179,5 @@ test(`doesn't setup core services if legacy config validation fails`, async () =
   expect(mockMetricsService.setup).not.toHaveBeenCalled();
   expect(mockStatusService.setup).not.toHaveBeenCalled();
   expect(mockLoggingService.setup).not.toHaveBeenCalled();
+  expect(mockI18nService.setup).not.toHaveBeenCalled();
 });

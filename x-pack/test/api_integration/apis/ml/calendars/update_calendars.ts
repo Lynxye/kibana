@@ -1,14 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import expect from '@kbn/expect';
 
 import { FtrProviderContext } from '../../../ftr_provider_context';
 import { USER } from '../../../../functional/services/ml/security_common';
-import { COMMON_REQUEST_HEADERS } from '../../../../functional/services/ml/common';
+import { COMMON_REQUEST_HEADERS } from '../../../../functional/services/ml/common_api';
 
 export default ({ getService }: FtrProviderContext) => {
   const supertest = getService('supertestWithoutAuth');
@@ -41,6 +42,7 @@ export default ({ getService }: FtrProviderContext) => {
 
     beforeEach(async () => {
       await ml.api.createCalendar(calendarId, originalCalendar);
+      // @ts-expect-error not full interface
       await ml.api.createCalendarEvents(calendarId, originalEvents);
     });
 
@@ -69,17 +71,18 @@ export default ({ getService }: FtrProviderContext) => {
       expect(updatedEvents).to.have.length(updateCalendarRequestBody.events.length);
       await ml.api.waitForEventsToExistInCalendar(
         updatedCalendar.calendar_id,
+        // @ts-expect-error not full interface
         updateCalendarRequestBody.events
       );
     });
 
-    it('should not allow to update calendar for user without required permission ', async () => {
+    it('should not allow to update calendar for user without required permission', async () => {
       await supertest
         .put(`/api/ml/calendars/${calendarId}`)
         .auth(USER.ML_VIEWER, ml.securityCommon.getPasswordForUser(USER.ML_VIEWER))
         .set(COMMON_REQUEST_HEADERS)
         .send(updateCalendarRequestBody)
-        .expect(404);
+        .expect(403);
     });
 
     it('should not allow to update calendar for unauthorized user', async () => {
@@ -88,13 +91,13 @@ export default ({ getService }: FtrProviderContext) => {
         .auth(USER.ML_UNAUTHORIZED, ml.securityCommon.getPasswordForUser(USER.ML_UNAUTHORIZED))
         .set(COMMON_REQUEST_HEADERS)
         .send(updateCalendarRequestBody)
-        .expect(404);
+        .expect(403);
     });
 
-    it('should return error if invalid calendarId ', async () => {
+    it('should return error if invalid calendarId', async () => {
       await supertest
         .put(`/api/ml/calendars/calendar_id_dne`)
-        .auth(USER.ML_VIEWER, ml.securityCommon.getPasswordForUser(USER.ML_VIEWER))
+        .auth(USER.ML_POWERUSER, ml.securityCommon.getPasswordForUser(USER.ML_POWERUSER))
         .set(COMMON_REQUEST_HEADERS)
         .send(updateCalendarRequestBody)
         .expect(404);

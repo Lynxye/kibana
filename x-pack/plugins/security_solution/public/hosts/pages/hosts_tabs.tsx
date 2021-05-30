@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { memo, useCallback } from 'react';
@@ -28,49 +29,52 @@ export const HostsTabs = memo<HostsTabsProps>(
     deleteQuery,
     docValueFields,
     filterQuery,
-    setAbsoluteRangeDatePicker,
-    to,
     from,
-    setQuery,
+    indexNames,
     isInitializing,
+    setAbsoluteRangeDatePicker,
+    setQuery,
+    to,
     type,
-    indexPattern,
-    hostsPagePath,
   }) => {
+    const narrowDateRange = useCallback(
+      (score: Anomaly, interval: string) => {
+        const fromTo = scoreIntervalToDateTime(score, interval);
+        setAbsoluteRangeDatePicker({
+          id: 'global',
+          from: fromTo.from,
+          to: fromTo.to,
+        });
+      },
+      [setAbsoluteRangeDatePicker]
+    );
+
+    const updateDateRange = useCallback<UpdateDateRange>(
+      ({ x }) => {
+        if (!x) {
+          return;
+        }
+        const [min, max] = x;
+        setAbsoluteRangeDatePicker({
+          id: 'global',
+          from: new Date(min).toISOString(),
+          to: new Date(max).toISOString(),
+        });
+      },
+      [setAbsoluteRangeDatePicker]
+    );
+
     const tabProps = {
       deleteQuery,
       endDate: to,
       filterQuery,
+      indexNames,
       skip: isInitializing,
       setQuery,
       startDate: from,
       type,
-      indexPattern,
-      narrowDateRange: useCallback(
-        (score: Anomaly, interval: string) => {
-          const fromTo = scoreIntervalToDateTime(score, interval);
-          setAbsoluteRangeDatePicker({
-            id: 'global',
-            from: fromTo.from,
-            to: fromTo.to,
-          });
-        },
-        [setAbsoluteRangeDatePicker]
-      ),
-      updateDateRange: useCallback<UpdateDateRange>(
-        ({ x }) => {
-          if (!x) {
-            return;
-          }
-          const [min, max] = x;
-          setAbsoluteRangeDatePicker({
-            id: 'global',
-            from: new Date(min).toISOString(),
-            to: new Date(max).toISOString(),
-          });
-        },
-        [setAbsoluteRangeDatePicker]
-      ),
+      narrowDateRange,
+      updateDateRange,
     };
 
     return (

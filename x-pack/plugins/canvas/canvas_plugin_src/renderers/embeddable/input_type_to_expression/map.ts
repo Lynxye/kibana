@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { MapEmbeddableInput } from '../../../../../../plugins/maps/public/embeddable';
@@ -12,7 +13,7 @@ export function toExpression(input: MapEmbeddableInput): string {
   expressionParts.push('savedMap');
   expressionParts.push(`id="${input.id}"`);
 
-  if (input.title) {
+  if (input.title !== undefined) {
     expressionParts.push(`title="${input.title}"`);
   }
 

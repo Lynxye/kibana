@@ -2,10 +2,7 @@
   "id": "reporting",
   "version": "8.0.0",
   "kibanaVersion": "kibana",
-  "optionalPlugins": [
-    "security",
-    "usageCollection"
-  ],
+  "optionalPlugins": ["security", "spaces", "usageCollection"],
   "configPath": ["xpack", "reporting"],
   "requiredPlugins": [
     "data",
@@ -13,13 +10,13 @@
     "management",
     "licensing",
     "uiActions",
+    "taskManager",
     "embeddable",
-    "share"
+    "screenshotMode",
+    "share",
+    "features"
   ],
   "server": true,
   "ui": true,
-  "requiredBundles": [
-    "kibanaReact",
-    "discover"
-  ]
+  "requiredBundles": ["kibanaReact", "discover"]
 }

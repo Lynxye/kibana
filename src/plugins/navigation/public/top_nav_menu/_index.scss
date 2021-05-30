@@ -1,15 +1,20 @@
-.kbnTopNavMenu__wrapper {
-  z-index: 5;
+.kbnTopNavMenu {
+  @include kbnThemeStyle('v7') {
+    margin-right: $euiSizeXS;
+  }
 
-  .kbnTopNavMenu {
-    padding: $euiSizeS 0;
-
-    .kbnTopNavItemEmphasized {
-      padding: 0 $euiSizeS;
+  @include kbnThemeStyle('v8') {
+    button:last-child {
+      margin-right: 0;
     }
   }
+}
 
-  .kbnTopNavMenu-isFullScreen {
-    padding: 0;
-  }
+.kbnTopNavMenu__badgeWrapper {
+  display: flex;
+  align-items: baseline;
+}
+
+.kbnTopNavMenu__badgeGroup {
+  margin-right: $euiSizeM;
 }

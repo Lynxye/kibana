@@ -1,17 +1,19 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import expect from '@kbn/expect';
 
 import { FtrProviderContext } from '../../ftr_provider_context';
-import { MlCommon } from './common';
+import { MlCommonUI } from './common_ui';
 import { MlCustomUrls } from './custom_urls';
 
 export function MachineLearningJobWizardCommonProvider(
   { getService }: FtrProviderContext,
-  mlCommon: MlCommon,
+  mlCommonUI: MlCommonUI,
   customUrls: MlCustomUrls
 ) {
   const comboBox = getService('comboBox');
@@ -128,7 +130,7 @@ export function MachineLearningJobWizardCommonProvider(
     },
 
     async setBucketSpan(bucketSpan: string) {
-      await mlCommon.setValueWithChecks('mlJobWizardInputBucketSpan', bucketSpan, {
+      await mlCommonUI.setValueWithChecks('mlJobWizardInputBucketSpan', bucketSpan, {
         clearWithKeyboard: true,
         typeCharByChar: true,
       });
@@ -148,7 +150,7 @@ export function MachineLearningJobWizardCommonProvider(
     },
 
     async setJobId(jobId: string) {
-      await mlCommon.setValueWithChecks('mlJobWizardInputJobId', jobId, {
+      await mlCommonUI.setValueWithChecks('mlJobWizardInputJobId', jobId, {
         clearWithKeyboard: true,
       });
       await this.assertJobIdValue(jobId);
@@ -169,7 +171,7 @@ export function MachineLearningJobWizardCommonProvider(
     },
 
     async setJobDescription(jobDescription: string) {
-      await mlCommon.setValueWithChecks('mlJobWizardInputJobDescription', jobDescription, {
+      await mlCommonUI.setValueWithChecks('mlJobWizardInputJobDescription', jobDescription, {
         clearWithKeyboard: true,
       });
       await this.assertJobDescriptionValue(jobDescription);
@@ -219,11 +221,11 @@ export function MachineLearningJobWizardCommonProvider(
 
     async addCalendar(calendarId: string) {
       await this.ensureAdditionalSettingsSectionOpen();
-      await comboBox.setCustom('mlJobWizardComboBoxCalendars > comboBoxInput', calendarId);
+      await comboBox.set('mlJobWizardComboBoxCalendars > comboBoxInput', calendarId);
       const actualCalendarSelection = await this.getSelectedCalendars();
       expect(actualCalendarSelection).to.contain(
         calendarId,
-        `Expected calendar selection to conatin '${calendarId}' (got '${actualCalendarSelection}')`
+        `Expected calendar selection to contain '${calendarId}' (got '${actualCalendarSelection}')`
       );
     },
 
@@ -335,6 +337,37 @@ export function MachineLearningJobWizardCommonProvider(
       }
     },
 
+    async assertStartDatafeedSwitchExists() {
+      const subj = 'mlJobWizardStartDatafeedCheckbox';
+      await testSubjects.existOrFail(subj, { allowHidden: true });
+    },
+
+    async getStartDatafeedSwitchCheckedState(): Promise<boolean> {
+      const subj = 'mlJobWizardStartDatafeedCheckbox';
+      const isSelected = await testSubjects.getAttribute(subj, 'aria-checked');
+      return isSelected === 'true';
+    },
+
+    async assertStartDatafeedSwitchCheckedState(expectedValue: boolean) {
+      const actualCheckedState = await this.getStartDatafeedSwitchCheckedState();
+      expect(actualCheckedState).to.eql(
+        expectedValue,
+        `Expected start datafeed switch to be '${expectedValue ? 'enabled' : 'disabled'}' (got '${
+          actualCheckedState ? 'enabled' : 'disabled'
+        }')`
+      );
+    },
+
+    async toggleStartDatafeedSwitch(toggle: boolean) {
+      const subj = 'mlJobWizardStartDatafeedCheckbox';
+      if ((await this.getStartDatafeedSwitchCheckedState()) !== toggle) {
+        await retry.tryForTime(5 * 1000, async () => {
+          await testSubjects.clickWhenNotDisabled(subj);
+          await this.assertStartDatafeedSwitchCheckedState(toggle);
+        });
+      }
+    },
+
     async assertModelMemoryLimitInputExists(
       sectionOptions: SectionOptions = { withAdvancedSection: true }
     ) {
@@ -372,7 +405,7 @@ export function MachineLearningJobWizardCommonProvider(
         subj = advancedSectionSelector(subj);
       }
       await retry.tryForTime(15 * 1000, async () => {
-        await mlCommon.setValueWithChecks(subj, modelMemoryLimit, { clearWithKeyboard: true });
+        await mlCommonUI.setValueWithChecks(subj, modelMemoryLimit, { clearWithKeyboard: true });
         await this.assertModelMemoryLimitValue(modelMemoryLimit, {
           withAdvancedSection: sectionOptions.withAdvancedSection,
         });
@@ -494,7 +527,7 @@ export function MachineLearningJobWizardCommonProvider(
 
       const expectedIndex = existingCustomUrls.length;
 
-      await customUrls.assertCustomUrlItem(expectedIndex, customUrl.label);
+      await customUrls.assertCustomUrlLabel(expectedIndex, customUrl.label);
     },
 
     async ensureAdvancedSectionOpen() {
@@ -509,6 +542,11 @@ export function MachineLearningJobWizardCommonProvider(
     async createJobAndWaitForCompletion() {
       await testSubjects.clickWhenNotDisabled('mlJobWizardButtonCreateJob');
       await testSubjects.existOrFail('mlJobWizardButtonRunInRealTime', { timeout: 2 * 60 * 1000 });
+    },
+
+    async createJobWithoutDatafeedStart() {
+      await testSubjects.clickWhenNotDisabled('mlJobWizardButtonCreateJob');
+      await testSubjects.existOrFail('mlPageJobManagement');
     },
   };
 }

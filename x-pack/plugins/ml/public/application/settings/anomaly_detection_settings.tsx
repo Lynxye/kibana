@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { FC, Fragment, useContext, useEffect, useState } from 'react';
@@ -25,6 +26,8 @@ import { FormattedMessage } from '@kbn/i18n/react';
 import { AnomalyDetectionSettingsContext } from './anomaly_detection_settings_context';
 import { useNotifications } from '../contexts/kibana';
 import { ml } from '../services/ml_api_service';
+import { ML_PAGES } from '../../../common/constants/ml_url_generator';
+import { useCreateAndNavigateToMlLink } from '../contexts/kibana/use_create_url';
 
 export const AnomalyDetectionSettings: FC = () => {
   const [calendarsCount, setCalendarsCount] = useState(0);
@@ -35,6 +38,10 @@ export const AnomalyDetectionSettings: FC = () => {
   );
 
   const { toasts } = useNotifications();
+  const redirectToCalendarList = useCreateAndNavigateToMlLink(ML_PAGES.CALENDARS_MANAGE);
+  const redirectToNewCalendarPage = useCreateAndNavigateToMlLink(ML_PAGES.CALENDARS_NEW);
+  const redirectToFilterLists = useCreateAndNavigateToMlLink(ML_PAGES.FILTER_LISTS_MANAGE);
+  const redirectToNewFilterListPage = useCreateAndNavigateToMlLink(ML_PAGES.FILTER_LISTS_NEW);
 
   useEffect(() => {
     loadSummaryStats();
@@ -126,7 +133,7 @@ export const AnomalyDetectionSettings: FC = () => {
                   flush="left"
                   size="l"
                   color="primary"
-                  href="#/settings/calendars_list"
+                  onClick={redirectToCalendarList}
                   isDisabled={canGetCalendars === false}
                 >
                   <FormattedMessage
@@ -141,7 +148,7 @@ export const AnomalyDetectionSettings: FC = () => {
                   flush="left"
                   size="l"
                   color="primary"
-                  href="#/settings/calendars_list/new_calendar"
+                  onClick={redirectToNewCalendarPage}
                   isDisabled={canCreateCalendar === false}
                 >
                   <FormattedMessage
@@ -167,7 +174,7 @@ export const AnomalyDetectionSettings: FC = () => {
                 <p>
                   <FormattedMessage
                     id="xpack.ml.settings.anomalyDetection.filterListsText"
-                    defaultMessage=" Filter lists contain values that you can use to include or exclude events from the machine learning analysis."
+                    defaultMessage="Filter lists contain values that you can use to include or exclude events from the machine learning analysis."
                   />
                 </p>
               </EuiTextColor>
@@ -194,7 +201,7 @@ export const AnomalyDetectionSettings: FC = () => {
                   flush="left"
                   size="l"
                   color="primary"
-                  href="#/settings/filter_lists"
+                  onClick={redirectToFilterLists}
                   isDisabled={canGetFilters === false}
                 >
                   <FormattedMessage
@@ -208,7 +215,7 @@ export const AnomalyDetectionSettings: FC = () => {
                   data-test-subj="mlFilterListsCreateButton"
                   size="l"
                   color="primary"
-                  href="#/settings/filter_lists/new_filter_list"
+                  onClick={redirectToNewFilterListPage}
                   isDisabled={canCreateFilter === false}
                 >
                   <FormattedMessage

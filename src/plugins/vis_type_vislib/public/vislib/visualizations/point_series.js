@@ -1,20 +1,9 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import d3 from 'd3';
@@ -25,10 +14,10 @@ import { Tooltip } from '../components/tooltip';
 import { Chart } from './_chart';
 import { TimeMarker } from './time_marker';
 import { seriesTypes } from './point_series/series_types';
-import touchdownTmplHtml from '../partials/touchdown.tmpl.html';
+import { touchdownTemplate } from '../partials/touchdown_template';
 
 const seriTypes = seriesTypes;
-const touchdownTmpl = _.template(touchdownTmplHtml);
+
 /**
  * Line Chart Visualization
  *
@@ -40,10 +29,10 @@ const touchdownTmpl = _.template(touchdownTmplHtml);
  * @param chartData {Object} Elasticsearch query results for this specific chart
  */
 export class PointSeries extends Chart {
-  constructor(handler, chartEl, chartData, deps) {
-    super(handler, chartEl, chartData, deps);
+  constructor(handler, chartEl, chartData, uiSettings) {
+    super(handler, chartEl, chartData, uiSettings);
 
-    this.deps = deps;
+    this.uiSettings = uiSettings;
     this.handler = handler;
     this.chartData = chartData;
     this.chartEl = chartEl;
@@ -180,7 +169,7 @@ export class PointSeries extends Chart {
     }
 
     function textFormatter() {
-      return touchdownTmpl(callPlay(d3.event));
+      return touchdownTemplate(callPlay(d3.event));
     }
 
     const endzoneTT = new Tooltip('endzones', this.handler.el, textFormatter, null);
@@ -246,7 +235,13 @@ export class PointSeries extends Chart {
           if (!seriArgs.show) return;
           const SeriClass =
             seriTypes[seriArgs.type || self.handler.visConfig.get('chart.type')] || seriTypes.line;
-          const series = new SeriClass(self.handler, svg, data.series[i], seriArgs, self.deps);
+          const series = new SeriClass(
+            self.handler,
+            svg,
+            data.series[i],
+            seriArgs,
+            self.uiSettings
+          );
           series.events = self.events;
           svg.call(series.draw());
           self.series.push(series);

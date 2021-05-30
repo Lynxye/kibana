@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
@@ -11,20 +12,20 @@ import { FunctionFactory } from '../../../types';
 
 export const help: FunctionHelp<FunctionFactory<typeof joinRows>> = {
   help: i18n.translate('xpack.canvas.functions.joinRowsHelpText', {
-    defaultMessage: 'Join values from rows in a datatable into a string',
+    defaultMessage: 'Concatenates values from rows in a `datatable` into a single string.',
   }),
   args: {
     column: i18n.translate('xpack.canvas.functions.joinRows.args.columnHelpText', {
-      defaultMessage: 'The column to join values from',
+      defaultMessage: 'The column or field from which to extract the values.',
     }),
     separator: i18n.translate('xpack.canvas.functions.joinRows.args.separatorHelpText', {
-      defaultMessage: 'The separator to use between row values',
+      defaultMessage: 'The delimiter to insert between each extracted value.',
     }),
     quote: i18n.translate('xpack.canvas.functions.joinRows.args.quoteHelpText', {
-      defaultMessage: 'The quote character around values',
+      defaultMessage: 'The quote character to wrap around each extracted value.',
     }),
     distinct: i18n.translate('xpack.canvas.functions.joinRows.args.distinctHelpText', {
-      defaultMessage: 'Removes duplicate values?',
+      defaultMessage: 'Extract only unique values?',
     }),
   },
 };

@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 const path = require('path');
@@ -39,7 +40,6 @@ module.exports = {
     'jquery',
     'lodash',
     'markdown-it',
-    'mocha',
     'monaco-editor',
     'prop-types',
     'react-ace',
@@ -77,12 +77,6 @@ module.exports = {
     filename: 'dll.js',
     library: DLL_NAME,
   },
-  // Include a require alias for legacy UI code and styles
-  resolve: {
-    alias: {
-      ui: path.resolve(KIBANA_ROOT, 'src/legacy/ui/public'),
-    },
-  },
   module: {
     rules: [
       {
@@ -101,22 +95,6 @@ module.exports = {
               flags: 'g',
             },
           },
-        ],
-      },
-      {
-        test: /\.less$/,
-        use: [
-          { loader: 'style-loader' },
-          { loader: 'css-loader', options: { importLoaders: 2 } },
-          {
-            loader: 'postcss-loader',
-            options: {
-              config: {
-                path: require.resolve('@kbn/optimizer/postcss.config.js'),
-              },
-            },
-          },
-          { loader: 'less-loader' },
         ],
       },
       {

@@ -1,20 +1,9 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import { mockDiscover, mockPackage } from './plugins_service.test.mocks';
@@ -22,13 +11,13 @@ import { mockDiscover, mockPackage } from './plugins_service.test.mocks';
 import { resolve, join } from 'path';
 import { BehaviorSubject, from } from 'rxjs';
 import { schema } from '@kbn/config-schema';
-import { createAbsolutePathSerializer } from '@kbn/dev-utils';
+import { createAbsolutePathSerializer, REPO_ROOT } from '@kbn/dev-utils';
 
 import { ConfigPath, ConfigService, Env } from '../config';
-import { rawConfigServiceMock } from '../config/raw_config_service.mock';
-import { getEnvOptions } from '../config/__mocks__/env';
+import { rawConfigServiceMock, getEnvOptions } from '../config/mocks';
 import { coreMock } from '../mocks';
 import { loggingSystemMock } from '../logging/logging_system.mock';
+import { environmentServiceMock } from '../environment/environment_service.mock';
 import { PluginDiscoveryError } from './discovery';
 import { PluginWrapper } from './plugin';
 import { PluginsService } from './plugins_service';
@@ -45,6 +34,7 @@ let configService: ConfigService;
 let coreId: symbol;
 let env: Env;
 let mockPluginSystem: jest.Mocked<PluginsSystem>;
+let environmentSetup: ReturnType<typeof environmentServiceMock.createSetupContract>;
 
 const setupDeps = coreMock.createInternalSetup();
 const logger = loggingSystemMock.create();
@@ -88,7 +78,7 @@ const createPlugin = (
     manifest: {
       id,
       version,
-      configPath: `${configPath}${disabled ? '-disabled' : ''}`,
+      configPath: disabled ? configPath.concat('-disabled') : configPath,
       kibanaVersion,
       requiredPlugins,
       requiredBundles,
@@ -101,33 +91,40 @@ const createPlugin = (
   });
 };
 
+async function testSetup() {
+  mockPackage.raw = {
+    branch: 'feature-v1',
+    version: 'v1',
+    build: {
+      distributable: true,
+      number: 100,
+      sha: 'feature-v1-build-sha',
+    },
+  };
+
+  coreId = Symbol('core');
+  env = Env.createDefault(REPO_ROOT, getEnvOptions());
+
+  config$ = new BehaviorSubject<Record<string, any>>({ plugins: { initialize: true } });
+  const rawConfigService = rawConfigServiceMock.create({ rawConfig$: config$ });
+  configService = new ConfigService(rawConfigService, env, logger);
+  await configService.setSchema(config.path, config.schema);
+  pluginsService = new PluginsService({ coreId, env, logger, configService });
+
+  [mockPluginSystem] = MockPluginsSystem.mock.instances as any;
+  mockPluginSystem.uiPlugins.mockReturnValue(new Map());
+  mockPluginSystem.getPlugins.mockReturnValue([]);
+
+  environmentSetup = environmentServiceMock.createSetupContract();
+}
+
+afterEach(() => {
+  jest.clearAllMocks();
+});
+
 describe('PluginsService', () => {
   beforeEach(async () => {
-    mockPackage.raw = {
-      branch: 'feature-v1',
-      version: 'v1',
-      build: {
-        distributable: true,
-        number: 100,
-        sha: 'feature-v1-build-sha',
-      },
-    };
-
-    coreId = Symbol('core');
-    env = Env.createDefault(getEnvOptions());
-
-    config$ = new BehaviorSubject<Record<string, any>>({ plugins: { initialize: true } });
-    const rawConfigService = rawConfigServiceMock.create({ rawConfig$: config$ });
-    configService = new ConfigService(rawConfigService, env, logger);
-    await configService.setSchema(config.path, config.schema);
-    pluginsService = new PluginsService({ coreId, env, logger, configService });
-
-    [mockPluginSystem] = MockPluginsSystem.mock.instances as any;
-    mockPluginSystem.uiPlugins.mockReturnValue(new Map());
-  });
-
-  afterEach(() => {
-    jest.clearAllMocks();
+    await testSetup();
   });
 
   describe('#discover()', () => {
@@ -137,7 +134,8 @@ describe('PluginsService', () => {
         plugin$: from([]),
       });
 
-      await expect(pluginsService.discover()).rejects.toMatchInlineSnapshot(`
+      await expect(pluginsService.discover({ environment: environmentSetup })).rejects
+        .toMatchInlineSnapshot(`
               [Error: Failed to initialize plugins:
               	Invalid JSON (invalid-manifest, path-1)]
             `);
@@ -158,7 +156,8 @@ describe('PluginsService', () => {
         plugin$: from([]),
       });
 
-      await expect(pluginsService.discover()).rejects.toMatchInlineSnapshot(`
+      await expect(pluginsService.discover({ environment: environmentSetup })).rejects
+        .toMatchInlineSnapshot(`
               [Error: Failed to initialize plugins:
               	Incompatible version (incompatible-version, path-3)]
             `);
@@ -192,7 +191,9 @@ describe('PluginsService', () => {
         ]),
       });
 
-      await expect(pluginsService.discover()).rejects.toMatchInlineSnapshot(
+      await expect(
+        pluginsService.discover({ environment: environmentSetup })
+      ).rejects.toMatchInlineSnapshot(
         `[Error: Plugin with id "conflicting-id" is already registered!]`
       );
 
@@ -253,7 +254,7 @@ describe('PluginsService', () => {
         ]),
       });
 
-      await pluginsService.discover();
+      await pluginsService.discover({ environment: environmentSetup });
       const setup = await pluginsService.setup(setupDeps);
 
       expect(setup.contracts).toBeInstanceOf(Map);
@@ -300,7 +301,7 @@ describe('PluginsService', () => {
         plugin$: from([firstPlugin, secondPlugin]),
       });
 
-      const { pluginTree } = await pluginsService.discover();
+      const { pluginTree } = await pluginsService.discover({ environment: environmentSetup });
       expect(pluginTree).toBeUndefined();
 
       expect(mockDiscover).toHaveBeenCalledTimes(1);
@@ -336,7 +337,7 @@ describe('PluginsService', () => {
         plugin$: from([firstPlugin, secondPlugin, thirdPlugin, lastPlugin, missingDepsPlugin]),
       });
 
-      const { pluginTree } = await pluginsService.discover();
+      const { pluginTree } = await pluginsService.discover({ environment: environmentSetup });
       expect(pluginTree).toBeUndefined();
 
       expect(mockDiscover).toHaveBeenCalledTimes(1);
@@ -369,11 +370,10 @@ describe('PluginsService', () => {
         plugin$: from([firstPlugin, secondPlugin]),
       });
 
-      await pluginsService.discover();
+      await pluginsService.discover({ environment: environmentSetup });
       expect(mockPluginSystem.addPlugin).toHaveBeenCalledTimes(2);
       expect(mockPluginSystem.addPlugin).toHaveBeenCalledWith(firstPlugin);
       expect(mockPluginSystem.addPlugin).toHaveBeenCalledWith(secondPlugin);
-
       expect(mockDiscover).toHaveBeenCalledTimes(1);
       expect(mockDiscover).toHaveBeenCalledWith(
         {
@@ -386,7 +386,8 @@ describe('PluginsService', () => {
             resolve(process.cwd(), '..', 'kibana-extra'),
           ],
         },
-        { coreId, env, logger, configService }
+        { coreId, env, logger, configService },
+        { uuid: 'uuid' }
       );
 
       const logs = loggingSystemMock.collect(logger);
@@ -417,7 +418,7 @@ describe('PluginsService', () => {
           }),
         ]),
       });
-      await pluginsService.discover();
+      await pluginsService.discover({ environment: environmentSetup });
       expect(configService.setSchema).toBeCalledWith('path', configSchema);
     });
 
@@ -448,11 +449,109 @@ describe('PluginsService', () => {
           }),
         ]),
       });
-      await pluginsService.discover();
+      await pluginsService.discover({ environment: environmentSetup });
       expect(configService.addDeprecationProvider).toBeCalledWith(
         'config-path',
         deprecationProvider
       );
+    });
+
+    it('returns the paths of the plugins', async () => {
+      const pluginA = createPlugin('A', { path: '/plugin-A-path', configPath: 'pathA' });
+      const pluginB = createPlugin('B', { path: '/plugin-B-path', configPath: 'pathB' });
+
+      mockDiscover.mockReturnValue({
+        error$: from([]),
+        plugin$: from([]),
+      });
+
+      mockPluginSystem.getPlugins.mockReturnValue([pluginA, pluginB]);
+
+      const { pluginPaths } = await pluginsService.discover({ environment: environmentSetup });
+
+      expect(pluginPaths).toEqual(['/plugin-A-path', '/plugin-B-path']);
+    });
+
+    it('ppopulates pluginConfigUsageDescriptors with plugins exposeToUsage property', async () => {
+      const pluginA = createPlugin('plugin-with-expose-usage', {
+        path: 'plugin-with-expose-usage',
+        configPath: 'pathA',
+      });
+
+      jest.doMock(
+        join('plugin-with-expose-usage', 'server'),
+        () => ({
+          config: {
+            exposeToUsage: {
+              test: true,
+              nested: {
+                prop: true,
+              },
+            },
+            schema: schema.maybe(schema.any()),
+          },
+        }),
+        {
+          virtual: true,
+        }
+      );
+
+      const pluginB = createPlugin('plugin-with-array-configPath', {
+        path: 'plugin-with-array-configPath',
+        configPath: ['plugin', 'pathB'],
+      });
+
+      jest.doMock(
+        join('plugin-with-array-configPath', 'server'),
+        () => ({
+          config: {
+            exposeToUsage: {
+              test: true,
+            },
+            schema: schema.maybe(schema.any()),
+          },
+        }),
+        {
+          virtual: true,
+        }
+      );
+
+      jest.doMock(
+        join('plugin-without-expose', 'server'),
+        () => ({
+          config: {
+            schema: schema.maybe(schema.any()),
+          },
+        }),
+        {
+          virtual: true,
+        }
+      );
+
+      const pluginC = createPlugin('plugin-without-expose', {
+        path: 'plugin-without-expose',
+        configPath: 'pathC',
+      });
+
+      mockDiscover.mockReturnValue({
+        error$: from([]),
+        plugin$: from([pluginA, pluginB, pluginC]),
+      });
+
+      await pluginsService.discover({ environment: environmentSetup });
+
+      // eslint-disable-next-line dot-notation
+      expect(pluginsService['pluginConfigUsageDescriptors']).toMatchInlineSnapshot(`
+        Map {
+          "pathA" => Object {
+            "nested.prop": true,
+            "test": true,
+          },
+          "plugin.pathB" => Object {
+            "test": true,
+          },
+        }
+      `);
     });
   });
 
@@ -496,7 +595,7 @@ describe('PluginsService', () => {
       });
       mockPluginSystem.uiPlugins.mockReturnValue(new Map([pluginToDiscoveredEntry(plugin)]));
 
-      const { uiPlugins } = await pluginsService.discover();
+      const { uiPlugins } = await pluginsService.discover({ environment: environmentSetup });
       const uiConfig$ = uiPlugins.browserConfigs.get('plugin-with-expose');
       expect(uiConfig$).toBeDefined();
 
@@ -532,7 +631,7 @@ describe('PluginsService', () => {
       });
       mockPluginSystem.uiPlugins.mockReturnValue(new Map([pluginToDiscoveredEntry(plugin)]));
 
-      const { uiPlugins } = await pluginsService.discover();
+      const { uiPlugins } = await pluginsService.discover({ environment: environmentSetup });
       expect([...uiPlugins.browserConfigs.entries()]).toHaveLength(0);
     });
   });
@@ -544,12 +643,12 @@ describe('PluginsService', () => {
         plugin$: from([
           createPlugin('plugin-1', {
             path: 'path-1',
-            version: 'some-version',
+            version: 'version-1',
             configPath: 'plugin1',
           }),
           createPlugin('plugin-2', {
             path: 'path-2',
-            version: 'some-version',
+            version: 'version-2',
             configPath: 'plugin2',
           }),
         ]),
@@ -559,30 +658,38 @@ describe('PluginsService', () => {
     });
 
     describe('uiPlugins.internal', () => {
-      it('includes disabled plugins', async () => {
+      it('contains internal properties for plugins', async () => {
         config$.next({ plugins: { initialize: true }, plugin1: { enabled: false } });
-        const { uiPlugins } = await pluginsService.discover();
+        const { uiPlugins } = await pluginsService.discover({ environment: environmentSetup });
         expect(uiPlugins.internal).toMatchInlineSnapshot(`
           Map {
             "plugin-1" => Object {
               "publicAssetsDir": <absolute path>/path-1/public/assets,
               "publicTargetDir": <absolute path>/path-1/target/public,
               "requiredBundles": Array [],
+              "version": "version-1",
             },
             "plugin-2" => Object {
               "publicAssetsDir": <absolute path>/path-2/public/assets,
               "publicTargetDir": <absolute path>/path-2/target/public,
               "requiredBundles": Array [],
+              "version": "version-2",
             },
           }
         `);
+      });
+
+      it('includes disabled plugins', async () => {
+        config$.next({ plugins: { initialize: true }, plugin1: { enabled: false } });
+        const { uiPlugins } = await pluginsService.discover({ environment: environmentSetup });
+        expect([...uiPlugins.internal.keys()].sort()).toEqual(['plugin-1', 'plugin-2']);
       });
     });
 
     describe('plugin initialization', () => {
       it('does initialize if plugins.initialize is true', async () => {
         config$.next({ plugins: { initialize: true } });
-        await pluginsService.discover();
+        await pluginsService.discover({ environment: environmentSetup });
         const { initialized } = await pluginsService.setup(setupDeps);
         expect(mockPluginSystem.setupPlugins).toHaveBeenCalled();
         expect(initialized).toBe(true);
@@ -590,11 +697,25 @@ describe('PluginsService', () => {
 
       it('does not initialize if plugins.initialize is false', async () => {
         config$.next({ plugins: { initialize: false } });
-        await pluginsService.discover();
+        await pluginsService.discover({ environment: environmentSetup });
         const { initialized } = await pluginsService.setup(setupDeps);
         expect(mockPluginSystem.setupPlugins).not.toHaveBeenCalled();
         expect(initialized).toBe(false);
       });
+    });
+  });
+
+  describe('#getExposedPluginConfigsToUsage', () => {
+    it('returns pluginConfigUsageDescriptors', () => {
+      // eslint-disable-next-line dot-notation
+      pluginsService['pluginConfigUsageDescriptors'].set('test', { enabled: true });
+      expect(pluginsService.getExposedPluginConfigsToUsage()).toMatchInlineSnapshot(`
+        Map {
+          "test" => Object {
+            "enabled": true,
+          },
+        }
+      `);
     });
   });
 

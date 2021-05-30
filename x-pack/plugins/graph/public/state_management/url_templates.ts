@@ -1,12 +1,14 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import actionCreatorFactory from 'typescript-fsa';
 import { reducerWithInitialState } from 'typescript-fsa-reducers/dist';
 import { i18n } from '@kbn/i18n';
+import { modifyUrl } from '@kbn/std';
 import rison from 'rison-node';
 import { takeEvery, select } from 'redux-saga/effects';
 import { format, parse } from 'url';
@@ -17,7 +19,6 @@ import { setDatasource, IndexpatternDatasource, requestDatasource } from './data
 import { outlinkEncoders } from '../helpers/outlink_encoders';
 import { urlTemplatePlaceholder } from '../helpers/url_template';
 import { matchesOne } from './helpers';
-import { modifyUrl } from '../../../../../src/core/public';
 
 const actionCreator = actionCreatorFactory('x-pack/graph/urlTemplates');
 

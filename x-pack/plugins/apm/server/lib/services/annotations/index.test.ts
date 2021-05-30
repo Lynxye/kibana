@@ -1,16 +1,22 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
-import { getDerivedServiceAnnotations } from './get_derived_service_annotations';
+
 import {
-  SearchParamsMock,
+  ESSearchRequest,
+  ESSearchResponse,
+} from '../../../../../../../typings/elasticsearch';
+import {
   inspectSearchParams,
-} from '../../../../public/utils/testHelpers';
+  SearchParamsMock,
+} from '../../../utils/test_helpers';
+import { getDerivedServiceAnnotations } from './get_derived_service_annotations';
+import multipleVersions from './__fixtures__/multiple_versions.json';
 import noVersions from './__fixtures__/no_versions.json';
 import oneVersion from './__fixtures__/one_version.json';
-import multipleVersions from './__fixtures__/multiple_versions.json';
 import versionsFirstSeen from './__fixtures__/versions_first_seen.json';
 
 describe('getServiceAnnotations', () => {
@@ -28,9 +34,17 @@ describe('getServiceAnnotations', () => {
             setup,
             serviceName: 'foo',
             environment: 'bar',
+            searchAggregatedTransactions: false,
           }),
         {
-          mockResponse: () => noVersions,
+          mockResponse: () =>
+            noVersions as ESSearchResponse<
+              unknown,
+              ESSearchRequest,
+              {
+                restTotalHitsAsInt: false;
+              }
+            >,
         }
       );
 
@@ -46,9 +60,17 @@ describe('getServiceAnnotations', () => {
             setup,
             serviceName: 'foo',
             environment: 'bar',
+            searchAggregatedTransactions: false,
           }),
         {
-          mockResponse: () => oneVersion,
+          mockResponse: () =>
+            oneVersion as ESSearchResponse<
+              unknown,
+              ESSearchRequest,
+              {
+                restTotalHitsAsInt: false;
+              }
+            >,
         }
       );
 
@@ -69,9 +91,17 @@ describe('getServiceAnnotations', () => {
             setup,
             serviceName: 'foo',
             environment: 'bar',
+            searchAggregatedTransactions: false,
           }),
         {
-          mockResponse: () => responses.shift(),
+          mockResponse: () =>
+            (responses.shift() as unknown) as ESSearchResponse<
+              unknown,
+              ESSearchRequest,
+              {
+                restTotalHitsAsInt: false;
+              }
+            >,
         }
       );
 
@@ -81,13 +111,13 @@ describe('getServiceAnnotations', () => {
         {
           id: '8.0.0',
           text: '8.0.0',
-          '@timestamp': 1.5281138e12,
+          '@timestamp': new Date('2018-06-04T12:00:00.000Z').getTime(),
           type: 'version',
         },
         {
           id: '7.5.0',
           text: '7.5.0',
-          '@timestamp': 1.5281138e12,
+          '@timestamp': new Date('2018-06-04T12:00:00.000Z').getTime(),
           type: 'version',
         },
       ]);

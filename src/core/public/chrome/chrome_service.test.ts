@@ -1,20 +1,9 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import { shallow } from 'enzyme';
@@ -363,6 +352,25 @@ describe('start', () => {
     });
   });
 
+  describe('breadcrumbsAppendExtension$', () => {
+    it('updates the breadcrumbsAppendExtension$', async () => {
+      const { chrome, service } = await start();
+      const promise = chrome.getBreadcrumbsAppendExtension$().pipe(toArray()).toPromise();
+
+      chrome.setBreadcrumbsAppendExtension({ content: (element) => () => {} });
+      service.stop();
+
+      await expect(promise).resolves.toMatchInlineSnapshot(`
+              Array [
+                undefined,
+                Object {
+                  "content": [Function],
+                },
+              ]
+            `);
+    });
+  });
+
   describe('custom nav link', () => {
     it('updates/emits the current custom nav link', async () => {
       const { chrome, service } = await start();
@@ -403,6 +411,59 @@ describe('start', () => {
                 undefined,
               ]
             `);
+    });
+  });
+
+  describe('erase chrome fields', () => {
+    it('while switching an app', async () => {
+      const startDeps = defaultStartDeps([new FakeApp('alpha')]);
+      const { navigateToApp } = startDeps.application;
+      const { chrome, service } = await start({ startDeps });
+
+      const helpExtensionPromise = chrome.getHelpExtension$().pipe(toArray()).toPromise();
+      const breadcrumbsPromise = chrome.getBreadcrumbs$().pipe(toArray()).toPromise();
+      const badgePromise = chrome.getBadge$().pipe(toArray()).toPromise();
+      const docTitleResetSpy = jest.spyOn(chrome.docTitle, 'reset');
+
+      const promises = Promise.all([helpExtensionPromise, breadcrumbsPromise, badgePromise]);
+
+      chrome.setHelpExtension({ appName: 'App name' });
+      chrome.setBreadcrumbs([{ text: 'App breadcrumb' }]);
+      chrome.setBadge({ text: 'App badge', tooltip: 'App tooltip' });
+
+      navigateToApp('alpha');
+
+      service.stop();
+
+      expect(docTitleResetSpy).toBeCalledTimes(1);
+      await expect(promises).resolves.toMatchInlineSnapshot(`
+                      Array [
+                        Array [
+                          undefined,
+                          Object {
+                            "appName": "App name",
+                          },
+                          undefined,
+                        ],
+                        Array [
+                          Array [],
+                          Array [
+                            Object {
+                              "text": "App breadcrumb",
+                            },
+                          ],
+                          Array [],
+                        ],
+                        Array [
+                          undefined,
+                          Object {
+                            "text": "App badge",
+                            "tooltip": "App tooltip",
+                          },
+                          undefined,
+                        ],
+                      ]
+                  `);
     });
   });
 });

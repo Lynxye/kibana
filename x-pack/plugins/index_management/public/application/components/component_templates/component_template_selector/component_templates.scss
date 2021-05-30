@@ -1,5 +1,4 @@
 
-
 /**
  * [1] Will center vertically the empty search result
  */
@@ -8,6 +7,7 @@ $heightHeader: $euiSizeL * 2;
 
 .componentTemplates {
   border: $euiBorderThin;
+  border-radius: $euiBorderRadius;
   border-top: none;
   height: 100%;
 

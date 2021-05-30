@@ -1,10 +1,11 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import React, { Fragment } from 'react';
+import React from 'react';
 import { i18n } from '@kbn/i18n';
 import { find } from 'lodash';
 import { uiRoutes } from '../../../angular/helpers/routes';
@@ -13,6 +14,7 @@ import template from './index.html';
 import { ApmServerInstances } from '../../../components/apm/instances';
 import { MonitoringViewBaseEuiTableController } from '../..';
 import { SetupModeRenderer } from '../../../components/renderers';
+import { SetupModeContext } from '../../../components/setup_mode/setup_mode_context';
 import { APM_SYSTEM_ID, CODE_PATH_APM } from '../../../../common/constants';
 
 uiRoutes.when('/apm/instances', {
@@ -35,8 +37,11 @@ uiRoutes.when('/apm/instances', {
         title: i18n.translate('xpack.monitoring.apm.instances.routeTitle', {
           defaultMessage: '{apm} - Instances',
           values: {
-            apm: 'APM',
+            apm: 'APM server',
           },
+        }),
+        pageTitle: i18n.translate('xpack.monitoring.apm.instances.pageTitle', {
+          defaultMessage: 'APM server instances',
         }),
         storageKey: 'apm.instances',
         api: `../api/monitoring/v1/clusters/${globalState.cluster_uuid}/apm/instances`,
@@ -48,16 +53,15 @@ uiRoutes.when('/apm/instances', {
 
       this.scope = $scope;
       this.injector = $injector;
+      this.onTableChangeRender = this.renderComponent;
 
       $scope.$watch(
         () => this.data,
-        (data) => {
-          this.renderReact(data);
-        }
+        () => this.renderComponent()
       );
     }
 
-    renderReact(data) {
+    renderComponent() {
       const { pagination, sorting, onTableChange } = this;
 
       const component = (
@@ -66,7 +70,7 @@ uiRoutes.when('/apm/instances', {
           injector={this.injector}
           productName={APM_SYSTEM_ID}
           render={({ setupMode, flyoutComponent, bottomBarComponent }) => (
-            <Fragment>
+            <SetupModeContext.Provider value={{ setupModeSupported: true }}>
               {flyoutComponent}
               <ApmServerInstances
                 setupMode={setupMode}
@@ -74,15 +78,15 @@ uiRoutes.when('/apm/instances', {
                   pagination,
                   sorting,
                   onTableChange,
-                  data,
+                  data: this.data,
                 }}
               />
               {bottomBarComponent}
-            </Fragment>
+            </SetupModeContext.Provider>
           )}
         />
       );
-      super.renderReact(component);
+      this.renderReact(component);
     }
   },
 });

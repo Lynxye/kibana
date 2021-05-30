@@ -1,13 +1,23 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { RuleAlertAction, RuleType } from '../../../../../common/detection_engine/types';
-import { AlertAction } from '../../../../../../alerts/common';
+import type { List } from '@kbn/securitysolution-io-ts-list-types';
+import {
+  RiskScoreMapping,
+  ThreatIndex,
+  ThreatMapping,
+  Threats,
+  Type,
+  SeverityMapping,
+  Severity,
+} from '@kbn/securitysolution-io-ts-alerting-types';
+import { RuleAlertAction } from '../../../../../common/detection_engine/types';
+import { AlertAction } from '../../../../../../alerting/common';
 import { Filter } from '../../../../../../../../src/plugins/data/common';
-import { FormData, FormHook } from '../../../../shared_imports';
 import { FieldValueQueryBar } from '../../../components/rules/query_bar';
 import { FieldValueTimeline } from '../../../components/rules/pick_timeline';
 import { FieldValueThreshold } from '../../../components/rules/threshold_input';
@@ -15,16 +25,14 @@ import {
   Author,
   BuildingBlockType,
   License,
-  RiskScoreMapping,
   RuleNameOverride,
-  SeverityMapping,
+  SortOrder,
   TimestampOverride,
 } from '../../../../../common/detection_engine/schemas/common/schemas';
-import { List } from '../../../../../common/detection_engine/schemas/types';
 
 export interface EuiBasicTableSortTypes {
   field: string;
-  direction: 'asc' | 'desc';
+  direction: SortOrder;
 }
 
 export interface EuiBasicTableOnChange {
@@ -35,34 +43,51 @@ export interface EuiBasicTableOnChange {
   sort?: EuiBasicTableSortTypes;
 }
 
+export type RuleStatusType = 'passive' | 'active' | 'valid';
+
 export enum RuleStep {
   defineRule = 'define-rule',
   aboutRule = 'about-rule',
   scheduleRule = 'schedule-rule',
   ruleActions = 'rule-actions',
 }
-export type RuleStatusType = 'passive' | 'active' | 'valid';
+export type RuleStepsOrder = [
+  RuleStep.defineRule,
+  RuleStep.aboutRule,
+  RuleStep.scheduleRule,
+  RuleStep.ruleActions
+];
 
-export interface RuleStepData {
-  data: unknown;
-  isValid: boolean;
+export interface RuleStepsData {
+  [RuleStep.defineRule]: DefineStepRule;
+  [RuleStep.aboutRule]: AboutStepRule;
+  [RuleStep.scheduleRule]: ScheduleStepRule;
+  [RuleStep.ruleActions]: ActionsStepRule;
 }
+
+export type RuleStepsFormData = {
+  [K in keyof RuleStepsData]: {
+    data: RuleStepsData[K] | undefined;
+    isValid: boolean;
+  };
+};
+
+export type RuleStepsFormHooks = {
+  [K in keyof RuleStepsData]: () => Promise<RuleStepsFormData[K] | undefined>;
+};
 
 export interface RuleStepProps {
   addPadding?: boolean;
   descriptionColumns?: 'multi' | 'single' | 'singleSplit';
-  setStepData?: (step: RuleStep, data: unknown, isValid: boolean) => void;
   isReadOnlyView: boolean;
   isUpdateView?: boolean;
   isLoading: boolean;
+  onSubmit?: () => void;
   resizeParentContainer?: (height: number) => void;
-  setForm?: (step: RuleStep, form: FormHook<FormData>) => void;
+  setForm?: <K extends keyof RuleStepsFormHooks>(step: K, hook: RuleStepsFormHooks[K]) => void;
 }
 
-interface StepRuleData {
-  isNew: boolean;
-}
-export interface AboutStepRule extends StepRuleData {
+export interface AboutStepRule {
   author: string[];
   name: string;
   description: string;
@@ -76,7 +101,8 @@ export interface AboutStepRule extends StepRuleData {
   ruleNameOverride: string;
   tags: string[];
   timestampOverride: string;
-  threat: IMitreEnterpriseAttack[];
+  threatIndicatorPath?: string;
+  threat: Threats;
   note: string;
 }
 
@@ -86,7 +112,7 @@ export interface AboutStepRuleDetails {
 }
 
 export interface AboutStepSeverity {
-  value: string;
+  value: Severity;
   mapping: SeverityMapping;
   isMappingChecked: boolean;
 }
@@ -97,23 +123,26 @@ export interface AboutStepRiskScore {
   isMappingChecked: boolean;
 }
 
-export interface DefineStepRule extends StepRuleData {
+export interface DefineStepRule {
   anomalyThreshold: number;
   index: string[];
-  machineLearningJobId: string;
+  machineLearningJobId: string[];
   queryBar: FieldValueQueryBar;
-  ruleType: RuleType;
+  ruleType: Type;
   timeline: FieldValueTimeline;
   threshold: FieldValueThreshold;
+  threatIndex: ThreatIndex;
+  threatQueryBar: FieldValueQueryBar;
+  threatMapping: ThreatMapping;
 }
 
-export interface ScheduleStepRule extends StepRuleData {
+export interface ScheduleStepRule {
   interval: string;
   from: string;
   to?: string;
 }
 
-export interface ActionsStepRule extends StepRuleData {
+export interface ActionsStepRule {
   actions: AlertAction[];
   enabled: boolean;
   kibanaSiemAppUrl?: string;
@@ -124,17 +153,26 @@ export interface DefineStepRuleJson {
   anomaly_threshold?: number;
   index?: string[];
   filters?: Filter[];
-  machine_learning_job_id?: string;
+  machine_learning_job_id?: string[];
   saved_id?: string;
   query?: string;
   language?: string;
   threshold?: {
-    field: string;
+    field: string[];
     value: number;
+    cardinality: Array<{
+      field: string;
+      value: number;
+    }>;
   };
+  threat_query?: string;
+  threat_mapping?: ThreatMapping;
+  threat_language?: string;
+  threat_index?: string[];
+  threat_filters?: Filter[];
   timeline_id?: string;
   timeline_title?: string;
-  type: RuleType;
+  type: Type;
 }
 
 export interface AboutStepRuleJson {
@@ -152,7 +190,8 @@ export interface AboutStepRuleJson {
   false_positives: string[];
   rule_name_override?: RuleNameOverride;
   tags: string[];
-  threat: IMitreEnterpriseAttack[];
+  threat: Threats;
+  threat_indicator_path?: string;
   timestamp_override?: TimestampOverride;
   note?: string;
 }
@@ -169,15 +208,4 @@ export interface ActionsStepRuleJson {
   enabled: boolean;
   throttle?: string | null;
   meta?: unknown;
-}
-
-export interface IMitreAttack {
-  id: string;
-  name: string;
-  reference: string;
-}
-export interface IMitreEnterpriseAttack {
-  framework: string;
-  tactic: IMitreAttack;
-  technique: IMitreAttack[];
 }

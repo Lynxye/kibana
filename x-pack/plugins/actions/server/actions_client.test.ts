@@ -1,19 +1,25 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { schema } from '@kbn/config-schema';
+import moment from 'moment';
+import { ByteSizeValue } from '@kbn/config-schema';
 
 import { ActionTypeRegistry, ActionTypeRegistryOpts } from './action_type_registry';
 import { ActionsClient } from './actions_client';
-import { ExecutorType } from './types';
+import { ExecutorType, ActionType } from './types';
 import { ActionExecutor, TaskRunnerFactory, ILicenseState } from './lib';
-import { taskManagerMock } from '../../task_manager/server/task_manager.mock';
+import { taskManagerMock } from '../../task_manager/server/mocks';
 import { actionsConfigMock } from './actions_config.mock';
 import { getActionsConfigurationUtilities } from './actions_config';
 import { licenseStateMock } from './lib/license_state.mock';
+import { licensingMock } from '../../licensing/server/mocks';
+import { httpServerMock } from '../../../../src/core/server/mocks';
+import { auditServiceMock } from '../../security/server/audit/index.mock';
 
 import {
   elasticsearchServiceMock,
@@ -21,19 +27,27 @@ import {
 } from '../../../../src/core/server/mocks';
 import { actionExecutorMock } from './lib/action_executor.mock';
 import uuid from 'uuid';
-import { KibanaRequest } from 'kibana/server';
 import { ActionsAuthorization } from './authorization/actions_authorization';
 import { actionsAuthorizationMock } from './authorization/actions_authorization.mock';
+// eslint-disable-next-line @kbn/eslint/no-restricted-paths
+import { elasticsearchClientMock } from '../../../../src/core/server/elasticsearch/client/mocks';
+
+jest.mock('../../../../src/core/server/saved_objects/service/lib/utils', () => ({
+  SavedObjectsUtils: {
+    generateId: () => 'mock-saved-object-id',
+  },
+}));
 
 const defaultKibanaIndex = '.kibana';
 const unsecuredSavedObjectsClient = savedObjectsClientMock.create();
-const scopedClusterClient = elasticsearchServiceMock.createLegacyScopedClusterClient();
+const scopedClusterClient = elasticsearchServiceMock.createScopedClusterClient();
 const actionExecutor = actionExecutorMock.create();
 const authorization = actionsAuthorizationMock.create();
 const executionEnqueuer = jest.fn();
-const request = {} as KibanaRequest;
+const request = httpServerMock.createKibanaRequest();
+const auditLogger = auditServiceMock.create().asScoped(request);
 
-const mockTaskManager = taskManagerMock.setup();
+const mockTaskManager = taskManagerMock.createSetup();
 
 let actionsClient: ActionsClient;
 let mockedLicenseState: jest.Mocked<ILicenseState>;
@@ -47,10 +61,9 @@ beforeEach(() => {
   jest.resetAllMocks();
   mockedLicenseState = licenseStateMock.create();
   actionTypeRegistryParams = {
+    licensing: licensingMock.createSetup(),
     taskManager: mockTaskManager,
-    taskRunnerFactory: new TaskRunnerFactory(
-      new ActionExecutor({ isESOUsingEphemeralEncryptionKey: false })
-    ),
+    taskRunnerFactory: new TaskRunnerFactory(new ActionExecutor({ isESOCanEncrypt: true })),
     actionsConfigUtils: actionsConfigMock.create(),
     licenseState: mockedLicenseState,
     preconfiguredActions: [],
@@ -66,6 +79,7 @@ beforeEach(() => {
     executionEnqueuer,
     request,
     authorization: (authorization as unknown) as ActionsAuthorization,
+    auditLogger,
   });
 });
 
@@ -78,6 +92,7 @@ describe('create()', () => {
         attributes: {
           name: 'my name',
           actionTypeId: 'my-action-type',
+          isMissingSecrets: false,
           config: {},
         },
         references: [],
@@ -109,6 +124,7 @@ describe('create()', () => {
         attributes: {
           name: 'my name',
           actionTypeId: 'my-action-type',
+          isMissingSecrets: false,
           config: {},
         },
         references: [],
@@ -140,6 +156,97 @@ describe('create()', () => {
     });
   });
 
+  describe('auditLogger', () => {
+    test('logs audit event when creating a connector', async () => {
+      const savedObjectCreateResult = {
+        id: '1',
+        type: 'action',
+        attributes: {
+          name: 'my name',
+          actionTypeId: 'my-action-type',
+          isMissingSecrets: false,
+          config: {},
+        },
+        references: [],
+      };
+      actionTypeRegistry.register({
+        id: savedObjectCreateResult.attributes.actionTypeId,
+        name: 'My action type',
+        minimumLicenseRequired: 'basic',
+        executor,
+      });
+      unsecuredSavedObjectsClient.create.mockResolvedValueOnce(savedObjectCreateResult);
+
+      await actionsClient.create({
+        action: {
+          ...savedObjectCreateResult.attributes,
+          secrets: {},
+        },
+      });
+
+      expect(auditLogger.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: expect.objectContaining({
+            action: 'connector_create',
+            outcome: 'unknown',
+          }),
+          kibana: { saved_object: { id: 'mock-saved-object-id', type: 'action' } },
+        })
+      );
+    });
+
+    test('logs audit event when not authorised to create a connector', async () => {
+      const savedObjectCreateResult = {
+        id: '1',
+        type: 'action',
+        attributes: {
+          name: 'my name',
+          actionTypeId: 'my-action-type',
+          isMissingSecrets: false,
+          config: {},
+        },
+        references: [],
+      };
+      actionTypeRegistry.register({
+        id: savedObjectCreateResult.attributes.actionTypeId,
+        name: 'My action type',
+        minimumLicenseRequired: 'basic',
+        executor,
+      });
+      unsecuredSavedObjectsClient.create.mockResolvedValueOnce(savedObjectCreateResult);
+
+      authorization.ensureAuthorized.mockRejectedValue(new Error('Unauthorized'));
+
+      await expect(
+        async () =>
+          await actionsClient.create({
+            action: {
+              ...savedObjectCreateResult.attributes,
+              secrets: {},
+            },
+          })
+      ).rejects.toThrow();
+      expect(auditLogger.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: expect.objectContaining({
+            action: 'connector_create',
+            outcome: 'failure',
+          }),
+          kibana: {
+            saved_object: {
+              id: 'mock-saved-object-id',
+              type: 'action',
+            },
+          },
+          error: {
+            code: 'Error',
+            message: 'Unauthorized',
+          },
+        })
+      );
+    });
+  });
+
   test('creates an action with all given properties', async () => {
     const savedObjectCreateResult = {
       id: '1',
@@ -147,6 +254,7 @@ describe('create()', () => {
       attributes: {
         name: 'my name',
         actionTypeId: 'my-action-type',
+        isMissingSecrets: false,
         config: {},
       },
       references: [],
@@ -171,6 +279,7 @@ describe('create()', () => {
       isPreconfigured: false,
       name: 'my name',
       actionTypeId: 'my-action-type',
+      isMissingSecrets: false,
       config: {},
     });
     expect(unsecuredSavedObjectsClient.create).toHaveBeenCalledTimes(1);
@@ -180,8 +289,12 @@ describe('create()', () => {
         Object {
           "actionTypeId": "my-action-type",
           "config": Object {},
+          "isMissingSecrets": false,
           "name": "my name",
           "secrets": Object {},
+        },
+        Object {
+          "id": "mock-saved-object-id",
         },
       ]
     `);
@@ -241,6 +354,7 @@ describe('create()', () => {
       attributes: {
         name: 'my name',
         actionTypeId: 'my-action-type',
+        isMissingSecrets: false,
         config: {
           a: true,
           b: true,
@@ -267,6 +381,7 @@ describe('create()', () => {
       isPreconfigured: false,
       name: 'my name',
       actionTypeId: 'my-action-type',
+      isMissingSecrets: false,
       config: {
         a: true,
         b: true,
@@ -284,8 +399,12 @@ describe('create()', () => {
             "b": true,
             "c": true,
           },
+          "isMissingSecrets": false,
           "name": "my name",
           "secrets": Object {},
+        },
+        Object {
+          "id": "mock-saved-object-id",
         },
       ]
     `);
@@ -295,14 +414,31 @@ describe('create()', () => {
     const localConfigUtils = getActionsConfigurationUtilities({
       enabled: true,
       enabledActionTypes: ['some-not-ignored-action-type'],
-      whitelistedHosts: ['*'],
+      allowedHosts: ['*'],
+      preconfiguredAlertHistoryEsIndex: false,
+      preconfigured: {},
+      proxyRejectUnauthorizedCertificates: true, // legacy
+      rejectUnauthorized: true, // legacy
+      proxyBypassHosts: undefined,
+      proxyOnlyHosts: undefined,
+      maxResponseContentLength: new ByteSizeValue(1000000),
+      responseTimeout: moment.duration('60s'),
+      cleanupFailedExecutionsTask: {
+        enabled: true,
+        cleanupInterval: schema.duration().validate('5m'),
+        idleInterval: schema.duration().validate('1h'),
+        pageSize: 100,
+      },
+      tls: {
+        verificationMode: 'full',
+        proxyVerificationMode: 'full',
+      },
     });
 
     const localActionTypeRegistryParams = {
+      licensing: licensingMock.createSetup(),
       taskManager: mockTaskManager,
-      taskRunnerFactory: new TaskRunnerFactory(
-        new ActionExecutor({ isESOUsingEphemeralEncryptionKey: false })
-      ),
+      taskRunnerFactory: new TaskRunnerFactory(new ActionExecutor({ isESOCanEncrypt: true })),
       actionsConfigUtils: localConfigUtils,
       licenseState: licenseStateMock.create(),
       preconfiguredActions: [],
@@ -327,6 +463,7 @@ describe('create()', () => {
       attributes: {
         name: 'my name',
         actionTypeId: 'my-action-type',
+        isMissingSecrets: false,
         config: {},
       },
       references: [],
@@ -360,6 +497,7 @@ describe('create()', () => {
       attributes: {
         name: 'my name',
         actionTypeId: 'my-action-type',
+        isMissingSecrets: false,
         config: {},
       },
       references: [],
@@ -396,6 +534,7 @@ describe('get()', () => {
         attributes: {
           name: 'my name',
           actionTypeId: 'my-action-type',
+          isMissingSecrets: false,
           config: {},
         },
         references: [],
@@ -437,13 +576,14 @@ describe('get()', () => {
       expect(authorization.ensureAuthorized).toHaveBeenCalledWith('get');
     });
 
-    test('throws when user is not authorised to create the type of action', async () => {
+    test('throws when user is not authorised to get the type of action', async () => {
       unsecuredSavedObjectsClient.get.mockResolvedValueOnce({
         id: '1',
         type: 'type',
         attributes: {
           name: 'my name',
           actionTypeId: 'my-action-type',
+          isMissingSecrets: false,
           config: {},
         },
         references: [],
@@ -460,7 +600,7 @@ describe('get()', () => {
       expect(authorization.ensureAuthorized).toHaveBeenCalledWith('get');
     });
 
-    test('throws when user is not authorised to create preconfigured of action', async () => {
+    test('throws when user is not authorised to get preconfigured of action', async () => {
       actionsClient = new ActionsClient({
         actionTypeRegistry,
         unsecuredSavedObjectsClient,
@@ -495,6 +635,63 @@ describe('get()', () => {
       );
 
       expect(authorization.ensureAuthorized).toHaveBeenCalledWith('get');
+    });
+  });
+
+  describe('auditLogger', () => {
+    test('logs audit event when getting a connector', async () => {
+      unsecuredSavedObjectsClient.get.mockResolvedValueOnce({
+        id: '1',
+        type: 'type',
+        attributes: {
+          name: 'my name',
+          actionTypeId: 'my-action-type',
+          isMissingSecrets: false,
+          config: {},
+        },
+        references: [],
+      });
+
+      await actionsClient.get({ id: '1' });
+
+      expect(auditLogger.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: expect.objectContaining({
+            action: 'connector_get',
+            outcome: 'success',
+          }),
+          kibana: { saved_object: { id: '1', type: 'action' } },
+        })
+      );
+    });
+
+    test('logs audit event when not authorised to get a connector', async () => {
+      unsecuredSavedObjectsClient.get.mockResolvedValueOnce({
+        id: '1',
+        type: 'type',
+        attributes: {
+          name: 'my name',
+          actionTypeId: 'my-action-type',
+          isMissingSecrets: false,
+          config: {},
+        },
+        references: [],
+      });
+
+      authorization.ensureAuthorized.mockRejectedValue(new Error('Unauthorized'));
+
+      await expect(actionsClient.get({ id: '1' })).rejects.toThrow();
+
+      expect(auditLogger.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: expect.objectContaining({
+            action: 'connector_get',
+            outcome: 'failure',
+          }),
+          kibana: { saved_object: { id: '1', type: 'action' } },
+          error: { code: 'Error', message: 'Unauthorized' },
+        })
+      );
     });
   });
 
@@ -579,12 +776,15 @@ describe('getAll()', () => {
         ],
       };
       unsecuredSavedObjectsClient.find.mockResolvedValueOnce(expectedResult);
-      scopedClusterClient.callAsInternalUser.mockResolvedValueOnce({
-        aggregations: {
-          '1': { doc_count: 6 },
-          testPreconfigured: { doc_count: 2 },
-        },
-      });
+      scopedClusterClient.asInternalUser.search.mockResolvedValueOnce(
+        // @ts-expect-error not full search response
+        elasticsearchClientMock.createSuccessTransportRequestPromise({
+          aggregations: {
+            '1': { doc_count: 6 },
+            testPreconfigured: { doc_count: 2 },
+          },
+        })
+      );
 
       actionsClient = new ActionsClient({
         actionTypeRegistry,
@@ -629,6 +829,68 @@ describe('getAll()', () => {
     });
   });
 
+  describe('auditLogger', () => {
+    test('logs audit event when searching connectors', async () => {
+      unsecuredSavedObjectsClient.find.mockResolvedValueOnce({
+        total: 1,
+        per_page: 10,
+        page: 1,
+        saved_objects: [
+          {
+            id: '1',
+            type: 'type',
+            attributes: {
+              name: 'test',
+              isMissingSecrets: false,
+              config: {
+                foo: 'bar',
+              },
+            },
+            score: 1,
+            references: [],
+          },
+        ],
+      });
+      scopedClusterClient.asInternalUser.search.mockResolvedValueOnce(
+        // @ts-expect-error not full search response
+        elasticsearchClientMock.createSuccessTransportRequestPromise({
+          aggregations: {
+            '1': { doc_count: 6 },
+            testPreconfigured: { doc_count: 2 },
+          },
+        })
+      );
+
+      await actionsClient.getAll();
+
+      expect(auditLogger.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: expect.objectContaining({
+            action: 'connector_find',
+            outcome: 'success',
+          }),
+          kibana: { saved_object: { id: '1', type: 'action' } },
+        })
+      );
+    });
+
+    test('logs audit event when not authorised to search connectors', async () => {
+      authorization.ensureAuthorized.mockRejectedValue(new Error('Unauthorized'));
+
+      await expect(actionsClient.getAll()).rejects.toThrow();
+
+      expect(auditLogger.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: expect.objectContaining({
+            action: 'connector_find',
+            outcome: 'failure',
+          }),
+          error: { code: 'Error', message: 'Unauthorized' },
+        })
+      );
+    });
+  });
+
   test('calls unsecuredSavedObjectsClient with parameters', async () => {
     const expectedResult = {
       total: 1,
@@ -640,6 +902,7 @@ describe('getAll()', () => {
           type: 'type',
           attributes: {
             name: 'test',
+            isMissingSecrets: false,
             config: {
               foo: 'bar',
             },
@@ -650,12 +913,15 @@ describe('getAll()', () => {
       ],
     };
     unsecuredSavedObjectsClient.find.mockResolvedValueOnce(expectedResult);
-    scopedClusterClient.callAsInternalUser.mockResolvedValueOnce({
-      aggregations: {
-        '1': { doc_count: 6 },
-        testPreconfigured: { doc_count: 2 },
-      },
-    });
+    scopedClusterClient.asInternalUser.search.mockResolvedValueOnce(
+      // @ts-expect-error not full search response
+      elasticsearchClientMock.createSuccessTransportRequestPromise({
+        aggregations: {
+          '1': { doc_count: 6 },
+          testPreconfigured: { doc_count: 2 },
+        },
+      })
+    );
 
     actionsClient = new ActionsClient({
       actionTypeRegistry,
@@ -688,6 +954,7 @@ describe('getAll()', () => {
         config: {
           foo: 'bar',
         },
+        isMissingSecrets: false,
         referencedByCount: 6,
       },
       {
@@ -715,17 +982,21 @@ describe('getBulk()', () => {
               config: {
                 foo: 'bar',
               },
+              isMissingSecrets: false,
             },
             references: [],
           },
         ],
       });
-      scopedClusterClient.callAsInternalUser.mockResolvedValueOnce({
-        aggregations: {
-          '1': { doc_count: 6 },
-          testPreconfigured: { doc_count: 2 },
-        },
-      });
+      scopedClusterClient.asInternalUser.search.mockResolvedValueOnce(
+        // @ts-expect-error not full search response
+        elasticsearchClientMock.createSuccessTransportRequestPromise({
+          aggregations: {
+            '1': { doc_count: 6 },
+            testPreconfigured: { doc_count: 2 },
+          },
+        })
+      );
 
       actionsClient = new ActionsClient({
         actionTypeRegistry,
@@ -770,6 +1041,66 @@ describe('getBulk()', () => {
     });
   });
 
+  describe('auditLogger', () => {
+    test('logs audit event when bulk getting connectors', async () => {
+      unsecuredSavedObjectsClient.bulkGet.mockResolvedValueOnce({
+        saved_objects: [
+          {
+            id: '1',
+            type: 'action',
+            attributes: {
+              actionTypeId: 'test',
+              name: 'test',
+              config: {
+                foo: 'bar',
+              },
+              isMissingSecrets: false,
+            },
+            references: [],
+          },
+        ],
+      });
+      scopedClusterClient.asInternalUser.search.mockResolvedValueOnce(
+        // @ts-expect-error not full search response
+        elasticsearchClientMock.createSuccessTransportRequestPromise({
+          aggregations: {
+            '1': { doc_count: 6 },
+            testPreconfigured: { doc_count: 2 },
+          },
+        })
+      );
+
+      await actionsClient.getBulk(['1']);
+
+      expect(auditLogger.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: expect.objectContaining({
+            action: 'connector_get',
+            outcome: 'success',
+          }),
+          kibana: { saved_object: { id: '1', type: 'action' } },
+        })
+      );
+    });
+
+    test('logs audit event when not authorised to bulk get connectors', async () => {
+      authorization.ensureAuthorized.mockRejectedValue(new Error('Unauthorized'));
+
+      await expect(actionsClient.getBulk(['1'])).rejects.toThrow();
+
+      expect(auditLogger.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: expect.objectContaining({
+            action: 'connector_get',
+            outcome: 'failure',
+          }),
+          kibana: { saved_object: { id: '1', type: 'action' } },
+          error: { code: 'Error', message: 'Unauthorized' },
+        })
+      );
+    });
+  });
+
   test('calls getBulk unsecuredSavedObjectsClient with parameters', async () => {
     unsecuredSavedObjectsClient.bulkGet.mockResolvedValueOnce({
       saved_objects: [
@@ -782,17 +1113,21 @@ describe('getBulk()', () => {
             config: {
               foo: 'bar',
             },
+            isMissingSecrets: false,
           },
           references: [],
         },
       ],
     });
-    scopedClusterClient.callAsInternalUser.mockResolvedValueOnce({
-      aggregations: {
-        '1': { doc_count: 6 },
-        testPreconfigured: { doc_count: 2 },
-      },
-    });
+    scopedClusterClient.asInternalUser.search.mockResolvedValueOnce(
+      // @ts-expect-error not full search response
+      elasticsearchClientMock.createSuccessTransportRequestPromise({
+        aggregations: {
+          '1': { doc_count: 6 },
+          testPreconfigured: { doc_count: 2 },
+        },
+      })
+    );
 
     actionsClient = new ActionsClient({
       actionTypeRegistry,
@@ -834,6 +1169,7 @@ describe('getBulk()', () => {
           foo: 'bar',
         },
         id: '1',
+        isMissingSecrets: false,
         isPreconfigured: false,
         name: 'test',
       },
@@ -861,6 +1197,39 @@ describe('delete()', () => {
     });
   });
 
+  describe('auditLogger', () => {
+    test('logs audit event when deleting a connector', async () => {
+      await actionsClient.delete({ id: '1' });
+
+      expect(auditLogger.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: expect.objectContaining({
+            action: 'connector_delete',
+            outcome: 'unknown',
+          }),
+          kibana: { saved_object: { id: '1', type: 'action' } },
+        })
+      );
+    });
+
+    test('logs audit event when not authorised to delete a connector', async () => {
+      authorization.ensureAuthorized.mockRejectedValue(new Error('Unauthorized'));
+
+      await expect(actionsClient.delete({ id: '1' })).rejects.toThrow();
+
+      expect(auditLogger.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: expect.objectContaining({
+            action: 'connector_delete',
+            outcome: 'failure',
+          }),
+          kibana: { saved_object: { id: '1', type: 'action' } },
+          error: { code: 'Error', message: 'Unauthorized' },
+        })
+      );
+    });
+  });
+
   test('calls unsecuredSavedObjectsClient with id', async () => {
     const expectedResult = Symbol();
     unsecuredSavedObjectsClient.delete.mockResolvedValueOnce(expectedResult);
@@ -877,42 +1246,45 @@ describe('delete()', () => {
 });
 
 describe('update()', () => {
+  function updateOperation(): ReturnType<ActionsClient['update']> {
+    actionTypeRegistry.register({
+      id: 'my-action-type',
+      name: 'My action type',
+      minimumLicenseRequired: 'basic',
+      executor,
+    });
+    unsecuredSavedObjectsClient.get.mockResolvedValueOnce({
+      id: '1',
+      type: 'action',
+      attributes: {
+        actionTypeId: 'my-action-type',
+        isMissingSecrets: false,
+      },
+      references: [],
+    });
+    unsecuredSavedObjectsClient.create.mockResolvedValueOnce({
+      id: 'my-action',
+      type: 'action',
+      attributes: {
+        actionTypeId: 'my-action-type',
+        isMissingSecrets: false,
+        name: 'my name',
+        config: {},
+        secrets: {},
+      },
+      references: [],
+    });
+    return actionsClient.update({
+      id: 'my-action',
+      action: {
+        name: 'my name',
+        config: {},
+        secrets: {},
+      },
+    });
+  }
+
   describe('authorization', () => {
-    function updateOperation(): ReturnType<ActionsClient['update']> {
-      actionTypeRegistry.register({
-        id: 'my-action-type',
-        name: 'My action type',
-        minimumLicenseRequired: 'basic',
-        executor,
-      });
-      unsecuredSavedObjectsClient.get.mockResolvedValueOnce({
-        id: '1',
-        type: 'action',
-        attributes: {
-          actionTypeId: 'my-action-type',
-        },
-        references: [],
-      });
-      unsecuredSavedObjectsClient.update.mockResolvedValueOnce({
-        id: 'my-action',
-        type: 'action',
-        attributes: {
-          actionTypeId: 'my-action-type',
-          name: 'my name',
-          config: {},
-          secrets: {},
-        },
-        references: [],
-      });
-      return actionsClient.update({
-        id: 'my-action',
-        action: {
-          name: 'my name',
-          config: {},
-          secrets: {},
-        },
-      });
-    }
     test('ensures user is authorised to update actions', async () => {
       await updateOperation();
       expect(authorization.ensureAuthorized).toHaveBeenCalledWith('update');
@@ -931,6 +1303,39 @@ describe('update()', () => {
     });
   });
 
+  describe('auditLogger', () => {
+    test('logs audit event when updating a connector', async () => {
+      await updateOperation();
+
+      expect(auditLogger.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: expect.objectContaining({
+            action: 'connector_update',
+            outcome: 'unknown',
+          }),
+          kibana: { saved_object: { id: 'my-action', type: 'action' } },
+        })
+      );
+    });
+
+    test('logs audit event when not authorised to update a connector', async () => {
+      authorization.ensureAuthorized.mockRejectedValue(new Error('Unauthorized'));
+
+      await expect(updateOperation()).rejects.toThrow();
+
+      expect(auditLogger.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: expect.objectContaining({
+            action: 'connector_update',
+            outcome: 'failure',
+          }),
+          kibana: { saved_object: { id: 'my-action', type: 'action' } },
+          error: { code: 'Error', message: 'Unauthorized' },
+        })
+      );
+    });
+  });
+
   test('updates an action with all given properties', async () => {
     actionTypeRegistry.register({
       id: 'my-action-type',
@@ -943,14 +1348,16 @@ describe('update()', () => {
       type: 'action',
       attributes: {
         actionTypeId: 'my-action-type',
+        isMissingSecrets: false,
       },
       references: [],
     });
-    unsecuredSavedObjectsClient.update.mockResolvedValueOnce({
+    unsecuredSavedObjectsClient.create.mockResolvedValueOnce({
       id: 'my-action',
       type: 'action',
       attributes: {
         actionTypeId: 'my-action-type',
+        isMissingSecrets: false,
         name: 'my name',
         config: {},
         secrets: {},
@@ -969,19 +1376,25 @@ describe('update()', () => {
       id: 'my-action',
       isPreconfigured: false,
       actionTypeId: 'my-action-type',
+      isMissingSecrets: false,
       name: 'my name',
       config: {},
     });
-    expect(unsecuredSavedObjectsClient.update).toHaveBeenCalledTimes(1);
-    expect(unsecuredSavedObjectsClient.update.mock.calls[0]).toMatchInlineSnapshot(`
+    expect(unsecuredSavedObjectsClient.create).toHaveBeenCalledTimes(1);
+    expect(unsecuredSavedObjectsClient.create.mock.calls[0]).toMatchInlineSnapshot(`
       Array [
         "action",
-        "my-action",
         Object {
           "actionTypeId": "my-action-type",
           "config": Object {},
+          "isMissingSecrets": false,
           "name": "my name",
           "secrets": Object {},
+        },
+        Object {
+          "id": "my-action",
+          "overwrite": true,
+          "references": Array [],
         },
       ]
     `);
@@ -990,6 +1403,70 @@ describe('update()', () => {
       Array [
         "action",
         "my-action",
+      ]
+    `);
+  });
+
+  test('updates an action with isMissingSecrets "true" (set true as the import result), to isMissingSecrets', async () => {
+    actionTypeRegistry.register({
+      id: 'my-action-type',
+      name: 'My action type',
+      minimumLicenseRequired: 'basic',
+      executor,
+    });
+    unsecuredSavedObjectsClient.get.mockResolvedValueOnce({
+      id: '1',
+      type: 'action',
+      attributes: {
+        actionTypeId: 'my-action-type',
+        isMissingSecrets: true,
+      },
+      references: [],
+    });
+    unsecuredSavedObjectsClient.create.mockResolvedValueOnce({
+      id: 'my-action',
+      type: 'action',
+      attributes: {
+        actionTypeId: 'my-action-type',
+        isMissingSecrets: true,
+        name: 'my name',
+        config: {},
+        secrets: {},
+      },
+      references: [],
+    });
+    const result = await actionsClient.update({
+      id: 'my-action',
+      action: {
+        name: 'my name',
+        config: {},
+        secrets: {},
+      },
+    });
+    expect(result).toEqual({
+      id: 'my-action',
+      isPreconfigured: false,
+      actionTypeId: 'my-action-type',
+      isMissingSecrets: true,
+      name: 'my name',
+      config: {},
+    });
+    expect(unsecuredSavedObjectsClient.create).toHaveBeenCalledTimes(1);
+    expect(unsecuredSavedObjectsClient.create.mock.calls[0]).toMatchInlineSnapshot(`
+      Array [
+        "action",
+        Object {
+          "actionTypeId": "my-action-type",
+          "config": Object {},
+          "isMissingSecrets": false,
+          "name": "my name",
+          "secrets": Object {},
+        },
+        Object {
+          "id": "my-action",
+          "overwrite": true,
+          "references": Array [],
+        },
       ]
     `);
   });
@@ -1043,11 +1520,12 @@ describe('update()', () => {
       },
       references: [],
     });
-    unsecuredSavedObjectsClient.update.mockResolvedValueOnce({
+    unsecuredSavedObjectsClient.create.mockResolvedValueOnce({
       id: 'my-action',
       type: 'action',
       attributes: {
         actionTypeId: 'my-action-type',
+        isMissingSecrets: true,
         name: 'my name',
         config: {
           a: true,
@@ -1074,6 +1552,7 @@ describe('update()', () => {
       id: 'my-action',
       isPreconfigured: false,
       actionTypeId: 'my-action-type',
+      isMissingSecrets: true,
       name: 'my name',
       config: {
         a: true,
@@ -1081,11 +1560,10 @@ describe('update()', () => {
         c: true,
       },
     });
-    expect(unsecuredSavedObjectsClient.update).toHaveBeenCalledTimes(1);
-    expect(unsecuredSavedObjectsClient.update.mock.calls[0]).toMatchInlineSnapshot(`
+    expect(unsecuredSavedObjectsClient.create).toHaveBeenCalledTimes(1);
+    expect(unsecuredSavedObjectsClient.create.mock.calls[0]).toMatchInlineSnapshot(`
       Array [
         "action",
-        "my-action",
         Object {
           "actionTypeId": "my-action-type",
           "config": Object {
@@ -1093,8 +1571,14 @@ describe('update()', () => {
             "b": true,
             "c": true,
           },
+          "isMissingSecrets": false,
           "name": "my name",
           "secrets": Object {},
+        },
+        Object {
+          "id": "my-action",
+          "overwrite": true,
+          "references": Array [],
         },
       ]
     `);
@@ -1118,11 +1602,12 @@ describe('update()', () => {
       },
       references: [],
     });
-    unsecuredSavedObjectsClient.update.mockResolvedValueOnce({
+    unsecuredSavedObjectsClient.create.mockResolvedValueOnce({
       id: 'my-action',
       type: 'action',
       attributes: {
         actionTypeId: 'my-action-type',
+        isMissingSecrets: false,
         name: 'my name',
         config: {},
         secrets: {},
@@ -1234,5 +1719,33 @@ describe('enqueueExecution()', () => {
     await expect(actionsClient.enqueueExecution(opts)).resolves.toMatchInlineSnapshot(`undefined`);
 
     expect(executionEnqueuer).toHaveBeenCalledWith(unsecuredSavedObjectsClient, opts);
+  });
+});
+
+describe('isActionTypeEnabled()', () => {
+  const fooActionType: ActionType = {
+    id: 'foo',
+    name: 'Foo',
+    minimumLicenseRequired: 'gold',
+    executor: jest.fn(),
+  };
+  beforeEach(() => {
+    actionTypeRegistry.register(fooActionType);
+  });
+
+  test('should call isLicenseValidForActionType of the license state with notifyUsage false by default', () => {
+    mockedLicenseState.isLicenseValidForActionType.mockReturnValue({ isValid: true });
+    actionsClient.isActionTypeEnabled('foo');
+    expect(mockedLicenseState.isLicenseValidForActionType).toHaveBeenCalledWith(fooActionType, {
+      notifyUsage: false,
+    });
+  });
+
+  test('should call isLicenseValidForActionType of the license state with notifyUsage true when specified', () => {
+    mockedLicenseState.isLicenseValidForActionType.mockReturnValue({ isValid: true });
+    actionsClient.isActionTypeEnabled('foo', { notifyUsage: true });
+    expect(mockedLicenseState.isLicenseValidForActionType).toHaveBeenCalledWith(fooActionType, {
+      notifyUsage: true,
+    });
   });
 });

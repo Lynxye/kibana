@@ -1,25 +1,15 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
-import { combineLatest } from 'rxjs';
-import { map, tap } from 'rxjs/operators';
+import { combineLatest, from } from 'rxjs';
+import { map, tap, switchMap } from 'rxjs/operators';
 import { CoreStart, IUiSettingsClient } from 'kibana/public';
+import { getData } from '../services';
 import {
   getSearchParamsFromRequest,
   SearchRequest,
@@ -29,6 +19,25 @@ import {
 import { search as dataPluginSearch } from '../../../data/public';
 import { VegaInspectorAdapters } from '../vega_inspector';
 import { RequestResponder } from '../../../inspector/public';
+
+const extendSearchParamsWithRuntimeFields = async (
+  requestParams: ReturnType<typeof getSearchParamsFromRequest>,
+  indexPatternString?: string
+) => {
+  if (indexPatternString) {
+    const indexPattern = (await getData().indexPatterns.find(indexPatternString)).find(
+      (index) => index.title === indexPatternString
+    );
+    const runtimeFields = indexPattern?.getComputedFields().runtimeFields;
+
+    return {
+      ...requestParams,
+      body: { ...requestParams.body, runtime_mappings: runtimeFields },
+    };
+  }
+
+  return requestParams;
+};
 
 export interface SearchAPIDependencies {
   uiSettings: IUiSettingsClient;
@@ -40,32 +49,44 @@ export class SearchAPI {
   constructor(
     private readonly dependencies: SearchAPIDependencies,
     private readonly abortSignal?: AbortSignal,
-    public readonly inspectorAdapters?: VegaInspectorAdapters
+    public readonly inspectorAdapters?: VegaInspectorAdapters,
+    private readonly searchSessionId?: string
   ) {}
 
   search(searchRequests: SearchRequest[]) {
-    const { search } = this.dependencies.search;
+    const { search } = this.dependencies;
     const requestResponders: any = {};
 
     return combineLatest(
       searchRequests.map((request) => {
         const requestId = request.name;
-        const params = getSearchParamsFromRequest(request, {
-          uiSettings: this.dependencies.uiSettings,
-          injectedMetadata: this.dependencies.injectedMetadata,
+        const requestParams = getSearchParamsFromRequest(request, {
+          getConfig: this.dependencies.uiSettings.get.bind(this.dependencies.uiSettings),
         });
 
         if (this.inspectorAdapters) {
-          requestResponders[requestId] = this.inspectorAdapters.requests.start(requestId, request);
-          requestResponders[requestId].json(params.body);
+          requestResponders[requestId] = this.inspectorAdapters.requests.start(requestId, {
+            ...request,
+            searchSessionId: this.searchSessionId,
+          });
+          requestResponders[requestId].json(requestParams.body);
         }
 
-        return search({ params }, { signal: this.abortSignal }).pipe(
-          tap((data) => this.inspectSearchResult(data, requestResponders[requestId])),
-          map((data) => ({
-            name: requestId,
-            rawResponse: data.rawResponse,
-          }))
+        return from(extendSearchParamsWithRuntimeFields(requestParams, request.index)).pipe(
+          switchMap((params) =>
+            search
+              .search(
+                { params },
+                { abortSignal: this.abortSignal, sessionId: this.searchSessionId }
+              )
+              .pipe(
+                tap((data) => this.inspectSearchResult(data, requestResponders[requestId])),
+                map((data) => ({
+                  name: requestId,
+                  rawResponse: data.rawResponse,
+                }))
+              )
+          )
         );
       })
     );

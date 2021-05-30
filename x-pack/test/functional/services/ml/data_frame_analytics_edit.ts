@@ -1,16 +1,18 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import expect from '@kbn/expect';
 
 import { FtrProviderContext } from '../../ftr_provider_context';
-import { MlCommon } from './common';
+import { MlCommonUI } from './common_ui';
 
 export function MachineLearningDataFrameAnalyticsEditProvider(
   { getService }: FtrProviderContext,
-  mlCommon: MlCommon
+  mlCommonUI: MlCommonUI
 ) {
   const testSubjects = getService('testSubjects');
   const retry = getService('retry');
@@ -43,14 +45,14 @@ export function MachineLearningDataFrameAnalyticsEditProvider(
       );
     },
     async setJobDescriptionEdit(jobDescription: string) {
-      await mlCommon.setValueWithChecks('mlAnalyticsEditFlyoutDescriptionInput', jobDescription, {
+      await mlCommonUI.setValueWithChecks('mlAnalyticsEditFlyoutDescriptionInput', jobDescription, {
         clearWithKeyboard: true,
       });
       await this.assertJobDescriptionEditValue(jobDescription);
     },
 
     async setJobMmlEdit(mml: string) {
-      await mlCommon.setValueWithChecks('mlAnalyticsEditFlyoutmodelMemoryLimitInput', mml, {
+      await mlCommonUI.setValueWithChecks('mlAnalyticsEditFlyoutmodelMemoryLimitInput', mml, {
         clearWithKeyboard: true,
       });
       await this.assertJobMmlEditValue(mml);

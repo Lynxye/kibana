@@ -1,23 +1,27 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { EuiButtonIcon, EuiSuperSelect } from '@elastic/eui';
+import deepEqual from 'fast-deep-equal';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSelector } from 'react-redux';
 import styled from 'styled-components';
-import { ActionCreator } from 'typescript-fsa';
 
 import { GlobalTimeArgs } from '../../containers/use_global_time';
 import { EventsByDataset } from '../../../overview/components/events_by_dataset';
 import { SignalsByCategory } from '../../../overview/components/signals_by_category';
 import { Filter, IIndexPattern, Query } from '../../../../../../../src/plugins/data/public';
 import { InputsModelId } from '../../store/inputs/constants';
-import { EventType } from '../../../timelines/store/timeline/model';
+import { TimelineEventsType } from '../../../../common/types/timeline';
 
 import { TopNOption } from './helpers';
 import * as i18n from './translations';
+import { getIndicesSelector, IndicesSelector } from './selectors';
+import { State } from '../../store';
 
 const TopNContainer = styled.div`
   width: 600px;
@@ -45,18 +49,12 @@ const TopNContent = styled.div`
 
 export interface Props extends Pick<GlobalTimeArgs, 'from' | 'to' | 'deleteQuery' | 'setQuery'> {
   combinedQueries?: string;
-  defaultView: EventType;
+  defaultView: TimelineEventsType;
   field: string;
   filters: Filter[];
   indexPattern: IIndexPattern;
-  indexToAdd?: string[] | null;
   options: TopNOption[];
   query: Query;
-  setAbsoluteRangeDatePicker: ActionCreator<{
-    id: InputsModelId;
-    from: string;
-    to: string;
-  }>;
   setAbsoluteRangeDatePickerTarget: InputsModelId;
   timelineId?: string;
   toggleTopN: () => void;
@@ -64,29 +62,31 @@ export interface Props extends Pick<GlobalTimeArgs, 'from' | 'to' | 'deleteQuery
   value?: string[] | string | null;
 }
 
-const NO_FILTERS: Filter[] = [];
-const DEFAULT_QUERY: Query = { query: '', language: 'kuery' };
-
 const TopNComponent: React.FC<Props> = ({
   combinedQueries,
   defaultView,
   deleteQuery,
-  filters = NO_FILTERS,
+  filters,
   field,
   from,
   indexPattern,
-  indexToAdd,
   options,
-  query = DEFAULT_QUERY,
-  setAbsoluteRangeDatePicker,
+  query,
   setAbsoluteRangeDatePickerTarget,
   setQuery,
   timelineId,
   to,
   toggleTopN,
 }) => {
-  const [view, setView] = useState<EventType>(defaultView);
-  const onViewSelected = useCallback((value: string) => setView(value as EventType), [setView]);
+  const [view, setView] = useState<TimelineEventsType>(defaultView);
+  const onViewSelected = useCallback((value: string) => setView(value as TimelineEventsType), [
+    setView,
+  ]);
+  const indicesSelector = useMemo(getIndicesSelector, []);
+  const { all: allIndices, raw: rawIndices } = useSelector<State, IndicesSelector>(
+    (state) => indicesSelector(state),
+    deepEqual
+  );
 
   useEffect(() => {
     setView(defaultView);
@@ -123,24 +123,24 @@ const TopNComponent: React.FC<Props> = ({
             from={from}
             headerChildren={headerChildren}
             indexPattern={indexPattern}
-            indexToAdd={indexToAdd}
+            indexNames={view === 'raw' ? rawIndices : allIndices}
             onlyField={field}
             query={query}
             setAbsoluteRangeDatePickerTarget={setAbsoluteRangeDatePickerTarget}
             setQuery={setQuery}
             showSpacer={false}
+            toggleTopN={toggleTopN}
             timelineId={timelineId}
             to={to}
           />
         ) : (
           <SignalsByCategory
+            combinedQueries={combinedQueries}
             filters={filters}
             from={from}
             headerChildren={headerChildren}
-            indexPattern={indexPattern}
             onlyField={field}
             query={query}
-            setAbsoluteRangeDatePicker={setAbsoluteRangeDatePicker}
             setAbsoluteRangeDatePickerTarget={setAbsoluteRangeDatePickerTarget}
             setQuery={setQuery}
             timelineId={timelineId}

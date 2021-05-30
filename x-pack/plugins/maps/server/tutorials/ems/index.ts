@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
@@ -60,7 +61,7 @@ Indexing EMS administrative boundaries in Elasticsearch allows for search on bou
                   }),
                   textPre: i18n.translate('xpack.maps.tutorials.ems.uploadStepText', {
                     defaultMessage:
-                      '1. Open [Elastic Maps]({newMapUrl}).\n\
+                      '1. Open [Maps]({newMapUrl}).\n\
 2. Click `Add layer`, then select `Upload GeoJSON`.\n\
 3. Upload the GeoJSON file and click `Import file`.',
                     values: {

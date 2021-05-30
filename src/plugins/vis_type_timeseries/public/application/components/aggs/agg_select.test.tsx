@@ -1,27 +1,17 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import React from 'react';
-import { mountWithIntl } from 'test_utils/enzyme_helpers';
+import { mountWithIntl } from '@kbn/test/jest';
 import { AggSelect } from './agg_select';
 import { METRIC, SERIES } from '../../../test_utils';
 import { EuiComboBox } from '@elastic/eui';
+import { Metric } from '../../../../common/types';
 
 describe('TSVB AggSelect', () => {
   const setup = (panelType: string, value: string) => {
@@ -39,7 +29,7 @@ describe('TSVB AggSelect', () => {
           onChange={jest.fn()}
           panelType={panelType}
           value={value}
-          siblings={series.metrics}
+          siblings={series.metrics as Metric[]}
         />
       </div>
     );
@@ -63,7 +53,7 @@ describe('TSVB AggSelect', () => {
           "value": "count",
         },
         Object {
-          "label": "Positive Rate",
+          "label": "Counter Rate",
           "value": "positive_rate",
         },
         Object {
@@ -99,6 +89,14 @@ describe('TSVB AggSelect', () => {
           "value": "count",
         },
         Object {
+          "label": "Max",
+          "value": "max",
+        },
+        Object {
+          "label": "Min",
+          "value": "min",
+        },
+        Object {
           "label": "Sum",
           "value": "sum",
         },
@@ -131,7 +129,7 @@ describe('TSVB AggSelect', () => {
           "value": "filter_ratio",
         },
         Object {
-          "label": "Positive Rate",
+          "label": "Counter Rate",
           "value": "positive_rate",
         },
         Object {

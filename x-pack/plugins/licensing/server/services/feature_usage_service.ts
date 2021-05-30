@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { isDate } from 'lodash';
@@ -43,14 +44,20 @@ export class FeatureUsageService {
   public setup(): FeatureUsageServiceSetup {
     return {
       register: (featureName, licenseType) => {
-        if (this.lastUsages.has(featureName)) {
-          throw new Error(`Feature '${featureName}' has already been registered.`);
+        const registered = this.lastUsages.get(featureName);
+        if (registered) {
+          if (registered.licenseType !== licenseType) {
+            throw new Error(
+              `Feature '${featureName}' has already been registered with another license type. (current: ${registered.licenseType}, new: ${licenseType})`
+            );
+          }
+        } else {
+          this.lastUsages.set(featureName, {
+            name: featureName,
+            lastUsed: null,
+            licenseType,
+          });
         }
-        this.lastUsages.set(featureName, {
-          name: featureName,
-          lastUsed: null,
-          licenseType,
-        });
       },
     };
   }

@@ -1,16 +1,17 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { handleActions } from 'redux-actions';
 import { takeLatest } from 'redux-saga/effects';
 import { createAsyncAction } from '../actions/utils';
-import { getAsyncInitialState, handleAsyncAction } from '../reducers/utils';
+import { asyncInitState, handleAsyncAction } from '../reducers/utils';
 import { CertResult, GetCertsParams } from '../../../common/runtime_types';
 import { AppState } from '../index';
-import { AsyncInitialState } from '../reducers/types';
+import { AsyncInitState } from '../reducers/types';
 import { fetchEffectFactory } from '../effects/fetch_effect';
 import { fetchCertificates } from '../api/certificates';
 
@@ -18,12 +19,12 @@ export const getCertificatesAction = createAsyncAction<GetCertsParams, CertResul
   'GET_CERTIFICATES'
 );
 
-interface CertificatesState {
-  certs: AsyncInitialState<CertResult>;
+export interface CertificatesState {
+  certs: AsyncInitState<CertResult>;
 }
 
 const initialState = {
-  certs: getAsyncInitialState(),
+  certs: asyncInitState(),
 };
 
 export const certificatesReducer = handleActions<CertificatesState>(

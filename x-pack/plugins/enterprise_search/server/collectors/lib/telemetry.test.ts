@@ -1,10 +1,11 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { mockLogger } from '../../routes/__mocks__';
+import { mockLogger } from '../../__mocks__';
 
 jest.mock('../../../../../../src/core/server', () => ({
   SavedObjectsErrorHelpers: {
@@ -15,7 +16,7 @@ import { SavedObjectsErrorHelpers } from '../../../../../../src/core/server';
 
 import { getSavedObjectAttributesFromRepo, incrementUICounter } from './telemetry';
 
-describe('App Search Telemetry Usage Collector', () => {
+describe('Telemetry helpers', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -61,7 +62,7 @@ describe('App Search Telemetry Usage Collector', () => {
       expect(incrementCounterMock).toHaveBeenCalledWith(
         'app_search_telemetry',
         'app_search_telemetry',
-        'ui_clicked.button'
+        ['ui_clicked.button']
       );
       expect(response).toEqual({ success: true });
     });

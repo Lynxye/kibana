@@ -1,25 +1,29 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { Logger, IRouter, CoreSetup } from 'src/core/server';
+import type { CoreSetup, Logger } from 'src/core/server';
+
+import type { SpacesServiceStart } from '../../../spaces_service';
+import type { SpacesRouter } from '../../../types';
+import type { UsageStatsServiceSetup } from '../../../usage_stats';
+import { initCopyToSpacesApi } from './copy_to_space';
 import { initDeleteSpacesApi } from './delete';
 import { initGetSpaceApi } from './get';
 import { initGetAllSpacesApi } from './get_all';
+import { initGetShareableReferencesApi } from './get_shareable_references';
 import { initPostSpacesApi } from './post';
 import { initPutSpacesApi } from './put';
-import { SpacesServiceSetup } from '../../../spaces_service/spaces_service';
-import { initCopyToSpacesApi } from './copy_to_space';
-import { initShareAddSpacesApi } from './share_add_spaces';
-import { initShareRemoveSpacesApi } from './share_remove_spaces';
+import { initUpdateObjectsSpacesApi } from './update_objects_spaces';
 
 export interface ExternalRouteDeps {
-  externalRouter: IRouter;
+  externalRouter: SpacesRouter;
   getStartServices: CoreSetup['getStartServices'];
-  getImportExportObjectLimit: () => number;
-  spacesService: SpacesServiceSetup;
+  getSpacesService: () => SpacesServiceStart;
+  usageStatsServicePromise: Promise<UsageStatsServiceSetup>;
   log: Logger;
 }
 
@@ -30,6 +34,6 @@ export function initExternalSpacesApi(deps: ExternalRouteDeps) {
   initPostSpacesApi(deps);
   initPutSpacesApi(deps);
   initCopyToSpacesApi(deps);
-  initShareAddSpacesApi(deps);
-  initShareRemoveSpacesApi(deps);
+  initUpdateObjectsSpacesApi(deps);
+  initGetShareableReferencesApi(deps);
 }

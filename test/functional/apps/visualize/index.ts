@@ -1,59 +1,68 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
-import { FtrProviderContext } from '../../ftr_provider_context.d';
-import { UI_SETTINGS } from '../../../../src/plugins/data/common';
+import { FtrProviderContext } from '../../ftr_provider_context';
 
-export default function ({ getService, getPageObjects, loadTestFile }: FtrProviderContext) {
+export default function ({ getService, loadTestFile }: FtrProviderContext) {
   const browser = getService('browser');
   const log = getService('log');
   const esArchiver = getService('esArchiver');
   const kibanaServer = getService('kibanaServer');
-  const PageObjects = getPageObjects(['common']);
-  let isOss = true;
 
   describe('visualize app', () => {
     before(async () => {
       log.debug('Starting visualize before method');
       await browser.setWindowSize(1280, 800);
+      await esArchiver.load('empty_kibana');
+
       await esArchiver.loadIfNeeded('logstash_functional');
       await esArchiver.loadIfNeeded('long_window_logstash');
-      await esArchiver.load('visualize');
-      await kibanaServer.uiSettings.replace({
-        defaultIndex: 'logstash-*',
-        [UI_SETTINGS.FORMAT_BYTES_DEFAULT_PATTERN]: '0,0.[000]b',
-      });
-      isOss = await PageObjects.common.isOss();
     });
 
-    describe('', function () {
+    // TODO: Remove when vislib is removed
+    describe('new charts library visualize ciGroup7', function () {
+      this.tags('ciGroup7');
+
+      before(async () => {
+        await kibanaServer.uiSettings.update({
+          'visualization:visualize:legacyChartsLibrary': false,
+        });
+        await browser.refresh();
+      });
+
+      after(async () => {
+        await kibanaServer.uiSettings.update({
+          'visualization:visualize:legacyChartsLibrary': true,
+        });
+        await browser.refresh();
+      });
+
+      // Test replaced vislib chart types
+      loadTestFile(require.resolve('./_area_chart'));
+      loadTestFile(require.resolve('./_line_chart_split_series'));
+      loadTestFile(require.resolve('./_line_chart_split_chart'));
+      loadTestFile(require.resolve('./_point_series_options'));
+      loadTestFile(require.resolve('./_vertical_bar_chart'));
+      loadTestFile(require.resolve('./_vertical_bar_chart_nontimeindex'));
+    });
+
+    describe('visualize ciGroup9', function () {
       this.tags('ciGroup9');
 
       loadTestFile(require.resolve('./_embedding_chart'));
-      loadTestFile(require.resolve('./_chart_types'));
       loadTestFile(require.resolve('./_area_chart'));
       loadTestFile(require.resolve('./_data_table'));
       loadTestFile(require.resolve('./_data_table_nontimeindex'));
       loadTestFile(require.resolve('./_data_table_notimeindex_filters'));
+      loadTestFile(require.resolve('./_chart_types'));
     });
 
-    describe('', function () {
+    describe('visualize ciGroup10', function () {
       this.tags('ciGroup10');
 
       loadTestFile(require.resolve('./_inspector'));
@@ -65,10 +74,11 @@ export default function ({ getService, getPageObjects, loadTestFile }: FtrProvid
       loadTestFile(require.resolve('./_metric_chart'));
     });
 
-    describe('', function () {
-      this.tags('ciGroup11');
+    describe('visualize ciGroup4', function () {
+      this.tags('ciGroup4');
 
-      loadTestFile(require.resolve('./_line_chart'));
+      loadTestFile(require.resolve('./_line_chart_split_series'));
+      loadTestFile(require.resolve('./_line_chart_split_chart'));
       loadTestFile(require.resolve('./_pie_chart'));
       loadTestFile(require.resolve('./_point_series_options'));
       loadTestFile(require.resolve('./_markdown_vis'));
@@ -76,13 +86,12 @@ export default function ({ getService, getPageObjects, loadTestFile }: FtrProvid
       loadTestFile(require.resolve('./_lab_mode'));
       loadTestFile(require.resolve('./_linked_saved_searches'));
       loadTestFile(require.resolve('./_visualize_listing'));
-      if (isOss) {
-        loadTestFile(require.resolve('./_tile_map'));
-        loadTestFile(require.resolve('./_region_map'));
-      }
+      loadTestFile(require.resolve('./_add_to_dashboard.ts'));
+      loadTestFile(require.resolve('./_tile_map'));
+      loadTestFile(require.resolve('./_region_map'));
     });
 
-    describe('', function () {
+    describe('visualize ciGroup12', function () {
       this.tags('ciGroup12');
 
       loadTestFile(require.resolve('./_tag_cloud'));

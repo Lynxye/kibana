@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
@@ -11,11 +12,11 @@ import { FunctionFactory } from '../../../types';
 
 export const help: FunctionHelp<FunctionFactory<typeof savedMap>> = {
   help: i18n.translate('xpack.canvas.functions.savedMapHelpText', {
-    defaultMessage: `Returns an embeddable for a saved map object`,
+    defaultMessage: `Returns an embeddable for a saved map object.`,
   }),
   args: {
     id: i18n.translate('xpack.canvas.functions.savedMap.args.idHelpText', {
-      defaultMessage: `The ID of the Saved Map Object`,
+      defaultMessage: `The ID of the saved map object`,
     }),
     center: i18n.translate('xpack.canvas.functions.savedMap.args.centerHelpText', {
       defaultMessage: `The center and zoom level the map should have`,

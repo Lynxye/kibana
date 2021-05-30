@@ -1,14 +1,24 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
-import moment from 'moment';
 
-import { EntriesArray } from './schemas/types';
+import moment from 'moment';
+import type {
+  EndpointEntriesArray,
+  EntriesArray,
+  Entry,
+  EntryMatch,
+  EntryNested,
+  OsTypeArray,
+} from '@kbn/securitysolution-io-ts-list-types';
+
 export const DATE_NOW = '2020-04-20T15:25:31.830Z';
 export const OLD_DATE_RELATIVE_TO_DATE_NOW = '2020-04-19T15:25:31.830Z';
 export const USER = 'some user';
+export const ELASTIC_USER = 'elastic';
 export const LIST_INDEX = '.lists';
 export const LIST_ITEM_INDEX = '.items';
 export const NAME = 'some name';
@@ -33,16 +43,20 @@ export const TYPE = 'ip';
 export const VALUE = '127.0.0.1';
 export const VALUE_2 = '255.255.255';
 export const NAMESPACE_TYPE = 'single';
+export const NESTED_FIELD = 'parent.field';
 
 // Exception List specific
 export const ID = 'uuid_here';
 export const ITEM_ID = 'some-list-item-id';
+export const DETECTION_TYPE = 'detection';
 export const ENDPOINT_TYPE = 'endpoint';
 export const FIELD = 'host.name';
 export const OPERATOR = 'included';
+export const OPERATOR_EXCLUDED = 'excluded';
 export const ENTRY_VALUE = 'some host name';
 export const MATCH = 'match';
 export const MATCH_ANY = 'match_any';
+export const WILDCARD = 'wildcard';
 export const MAX_IMPORT_PAYLOAD_BYTES = 9000000;
 export const IMPORT_BUFFER_SIZE = 1000;
 export const LIST = 'list';
@@ -56,8 +70,44 @@ export const ENTRIES: EntriesArray = [
   },
   { field: 'some.not.nested.field', operator: 'included', type: 'match', value: 'some value' },
 ];
+export const ENDPOINT_ENTRIES: EndpointEntriesArray = [
+  {
+    entries: [{ field: 'nested.field', operator: 'included', type: 'match', value: 'some value' }],
+    field: 'some.parentField',
+    type: 'nested',
+  },
+  { field: 'some.not.nested.field', operator: 'included', type: 'match', value: 'some value' },
+];
+// ENTRIES_WITH_IDS should only be used to mock out functionality of a collection of transforms
+// that are UI specific and useful for UI concerns that are inserted between the
+// API and the actual user interface. In some ways these might be viewed as
+// technical debt or to compensate for the differences and preferences
+// of how ReactJS might prefer data vs. how we want to model data.
+export const ENTRIES_WITH_IDS: EntriesArray = [
+  {
+    entries: [
+      {
+        field: 'nested.field',
+        id: '123',
+        operator: 'included',
+        type: 'match',
+        value: 'some value',
+      } as EntryMatch & { id: string },
+    ],
+    field: 'some.parentField',
+    id: '123',
+    type: 'nested',
+  } as EntryNested & { id: string },
+  {
+    field: 'some.not.nested.field',
+    id: '123',
+    operator: 'included',
+    type: 'match',
+    value: 'some value',
+  } as Entry & { id: string },
+];
 export const ITEM_TYPE = 'simple';
-export const _TAGS = [];
+export const OS_TYPES: OsTypeArray = ['windows'];
 export const TAGS = [];
 export const COMMENTS = [];
 export const FILTER = 'name:Nicolas Bourbaki';

@@ -1,44 +1,48 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
 import { uniq } from 'lodash';
-import Boom from 'boom';
-import { ILegacyScopedClusterClient } from 'kibana/server';
-import { parseTimeIntervalForJob } from '../../../common/util/job_utils';
+import Boom from '@hapi/boom';
+import { IScopedClusterClient } from 'kibana/server';
+import {
+  getSingleMetricViewerJobErrorMessage,
+  parseTimeIntervalForJob,
+} from '../../../common/util/job_utils';
 import { JOB_STATE, DATAFEED_STATE } from '../../../common/constants/states';
 import {
   MlSummaryJob,
   AuditMessage,
-  Job,
-  JobStats,
   DatafeedWithStats,
   CombinedJobWithStats,
+  Datafeed,
+  Job,
 } from '../../../common/types/anomaly_detection_jobs';
+import {
+  MlJobsResponse,
+  MlJobsStatsResponse,
+  JobsExistResponse,
+} from '../../../common/types/job_service';
 import { GLOBAL_CALENDAR } from '../../../common/constants/calendars';
 import { datafeedsProvider, MlDatafeedsResponse, MlDatafeedsStatsResponse } from './datafeeds';
 import { jobAuditMessagesProvider } from '../job_audit_messages';
 import { resultsServiceProvider } from '../results_service';
-import { CalendarManager, Calendar } from '../calendar';
+import { CalendarManager } from '../calendar';
 import { fillResultsWithTimeouts, isRequestTimeout } from './error_utils';
 import {
   getEarliestDatafeedStartTime,
   getLatestDataOrBucketTimestamp,
-  isTimeSeriesViewJob,
 } from '../../../common/util/job_utils';
 import { groupsProvider } from './groups';
-export interface MlJobsResponse {
-  jobs: Job[];
-  count: number;
-}
-
-export interface MlJobsStatsResponse {
-  jobs: JobStats[];
-  count: number;
-}
+import type { MlClient } from '../../lib/ml_client';
+import { isPopulatedObject } from '../../../common/util/object_utils';
+import type { AlertsClient } from '../../../../alerting/server';
+import { ML_ALERT_TYPES } from '../../../common/constants/alerts';
+import { MlAnomalyDetectionAlertParams } from '../../routes/schemas/alerting_schema';
 
 interface Results {
   [id: string]: {
@@ -47,16 +51,23 @@ interface Results {
   };
 }
 
-export function jobsProvider(mlClusterClient: ILegacyScopedClusterClient) {
-  const { callAsInternalUser } = mlClusterClient;
+export function jobsProvider(
+  client: IScopedClusterClient,
+  mlClient: MlClient,
+  alertsClient?: AlertsClient
+) {
+  const { asInternalUser } = client;
 
-  const { forceDeleteDatafeed, getDatafeedIdsByJobId } = datafeedsProvider(mlClusterClient);
-  const { getAuditMessagesSummary } = jobAuditMessagesProvider(mlClusterClient);
-  const { getLatestBucketTimestampByJob } = resultsServiceProvider(mlClusterClient);
-  const calMngr = new CalendarManager(mlClusterClient);
+  const { forceDeleteDatafeed, getDatafeedIdsByJobId, getDatafeedByJobId } = datafeedsProvider(
+    client,
+    mlClient
+  );
+  const { getAuditMessagesSummary } = jobAuditMessagesProvider(client, mlClient);
+  const { getLatestBucketTimestampByJob } = resultsServiceProvider(mlClient);
+  const calMngr = new CalendarManager(mlClient);
 
   async function forceDeleteJob(jobId: string) {
-    return callAsInternalUser('ml.deleteJob', { jobId, force: true });
+    await mlClient.deleteJob({ job_id: jobId, force: true, wait_for_completion: false });
   }
 
   async function deleteJobs(jobIds: string[]) {
@@ -78,7 +89,7 @@ export function jobsProvider(mlClusterClient: ILegacyScopedClusterClient) {
             if (isRequestTimeout(error)) {
               return fillResultsWithTimeouts(results, jobId, jobIds, DATAFEED_STATE.DELETED);
             }
-            results[jobId] = { deleted: false, error };
+            results[jobId] = { deleted: false, error: error.body };
           }
         }
       } catch (error) {
@@ -90,7 +101,7 @@ export function jobsProvider(mlClusterClient: ILegacyScopedClusterClient) {
             DATAFEED_STATE.DELETED
           );
         }
-        results[jobId] = { deleted: false, error };
+        results[jobId] = { deleted: false, error: error.body };
       }
     }
     return results;
@@ -100,7 +111,7 @@ export function jobsProvider(mlClusterClient: ILegacyScopedClusterClient) {
     const results: Results = {};
     for (const jobId of jobIds) {
       try {
-        await callAsInternalUser('ml.closeJob', { jobId });
+        await mlClient.closeJob({ job_id: jobId });
         results[jobId] = { closed: true };
       } catch (error) {
         if (isRequestTimeout(error)) {
@@ -109,23 +120,23 @@ export function jobsProvider(mlClusterClient: ILegacyScopedClusterClient) {
 
         if (
           error.statusCode === 409 &&
-          error.response &&
-          error.response.includes('datafeed') === false
+          error.body.error?.reason &&
+          error.body.error.reason.includes('datafeed') === false
         ) {
           // the close job request may fail (409) if the job has failed or if the datafeed hasn't been stopped.
           // if the job has failed we want to attempt a force close.
           // however, if we received a 409 due to the datafeed being started we should not attempt a force close.
           try {
-            await callAsInternalUser('ml.closeJob', { jobId, force: true });
+            await mlClient.closeJob({ job_id: jobId, force: true });
             results[jobId] = { closed: true };
           } catch (error2) {
-            if (isRequestTimeout(error)) {
+            if (isRequestTimeout(error2)) {
               return fillResultsWithTimeouts(results, jobId, jobIds, JOB_STATE.CLOSED);
             }
-            results[jobId] = { closed: false, error: error2 };
+            results[jobId] = { closed: false, error: error2.body };
           }
         } else {
-          results[jobId] = { closed: false, error };
+          results[jobId] = { closed: false, error: error.body };
         }
       }
     }
@@ -139,12 +150,15 @@ export function jobsProvider(mlClusterClient: ILegacyScopedClusterClient) {
       throw Boom.notFound(`Cannot find datafeed for job ${jobId}`);
     }
 
-    const dfResult = await callAsInternalUser('ml.stopDatafeed', { datafeedId, force: true });
-    if (!dfResult || dfResult.stopped !== true) {
+    const { body } = await mlClient.stopDatafeed({
+      datafeed_id: datafeedId,
+      body: { force: true },
+    });
+    if (body.stopped !== true) {
       return { success: false };
     }
 
-    await callAsInternalUser('ml.closeJob', { jobId, force: true });
+    await mlClient.closeJob({ job_id: jobId, force: true });
 
     return { success: true };
   }
@@ -152,20 +166,27 @@ export function jobsProvider(mlClusterClient: ILegacyScopedClusterClient) {
   async function jobsSummary(jobIds: string[] = []) {
     const fullJobsList: CombinedJobWithStats[] = await createFullJobsList();
     const fullJobsIds = fullJobsList.map((job) => job.job_id);
-    const auditMessages: AuditMessage[] = await getAuditMessagesSummary(fullJobsIds);
-    const auditMessagesByJob = auditMessages.reduce((acc, cur) => {
-      acc[cur.job_id] = cur;
-      return acc;
-    }, {} as { [id: string]: AuditMessage });
+    let auditMessagesByJob: { [id: string]: AuditMessage } = {};
+
+    // even if there are errors getting the audit messages, we still want to show the full list
+    try {
+      const auditMessages: AuditMessage[] = await getAuditMessagesSummary(fullJobsIds);
+      auditMessagesByJob = auditMessages.reduce((acc, cur) => {
+        acc[cur.job_id] = cur;
+        return acc;
+      }, auditMessagesByJob);
+    } catch (e) {
+      // fail silently
+    }
 
     const deletingStr = i18n.translate('xpack.ml.models.jobService.deletingJob', {
       defaultMessage: 'deleting',
     });
 
     const jobs = fullJobsList.map((job) => {
-      const hasDatafeed =
-        typeof job.datafeed_config === 'object' && Object.keys(job.datafeed_config).length > 0;
+      const hasDatafeed = isPopulatedObject(job.datafeed_config);
       const dataCounts = job.data_counts;
+      const errorMessage = getSingleMetricViewerJobErrorMessage(job);
 
       const tempJob: MlSummaryJob = {
         id: job.job_id,
@@ -174,6 +195,7 @@ export function jobsProvider(mlClusterClient: ILegacyScopedClusterClient) {
         processed_record_count: job.data_counts?.processed_record_count,
         earliestStartTimestampMs: getEarliestDatafeedStartTime(
           dataCounts?.latest_record_timestamp,
+          // @ts-expect-error @elastic/elasticsearch data counts missing is missing latest_bucket_timestamp
           dataCounts?.latest_bucket_timestamp,
           parseTimeIntervalForJob(job.analysis_config?.bucket_span)
         ),
@@ -189,11 +211,15 @@ export function jobsProvider(mlClusterClient: ILegacyScopedClusterClient) {
         earliestTimestampMs: dataCounts?.earliest_record_timestamp,
         latestResultsTimestampMs: getLatestDataOrBucketTimestamp(
           dataCounts?.latest_record_timestamp,
+          // @ts-expect-error @elastic/elasticsearch data counts missing is missing latest_bucket_timestamp
           dataCounts?.latest_bucket_timestamp
         ),
-        isSingleMetricViewerJob: isTimeSeriesViewJob(job),
+        isSingleMetricViewerJob: errorMessage === undefined,
+        isNotSingleMetricViewerJobMessage: errorMessage,
         nodeName: job.node ? job.node.name : undefined,
         deleting: job.deleting || undefined,
+        awaitingNodeAssignment: isJobAwaitingNodeAssignment(job),
+        alertingRules: job.alerting_rules,
       };
       if (jobIds.find((j) => j === tempJob.id)) {
         tempJob.fullJob = job;
@@ -221,25 +247,27 @@ export function jobsProvider(mlClusterClient: ILegacyScopedClusterClient) {
 
     const jobs = fullJobsList.map((job) => {
       jobsMap[job.job_id] = job.groups || [];
-      const hasDatafeed =
-        typeof job.datafeed_config === 'object' && Object.keys(job.datafeed_config).length > 0;
+      const hasDatafeed = isPopulatedObject(job.datafeed_config);
       const timeRange: { to?: number; from?: number } = {};
 
       const dataCounts = job.data_counts;
       if (dataCounts !== undefined) {
         timeRange.to = getLatestDataOrBucketTimestamp(
           dataCounts.latest_record_timestamp as number,
+          // @ts-expect-error @elastic/elasticsearch data counts missing is missing latest_bucket_timestamp
           dataCounts.latest_bucket_timestamp as number
         );
         timeRange.from = dataCounts.earliest_record_timestamp;
       }
+      const errorMessage = getSingleMetricViewerJobErrorMessage(job);
 
       const tempJob = {
         id: job.job_id,
         job_id: job.job_id,
         groups: Array.isArray(job.groups) ? job.groups.sort() : [],
         isRunning: hasDatafeed && job.datafeed_config.state === 'started',
-        isSingleMetricViewerJob: isTimeSeriesViewJob(job),
+        isSingleMetricViewerJob: errorMessage === undefined,
+        isNotSingleMetricViewerJobMessage: errorMessage,
         timeRange,
       };
 
@@ -249,6 +277,25 @@ export function jobsProvider(mlClusterClient: ILegacyScopedClusterClient) {
     return { jobs, jobsMap };
   }
 
+  async function getJobForCloning(jobId: string) {
+    const [{ body: jobResults }, datafeedResult] = await Promise.all([
+      mlClient.getJobs<MlJobsResponse>({ job_id: jobId, exclude_generated: true }),
+      getDatafeedByJobId(jobId, true),
+    ]);
+    const result: { datafeed?: Datafeed; job?: Job } = { job: undefined, datafeed: undefined };
+    if (datafeedResult && datafeedResult.job_id === jobId) {
+      result.datafeed = datafeedResult;
+    }
+
+    if (jobResults && jobResults.jobs) {
+      const job = jobResults.jobs.find((j) => j.job_id === jobId);
+      if (job) {
+        result.job = job;
+      }
+    }
+    return result;
+  }
+
   async function createFullJobsList(jobIds: string[] = []) {
     const jobs: CombinedJobWithStats[] = [];
     const groups: { [jobId: string]: string[] } = {};
@@ -256,41 +303,25 @@ export function jobsProvider(mlClusterClient: ILegacyScopedClusterClient) {
     const calendarsByJobId: { [jobId: string]: string[] } = {};
     const globalCalendars: string[] = [];
 
-    const requests: [
-      Promise<MlJobsResponse>,
-      Promise<MlJobsStatsResponse>,
-      Promise<MlDatafeedsResponse>,
-      Promise<MlDatafeedsStatsResponse>,
-      Promise<Calendar[]>,
-      Promise<{ [id: string]: number | undefined }>
-    ] = [
-      jobIds.length > 0
-        ? (callAsInternalUser('ml.jobs', { jobId: jobIds }) as Promise<MlJobsResponse>) // move length check in  side call
-        : (callAsInternalUser('ml.jobs') as Promise<MlJobsResponse>),
-      jobIds.length > 0
-        ? (callAsInternalUser('ml.jobStats', { jobId: jobIds }) as Promise<MlJobsStatsResponse>)
-        : (callAsInternalUser('ml.jobStats') as Promise<MlJobsStatsResponse>),
-      callAsInternalUser('ml.datafeeds') as Promise<MlDatafeedsResponse>,
-      callAsInternalUser('ml.datafeedStats') as Promise<MlDatafeedsStatsResponse>,
-      calMngr.getAllCalendars(),
-      getLatestBucketTimestampByJob(),
-    ];
+    const jobIdsString = jobIds.join();
 
     const [
-      jobResults,
-      jobStatsResults,
-      datafeedResults,
-      datafeedStatsResults,
+      { body: jobResults },
+      { body: jobStatsResults },
+      { body: datafeedResults },
+      { body: datafeedStatsResults },
       calendarResults,
       latestBucketTimestampByJob,
-    ] = await Promise.all<
-      MlJobsResponse,
-      MlJobsStatsResponse,
-      MlDatafeedsResponse,
-      MlDatafeedsStatsResponse,
-      Calendar[],
-      { [id: string]: number | undefined }
-    >(requests);
+    ] = await Promise.all([
+      mlClient.getJobs<MlJobsResponse>(jobIds.length > 0 ? { job_id: jobIdsString } : undefined),
+      mlClient.getJobStats<MlJobsStatsResponse>(
+        jobIds.length > 0 ? { job_id: jobIdsString } : undefined
+      ),
+      mlClient.getDatafeeds<MlDatafeedsResponse>(),
+      mlClient.getDatafeedStats<MlDatafeedsStatsResponse>(),
+      calMngr.getAllCalendars(),
+      getLatestBucketTimestampByJob(),
+    ]);
 
     if (datafeedResults && datafeedResults.datafeeds) {
       datafeedResults.datafeeds.forEach((datafeed) => {
@@ -367,6 +398,7 @@ export function jobsProvider(mlClusterClient: ILegacyScopedClusterClient) {
         if (jobStatsResults && jobStatsResults.jobs) {
           const jobStats = jobStatsResults.jobs.find((js) => js.job_id === tempJob.job_id);
           if (jobStats !== undefined) {
+            // @ts-expect-error @elastic-elasticsearch JobStats type is incomplete
             tempJob = { ...tempJob, ...jobStats };
             if (jobStats.node) {
               tempJob.node = jobStats.node;
@@ -379,6 +411,7 @@ export function jobsProvider(mlClusterClient: ILegacyScopedClusterClient) {
             const latestBucketTimestamp =
               latestBucketTimestampByJob && latestBucketTimestampByJob[tempJob.job_id];
             if (latestBucketTimestamp) {
+              // @ts-expect-error @elastic/elasticsearch data counts missing is missing latest_bucket_timestamp
               tempJob.data_counts.latest_bucket_timestamp = latestBucketTimestamp;
             }
           }
@@ -391,6 +424,39 @@ export function jobsProvider(mlClusterClient: ILegacyScopedClusterClient) {
 
         jobs.push(tempJob);
       });
+
+      if (alertsClient) {
+        const mlAlertingRules = await alertsClient.find<MlAnomalyDetectionAlertParams>({
+          options: {
+            filter: `alert.attributes.alertTypeId:${ML_ALERT_TYPES.ANOMALY_DETECTION}`,
+            perPage: 1000,
+          },
+        });
+
+        mlAlertingRules.data.forEach((curr) => {
+          const {
+            params: {
+              jobSelection: { jobIds: ruleJobIds, groupIds: ruleGroupIds },
+            },
+          } = curr;
+
+          jobs.forEach((j) => {
+            const isIncluded =
+              (Array.isArray(ruleJobIds) && ruleJobIds.includes(j.job_id)) ||
+              (Array.isArray(ruleGroupIds) &&
+                Array.isArray(j.groups) &&
+                j.groups.some((g) => ruleGroupIds.includes(g)));
+
+            if (isIncluded) {
+              if (Array.isArray(j.alerting_rules)) {
+                j.alerting_rules.push(curr);
+              } else {
+                j.alerting_rules = [curr];
+              }
+            }
+          });
+        });
+      }
     }
     return jobs;
   }
@@ -398,19 +464,29 @@ export function jobsProvider(mlClusterClient: ILegacyScopedClusterClient) {
   async function deletingJobTasks() {
     const actions = ['cluster:admin/xpack/ml/job/delete'];
     const detailed = true;
-    const jobIds = [];
+    const jobIds: string[] = [];
     try {
-      const tasksList = await callAsInternalUser('tasks.list', { actions, detailed });
-      Object.keys(tasksList.nodes).forEach((nodeId) => {
-        const tasks = tasksList.nodes[nodeId].tasks;
-        Object.keys(tasks).forEach((taskId) => {
-          jobIds.push(tasks[taskId].description.replace(/^delete-job-/, ''));
-        });
+      const { body } = await asInternalUser.tasks.list({
+        // @ts-expect-error @elastic-elasticsearch expects it to be a string
+        actions,
+        detailed,
       });
+
+      if (body.nodes) {
+        Object.keys(body.nodes).forEach((nodeId) => {
+          const tasks = body.nodes![nodeId].tasks;
+          Object.keys(tasks).forEach((taskId) => {
+            jobIds.push(tasks[taskId].description!.replace(/^delete-job-/, ''));
+          });
+        });
+      }
     } catch (e) {
       // if the user doesn't have permission to load the task list,
       // use the jobs list to get the ids of deleting jobs
-      const { jobs } = (await callAsInternalUser('ml.jobs')) as MlJobsResponse;
+      const {
+        body: { jobs },
+      } = await mlClient.getJobs<MlJobsResponse>();
+
       jobIds.push(...jobs.filter((j) => j.deleting === true).map((j) => j.job_id));
     }
     return { jobIds };
@@ -419,36 +495,43 @@ export function jobsProvider(mlClusterClient: ILegacyScopedClusterClient) {
   // Checks if each of the jobs in the specified list of IDs exist.
   // Job IDs in supplied array may contain wildcard '*' characters
   // e.g. *_low_request_rate_ecs
-  async function jobsExist(jobIds: string[] = []) {
-    // Get the list of job IDs.
-    const jobsInfo = (await callAsInternalUser('ml.jobs', {
-      jobId: jobIds,
-    })) as MlJobsResponse;
+  async function jobsExist(
+    jobIds: string[] = [],
+    allSpaces: boolean = false
+  ): Promise<JobsExistResponse> {
+    const results: JobsExistResponse = {};
+    for (const jobId of jobIds) {
+      try {
+        if (jobId === '') {
+          results[jobId] = { exists: false, isGroup: false };
+          continue;
+        }
 
-    const results: { [id: string]: boolean } = {};
-    if (jobsInfo.count > 0) {
-      const allJobIds = jobsInfo.jobs.map((job) => job.job_id);
+        const { body } = allSpaces
+          ? await client.asInternalUser.ml.getJobs<MlJobsResponse>({
+              job_id: jobId,
+            })
+          : await mlClient.getJobs<MlJobsResponse>({
+              job_id: jobId,
+            });
 
-      // Check if each of the supplied IDs match existing jobs.
-      jobIds.forEach((jobId) => {
-        // Create a Regex for each supplied ID as wildcard * is allowed.
-        const regexp = new RegExp(`^${jobId.replace(/\*+/g, '.*')}$`);
-        const exists = allJobIds.some((existsJobId) => regexp.test(existsJobId));
-        results[jobId] = exists;
-      });
-    } else {
-      jobIds.forEach((jobId) => {
-        results[jobId] = false;
-      });
+        const isGroup = body.jobs.some((j) => j.groups !== undefined && j.groups.includes(jobId));
+        results[jobId] = { exists: body.count > 0, isGroup };
+      } catch (e) {
+        // if a non-wildcarded job id is supplied, the get jobs endpoint will 404
+        if (e.statusCode !== 404) {
+          throw e;
+        }
+        results[jobId] = { exists: false, isGroup: false };
+      }
     }
-
     return results;
   }
 
   async function getAllJobAndGroupIds() {
-    const { getAllGroups } = groupsProvider(mlClusterClient);
-    const jobs = (await callAsInternalUser('ml.jobs')) as MlJobsResponse;
-    const jobIds = jobs.jobs.map((job) => job.job_id);
+    const { getAllGroups } = groupsProvider(mlClient);
+    const { body } = await mlClient.getJobs<MlJobsResponse>();
+    const jobIds = body.jobs.map((job) => job.job_id);
     const groups = await getAllGroups();
     const groupIds = groups.map((group) => group.id);
 
@@ -460,13 +543,13 @@ export function jobsProvider(mlClusterClient: ILegacyScopedClusterClient) {
 
   async function getLookBackProgress(jobId: string, start: number, end: number) {
     const datafeedId = `datafeed-${jobId}`;
-    const [jobStats, isRunning] = await Promise.all([
-      callAsInternalUser('ml.jobStats', { jobId: [jobId] }) as Promise<MlJobsStatsResponse>,
+    const [{ body }, isRunning] = await Promise.all([
+      mlClient.getJobStats<MlJobsStatsResponse>({ job_id: jobId }),
       isDatafeedRunning(datafeedId),
     ]);
 
-    if (jobStats.jobs.length) {
-      const statsForJob = jobStats.jobs[0];
+    if (body.jobs.length) {
+      const statsForJob = body.jobs[0];
       const time = statsForJob.data_counts.latest_record_timestamp;
       const progress = (time - start) / (end - start);
       const isJobClosed = statsForJob.state === JOB_STATE.CLOSED;
@@ -480,11 +563,11 @@ export function jobsProvider(mlClusterClient: ILegacyScopedClusterClient) {
   }
 
   async function isDatafeedRunning(datafeedId: string) {
-    const stats = (await callAsInternalUser('ml.datafeedStats', {
-      datafeedId: [datafeedId],
-    })) as MlDatafeedsStatsResponse;
-    if (stats.datafeeds.length) {
-      const state = stats.datafeeds[0].state;
+    const { body } = await mlClient.getDatafeedStats<MlDatafeedsStatsResponse>({
+      datafeed_id: datafeedId,
+    });
+    if (body.datafeeds.length) {
+      const state = body.datafeeds[0].state;
       return (
         state === DATAFEED_STATE.STARTED ||
         state === DATAFEED_STATE.STARTING ||
@@ -494,6 +577,10 @@ export function jobsProvider(mlClusterClient: ILegacyScopedClusterClient) {
     return false;
   }
 
+  function isJobAwaitingNodeAssignment(job: CombinedJobWithStats) {
+    return job.node === undefined && job.state === JOB_STATE.OPENING;
+  }
+
   return {
     forceDeleteJob,
     deleteJobs,
@@ -501,6 +588,7 @@ export function jobsProvider(mlClusterClient: ILegacyScopedClusterClient) {
     forceStopAndCloseJob,
     jobsSummary,
     jobsWithTimerange,
+    getJobForCloning,
     createFullJobsList,
     deletingJobTasks,
     jobsExist,

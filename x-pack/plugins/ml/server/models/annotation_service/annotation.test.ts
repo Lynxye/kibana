@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import getAnnotationsRequestMock from './__mocks__/get_annotations_request.json';
@@ -22,24 +23,20 @@ describe('annotation_service', () => {
   let mlClusterClientSpy = {} as any;
 
   beforeEach(() => {
-    const callAs = jest.fn((action: string) => {
-      switch (action) {
-        case 'delete':
-        case 'index':
-          return Promise.resolve(acknowledgedResponseMock);
-        case 'search':
-          return Promise.resolve(getAnnotationsResponseMock);
-      }
-    });
+    const callAs = {
+      delete: jest.fn(() => Promise.resolve({ body: acknowledgedResponseMock })),
+      index: jest.fn(() => Promise.resolve({ body: acknowledgedResponseMock })),
+      search: jest.fn(() => Promise.resolve({ body: getAnnotationsResponseMock })),
+    };
 
     mlClusterClientSpy = {
-      callAsCurrentUser: callAs,
-      callAsInternalUser: callAs,
+      asCurrentUser: callAs,
+      asInternalUser: callAs,
     };
   });
 
   describe('deleteAnnotation()', () => {
-    it('should delete annotation', async (done) => {
+    it('should delete annotation', async () => {
       const { deleteAnnotation } = annotationServiceProvider(mlClusterClientSpy);
       const mockFunct = mlClusterClientSpy;
 
@@ -52,15 +49,13 @@ describe('annotation_service', () => {
 
       const response = await deleteAnnotation(annotationMockId);
 
-      expect(mockFunct.callAsInternalUser.mock.calls[0][0]).toBe('delete');
-      expect(mockFunct.callAsInternalUser.mock.calls[0][1]).toEqual(deleteParamsMock);
+      expect(mockFunct.asInternalUser.delete.mock.calls[0][0]).toStrictEqual(deleteParamsMock);
       expect(response).toBe(acknowledgedResponseMock);
-      done();
     });
   });
 
   describe('getAnnotation()', () => {
-    it('should get annotations for specific job', async (done) => {
+    it('should get annotations for specific job', async () => {
       const { getAnnotations } = annotationServiceProvider(mlClusterClientSpy);
       const mockFunct = mlClusterClientSpy;
 
@@ -73,12 +68,12 @@ describe('annotation_service', () => {
 
       const response: GetResponse = await getAnnotations(indexAnnotationArgsMock);
 
-      expect(mockFunct.callAsInternalUser.mock.calls[0][0]).toBe('search');
-      expect(mockFunct.callAsInternalUser.mock.calls[0][1]).toEqual(getAnnotationsRequestMock);
+      expect(mockFunct.asInternalUser.search.mock.calls[0][0]).toStrictEqual(
+        getAnnotationsRequestMock
+      );
       expect(Object.keys(response.annotations)).toHaveLength(1);
       expect(response.annotations[jobIdMock]).toHaveLength(2);
       expect(isAnnotations(response.annotations[jobIdMock])).toBeTruthy();
-      done();
     });
 
     it('should throw and catch an error', async () => {
@@ -89,9 +84,9 @@ describe('annotation_service', () => {
       };
 
       const mlClusterClientSpyError: any = {
-        callAsInternalUser: jest.fn(() => {
-          return Promise.resolve(mockEsError);
-        }),
+        asInternalUser: {
+          search: jest.fn(() => Promise.resolve({ body: mockEsError })),
+        },
       };
 
       const { getAnnotations } = annotationServiceProvider(mlClusterClientSpyError);
@@ -110,7 +105,7 @@ describe('annotation_service', () => {
   });
 
   describe('indexAnnotation()', () => {
-    it('should index annotation', async (done) => {
+    it('should index annotation', async () => {
       const { indexAnnotation } = annotationServiceProvider(mlClusterClientSpy);
       const mockFunct = mlClusterClientSpy;
 
@@ -124,10 +119,8 @@ describe('annotation_service', () => {
 
       const response = await indexAnnotation(annotationMock, usernameMock);
 
-      expect(mockFunct.callAsInternalUser.mock.calls[0][0]).toBe('index');
-
       // test if the annotation has been correctly augmented
-      const indexParamsCheck = mockFunct.callAsInternalUser.mock.calls[0][1];
+      const indexParamsCheck = mockFunct.asInternalUser.index.mock.calls[0][0];
       const annotation = indexParamsCheck.body;
       expect(annotation.create_username).toBe(usernameMock);
       expect(annotation.modified_username).toBe(usernameMock);
@@ -135,10 +128,9 @@ describe('annotation_service', () => {
       expect(typeof annotation.modified_time).toBe('number');
 
       expect(response).toBe(acknowledgedResponseMock);
-      done();
     });
 
-    it('should remove ._id and .key before updating annotation', async (done) => {
+    it('should remove ._id and .key before updating annotation', async () => {
       const { indexAnnotation } = annotationServiceProvider(mlClusterClientSpy);
       const mockFunct = mlClusterClientSpy;
 
@@ -154,10 +146,8 @@ describe('annotation_service', () => {
 
       const response = await indexAnnotation(annotationMock, usernameMock);
 
-      expect(mockFunct.callAsInternalUser.mock.calls[0][0]).toBe('index');
-
       // test if the annotation has been correctly augmented
-      const indexParamsCheck = mockFunct.callAsInternalUser.mock.calls[0][1];
+      const indexParamsCheck = mockFunct.asInternalUser.index.mock.calls[0][0];
       const annotation = indexParamsCheck.body;
       expect(annotation.create_username).toBe(usernameMock);
       expect(annotation.modified_username).toBe(usernameMock);
@@ -167,10 +157,9 @@ describe('annotation_service', () => {
       expect(typeof annotation.key).toBe('undefined');
 
       expect(response).toBe(acknowledgedResponseMock);
-      done();
     });
 
-    it('should update annotation text and the username for modified_username', async (done) => {
+    it('should update annotation text and the username for modified_username', async () => {
       const { getAnnotations, indexAnnotation } = annotationServiceProvider(mlClusterClientSpy);
       const mockFunct = mlClusterClientSpy;
 
@@ -196,16 +185,14 @@ describe('annotation_service', () => {
 
       await indexAnnotation(annotation, modifiedUsernameMock);
 
-      expect(mockFunct.callAsInternalUser.mock.calls[1][0]).toBe('index');
       // test if the annotation has been correctly updated
-      const indexParamsCheck = mockFunct.callAsInternalUser.mock.calls[1][1];
+      const indexParamsCheck = mockFunct.asInternalUser.index.mock.calls[0][0];
       const modifiedAnnotation = indexParamsCheck.body;
       expect(modifiedAnnotation.annotation).toBe(modifiedAnnotationText);
       expect(modifiedAnnotation.create_username).toBe(originalUsernameMock);
       expect(modifiedAnnotation.modified_username).toBe(modifiedUsernameMock);
       expect(typeof modifiedAnnotation.create_time).toBe('number');
       expect(typeof modifiedAnnotation.modified_time).toBe('number');
-      done();
     });
   });
 });

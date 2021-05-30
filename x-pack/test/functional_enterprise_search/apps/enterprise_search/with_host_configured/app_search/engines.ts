@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import expect from '@kbn/expect';
@@ -52,6 +53,9 @@ export default function enterpriseSearchSetupEnginesTests({
         await retry.try(async function () {
           const currentUrl = await browser.getCurrentUrl();
           expect(currentUrl).to.contain('/app_search');
+
+          const documentTitle = await browser.getTitle();
+          expect(documentTitle).to.contain('App Search - Elastic');
         });
       });
 

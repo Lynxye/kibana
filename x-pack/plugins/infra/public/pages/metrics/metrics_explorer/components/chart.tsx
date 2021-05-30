@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { useCallback, useMemo } from 'react';
@@ -18,6 +19,7 @@ import {
 } from '@elastic/charts';
 import { first, last } from 'lodash';
 import moment from 'moment';
+import { MetricsSourceConfigurationProperties } from '../../../../../common/metrics_sources';
 import { MetricsExplorerSeries } from '../../../../../common/http_api/metrics_explorer';
 import {
   MetricsExplorerOptions,
@@ -25,11 +27,10 @@ import {
   MetricsExplorerYAxisMode,
   MetricsExplorerChartOptions,
 } from '../hooks/use_metrics_explorer_options';
-import { euiStyled } from '../../../../../../observability/public';
+import { euiStyled } from '../../../../../../../../src/plugins/kibana_react/common';
 import { createFormatterForMetric } from './helpers/create_formatter_for_metric';
 import { MetricExplorerSeriesChart } from './series_chart';
 import { MetricsExplorerChartContextMenu } from './chart_context_menu';
-import { SourceQuery } from '../../../../graphql/types';
 import { MetricsExplorerEmptyChart } from './empty_chart';
 import { MetricsExplorerNoMetrics } from './no_metrics';
 import { getChartTheme } from './helpers/get_chart_theme';
@@ -46,7 +47,7 @@ interface Props {
   options: MetricsExplorerOptions;
   chartOptions: MetricsExplorerChartOptions;
   series: MetricsExplorerSeries;
-  source: SourceQuery.Query['source']['configuration'] | undefined;
+  source: MetricsSourceConfigurationProperties | undefined;
   timeRange: MetricsExplorerTimeOptions;
   onTimeChange: (start: string, end: string) => void;
 }
@@ -74,16 +75,13 @@ export const MetricsExplorerChart = ({
     const [from, to] = x;
     onTimeChange(moment(from).toISOString(), moment(to).toISOString());
   };
-  const dateFormatter = useMemo(
-    () =>
-      series.rows.length > 0
-        ? niceTimeFormatter([
-            (first(series.rows) as any).timestamp,
-            (last(series.rows) as any).timestamp,
-          ])
-        : (value: number) => `${value}`,
-    [series.rows]
-  );
+  const dateFormatter = useMemo(() => {
+    const firstRow = first(series.rows);
+    const lastRow = last(series.rows);
+    return firstRow && lastRow
+      ? niceTimeFormatter([firstRow.timestamp, lastRow.timestamp])
+      : (value: number) => `${value}`;
+  }, [series.rows]);
   const tooltipProps = {
     headerFormatter: useCallback(
       (data: TooltipValue) => moment(data.value).format(dateFormat || 'Y-MM-DD HH:mm:ss.SSS'),

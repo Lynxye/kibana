@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { FC, useState } from 'react';
@@ -19,17 +20,23 @@ import {
 } from '@elastic/eui';
 import { FormattedMessage } from '@kbn/i18n/react';
 import { useNavigateToPath } from '../../../../contexts/kibana';
+
 import { useMlContext } from '../../../../contexts/ml';
 import { isSavedSearchSavedObject } from '../../../../../../common/types/kibana';
 import { DataRecognizer } from '../../../../components/data_recognizer';
 import { addItemToRecentlyAccessed } from '../../../../util/recently_accessed';
 import { timeBasedIndexCheck } from '../../../../util/index_utils';
-import { CreateJobLinkCard } from '../../../../components/create_job_link_card';
+import { LinkCard } from '../../../../components/link_card';
 import { CategorizationIcon } from './categorization_job_icon';
+import { ML_PAGES } from '../../../../../../common/constants/ml_url_generator';
+import { useCreateAndNavigateToMlLink } from '../../../../contexts/kibana/use_create_url';
 
 export const Page: FC = () => {
   const mlContext = useMlContext();
   const navigateToPath = useNavigateToPath();
+  const onSelectDifferentIndex = useCreateAndNavigateToMlLink(
+    ML_PAGES.ANOMALY_DETECTION_CREATE_JOB_SELECT_INDEX
+  );
 
   const [recognizerResultsCount, setRecognizerResultsCount] = useState(0);
 
@@ -193,7 +200,7 @@ export const Page: FC = () => {
                 defaultMessage="Anomaly detection can only be run over indices which are time based."
               />
               <br />
-              <EuiLink href="#jobs/new_job">
+              <EuiLink onClick={onSelectDifferentIndex}>
                 <FormattedMessage
                   id="xpack.ml.newJob.wizard.jobType.selectDifferentIndexLinkText"
                   defaultMessage="Select a different index"
@@ -250,7 +257,7 @@ export const Page: FC = () => {
         <EuiFlexGrid gutterSize="l" columns={4}>
           {jobTypes.map(({ onClick, icon, title, description, id }) => (
             <EuiFlexItem key={id}>
-              <CreateJobLinkCard
+              <LinkCard
                 data-test-subj={id}
                 onClick={onClick}
                 icon={icon.type}
@@ -287,7 +294,7 @@ export const Page: FC = () => {
 
         <EuiFlexGrid gutterSize="l" columns={4}>
           <EuiFlexItem>
-            <CreateJobLinkCard
+            <LinkCard
               icon="dataVisualizer"
               iconAreaLabel={i18n.translate(
                 'xpack.ml.newJob.wizard.jobType.dataVisualizerAriaLabel',

@@ -1,8 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import { FormattedMessage } from '@kbn/i18n/react';
 import { EuiPageContent } from '@elastic/eui';
 import React, { FunctionComponent } from 'react';
@@ -21,13 +23,14 @@ import {
 } from '../shared_imports';
 
 import { PipelinesList, PipelinesCreate, PipelinesEdit, PipelinesClone } from './sections';
+import { ROUTES } from './services/navigation';
 
 export const AppWithoutRouter = () => (
   <Switch>
-    <Route exact path="/" component={PipelinesList} />
-    <Route exact path={`/create/:sourceName`} component={PipelinesClone} />
-    <Route exact path={`/create`} component={PipelinesCreate} />
-    <Route exact path={`/edit/:name`} component={PipelinesEdit} />
+    <Route exact path={ROUTES.list} component={PipelinesList} />
+    <Route exact path={ROUTES.clone} component={PipelinesClone} />
+    <Route exact path={ROUTES.create} component={PipelinesCreate} />
+    <Route exact path={ROUTES.edit} component={PipelinesEdit} />
     {/* Catch all */}
     <Route component={PipelinesList} />
   </Switch>

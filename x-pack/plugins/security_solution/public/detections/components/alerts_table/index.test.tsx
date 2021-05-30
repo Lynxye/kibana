@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React from 'react';
@@ -18,11 +19,10 @@ describe('AlertsTableComponent', () => {
       <TestProviders>
         <AlertsTableComponent
           timelineId={TimelineId.test}
-          canUserCRUD
           hasIndexWrite
+          hasIndexMaintenance
           from={'2020-07-07T08:20:18.966Z'}
           loading
-          signalsIndex="index"
           to={'2020-07-08T08:20:18.966Z'}
           globalQuery={{
             query: 'query',
@@ -40,8 +40,8 @@ describe('AlertsTableComponent', () => {
           clearEventsDeleted={jest.fn()}
           showBuildingBlockAlerts={false}
           onShowBuildingBlockAlertsChanged={jest.fn()}
-          updateTimelineIsLoading={jest.fn()}
-          updateTimeline={jest.fn()}
+          showOnlyThreatIndicatorAlerts={false}
+          onShowOnlyThreatIndicatorAlertsChanged={jest.fn()}
         />
       </TestProviders>
     );

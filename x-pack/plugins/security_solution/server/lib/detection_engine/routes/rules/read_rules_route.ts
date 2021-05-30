@@ -1,25 +1,31 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
+import { transformError } from '@kbn/securitysolution-es-utils';
+import { RuleDataClient } from '../../../../../../rule_registry/server';
 import { queryRuleValidateTypeDependents } from '../../../../../common/detection_engine/schemas/request/query_rules_type_dependents';
 import {
   queryRulesSchema,
   QueryRulesSchemaDecoded,
 } from '../../../../../common/detection_engine/schemas/request/query_rules_schema';
 import { buildRouteValidation } from '../../../../utils/build_validation/route_validation';
-import { IRouter } from '../../../../../../../../src/core/server';
+import type { SecuritySolutionPluginRouter } from '../../../../types';
 import { DETECTION_ENGINE_RULES_URL } from '../../../../../common/constants';
-import { getIdError } from './utils';
-import { transformValidate } from './validate';
-import { transformError, buildSiemResponse } from '../utils';
+import { getIdError, transform } from './utils';
+import { buildSiemResponse } from '../utils';
+
 import { readRules } from '../../rules/read_rules';
 import { getRuleActionsSavedObject } from '../../rule_actions/get_rule_actions_saved_object';
 import { ruleStatusSavedObjectsClientFactory } from '../../signals/rule_status_saved_objects_client';
 
-export const readRulesRoute = (router: IRouter) => {
+export const readRulesRoute = (
+  router: SecuritySolutionPluginRouter,
+  ruleDataClient?: RuleDataClient | null
+) => {
   router.get(
     {
       path: DETECTION_ENGINE_RULES_URL,
@@ -67,15 +73,18 @@ export const readRulesRoute = (router: IRouter) => {
             search: rule.id,
             searchFields: ['alertId'],
           });
-          const [validated, errors] = transformValidate(
-            rule,
-            ruleActions,
-            ruleStatuses.saved_objects[0]
-          );
-          if (errors != null) {
-            return siemResponse.error({ statusCode: 500, body: errors });
+          const [currentStatus] = ruleStatuses.saved_objects;
+          if (currentStatus != null && rule.executionStatus.status === 'error') {
+            currentStatus.attributes.lastFailureMessage = `Reason: ${rule.executionStatus.error?.reason} Message: ${rule.executionStatus.error?.message}`;
+            currentStatus.attributes.lastFailureAt = rule.executionStatus.lastExecutionDate.toISOString();
+            currentStatus.attributes.statusDate = rule.executionStatus.lastExecutionDate.toISOString();
+            currentStatus.attributes.status = 'failed';
+          }
+          const transformed = transform(rule, ruleActions, currentStatus);
+          if (transformed == null) {
+            return siemResponse.error({ statusCode: 500, body: 'Internal error transforming' });
           } else {
-            return response.ok({ body: validated ?? {} });
+            return response.ok({ body: transformed ?? {} });
           }
         } else {
           const error = getIdError({ id, ruleId });

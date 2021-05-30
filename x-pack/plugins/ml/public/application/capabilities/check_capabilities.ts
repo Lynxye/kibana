@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
@@ -24,7 +25,7 @@ export function checkGetManagementMlJobsResolver() {
         if (isManageML === true && isPlatinumOrTrialLicense === true) {
           return resolve({ mlFeatureEnabledInSpace });
         } else {
-          return reject();
+          return reject({ capabilities, isPlatinumOrTrialLicense, mlFeatureEnabledInSpace });
         }
       })
       .catch((e) => {
@@ -33,10 +34,12 @@ export function checkGetManagementMlJobsResolver() {
   });
 }
 
-export function checkGetJobsCapabilitiesResolver(): Promise<MlCapabilities> {
+export function checkGetJobsCapabilitiesResolver(
+  redirectToMlAccessDeniedPage: () => Promise<void>
+): Promise<MlCapabilities> {
   return new Promise((resolve, reject) => {
     getCapabilities()
-      .then(({ capabilities, isPlatinumOrTrialLicense }) => {
+      .then(async ({ capabilities, isPlatinumOrTrialLicense }) => {
         _capabilities = capabilities;
         // the minimum privilege for using ML with a platinum or trial license is being able to get the transforms list.
         // all other functionality is controlled by the return capabilities object.
@@ -46,21 +49,23 @@ export function checkGetJobsCapabilitiesResolver(): Promise<MlCapabilities> {
         if (_capabilities.canGetJobs || isPlatinumOrTrialLicense === false) {
           return resolve(_capabilities);
         } else {
-          window.location.href = '#/access-denied';
+          await redirectToMlAccessDeniedPage();
           return reject();
         }
       })
-      .catch((e) => {
-        window.location.href = '#/access-denied';
+      .catch(async (e) => {
+        await redirectToMlAccessDeniedPage();
         return reject();
       });
   });
 }
 
-export function checkCreateJobsCapabilitiesResolver(): Promise<MlCapabilities> {
+export function checkCreateJobsCapabilitiesResolver(
+  redirectToJobsManagementPage: () => Promise<void>
+): Promise<MlCapabilities> {
   return new Promise((resolve, reject) => {
     getCapabilities()
-      .then(({ capabilities, isPlatinumOrTrialLicense }) => {
+      .then(async ({ capabilities, isPlatinumOrTrialLicense }) => {
         _capabilities = capabilities;
         // if the license is basic (isPlatinumOrTrialLicense === false) then do not redirect,
         // allow the promise to resolve as the separate license check will redirect then user to
@@ -69,34 +74,36 @@ export function checkCreateJobsCapabilitiesResolver(): Promise<MlCapabilities> {
           return resolve(_capabilities);
         } else {
           // if the user has no permission to create a job,
-          // redirect them back to the Transforms Management page
-          window.location.href = '#/jobs';
+          // redirect them back to the Anomaly Detection Management page
+          await redirectToJobsManagementPage();
           return reject();
         }
       })
-      .catch((e) => {
-        window.location.href = '#/jobs';
+      .catch(async (e) => {
+        await redirectToJobsManagementPage();
         return reject();
       });
   });
 }
 
-export function checkFindFileStructurePrivilegeResolver(): Promise<MlCapabilities> {
+export function checkFindFileStructurePrivilegeResolver(
+  redirectToMlAccessDeniedPage: () => Promise<void>
+): Promise<MlCapabilities> {
   return new Promise((resolve, reject) => {
     getCapabilities()
-      .then(({ capabilities }) => {
+      .then(async ({ capabilities }) => {
         _capabilities = capabilities;
         // the minimum privilege for using ML with a basic license is being able to use the datavisualizer.
         // all other functionality is controlled by the return _capabilities object
         if (_capabilities.canFindFileStructure) {
           return resolve(_capabilities);
         } else {
-          window.location.href = '#/access-denied';
+          await redirectToMlAccessDeniedPage();
           return reject();
         }
       })
-      .catch((e) => {
-        window.location.href = '#/access-denied';
+      .catch(async (e) => {
+        await redirectToMlAccessDeniedPage();
         return reject();
       });
   });

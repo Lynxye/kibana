@@ -1,27 +1,28 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
-import { KibanaDatatable } from '../../../../../plugins/expressions/public';
-import { deserializeAggConfig } from '../../search/expressions';
+import _ from 'lodash';
+import { Datatable } from '../../../../../plugins/expressions/public';
 import { esFilters, Filter } from '../../../public';
-import { getIndexPatterns } from '../../../public/services';
-import type { ValueClickContext } from '../../../../embeddable/public';
+import { getIndexPatterns, getSearchService } from '../../../public/services';
+import { AggConfigSerialized } from '../../../common/search/aggs';
+
+/** @internal */
+export interface ValueClickDataContext {
+  data: Array<{
+    table: Pick<Datatable, 'rows' | 'columns'>;
+    column: number;
+    row: number;
+    value: any;
+  }>;
+  timeFieldName?: string;
+  negate?: boolean;
+}
 
 /**
  * For terms aggregations on `__other__` buckets, this assembles a list of applicable filter
@@ -33,7 +34,7 @@ import type { ValueClickContext } from '../../../../embeddable/public';
  * @return {array} - array of terms to filter against
  */
 const getOtherBucketFilterTerms = (
-  table: Pick<KibanaDatatable, 'rows' | 'columns'>,
+  table: Pick<Datatable, 'rows' | 'columns'>,
   columnIndex: number,
   rowIndex: number
 ) => {
@@ -71,22 +72,28 @@ const getOtherBucketFilterTerms = (
  * @return {Filter[]|undefined} - list of filters to provide to queryFilter.addFilters()
  */
 const createFilter = async (
-  table: Pick<KibanaDatatable, 'rows' | 'columns'>,
+  table: Pick<Datatable, 'rows' | 'columns'>,
   columnIndex: number,
   rowIndex: number
 ) => {
-  if (!table || !table.columns || !table.columns[columnIndex]) {
+  if (
+    !table ||
+    !table.columns ||
+    !table.columns[columnIndex] ||
+    !table.columns[columnIndex].meta ||
+    table.columns[columnIndex].meta.source !== 'esaggs' ||
+    !table.columns[columnIndex].meta.sourceParams?.indexPatternId
+  ) {
     return;
   }
   const column = table.columns[columnIndex];
-  if (!column.meta || !column.meta.indexPatternId) {
-    return;
-  }
-  const aggConfig = deserializeAggConfig({
-    type: column.meta.type,
-    aggConfigParams: column.meta.aggConfigParams ? column.meta.aggConfigParams : {},
-    indexPattern: await getIndexPatterns().get(column.meta.indexPatternId),
-  });
+  const { indexPatternId, ...aggConfigParams } = table.columns[columnIndex].meta
+    .sourceParams as any;
+  const aggConfigsInstance = getSearchService().aggs.createAggConfigs(
+    await getIndexPatterns().get(indexPatternId),
+    [aggConfigParams as AggConfigSerialized]
+  );
+  const aggConfig = aggConfigsInstance.aggs[0];
   let filter: Filter[] = [];
   const value: any = rowIndex > -1 ? table.rows[rowIndex][column.id] : null;
   if (value === null || value === undefined || !aggConfig.isFilterable()) {
@@ -114,7 +121,7 @@ const createFilter = async (
 export const createFiltersFromValueClickAction = async ({
   data,
   negate,
-}: ValueClickContext['data']) => {
+}: ValueClickDataContext) => {
   const filters: Filter[] = [];
 
   await Promise.all(
@@ -134,5 +141,7 @@ export const createFiltersFromValueClickAction = async ({
       })
   );
 
-  return esFilters.mapAndFlattenFilters(filters);
+  return _.uniqWith(esFilters.mapAndFlattenFilters(filters), (a, b) =>
+    esFilters.compareFilters(a, b, esFilters.COMPARE_ALL_OPTIONS)
+  );
 };

@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import * as rt from 'io-ts';
@@ -89,7 +90,10 @@ export const metricsExplorerRowRT = rt.intersection([
   rt.type({
     timestamp: rt.number,
   }),
-  rt.record(rt.string, rt.union([rt.string, rt.number, rt.null, rt.undefined])),
+  rt.record(
+    rt.string,
+    rt.union([rt.string, rt.number, rt.null, rt.undefined, rt.array(rt.object)])
+  ),
 ]);
 
 export const metricsExplorerSeriesRT = rt.intersection([
@@ -107,6 +111,8 @@ export const metricsExplorerResponseRT = rt.type({
   series: rt.array(metricsExplorerSeriesRT),
   pageInfo: metricsExplorerPageInfoRT,
 });
+
+export type AfterKey = rt.TypeOf<typeof afterKeyObjectRT>;
 
 export type MetricsExplorerAggregation = rt.TypeOf<typeof metricsExplorerAggregationRT>;
 

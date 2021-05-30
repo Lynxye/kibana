@@ -1,11 +1,12 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { ESTermQuery } from '../../../../common/typed_json';
-import { Filter, IIndexPattern } from '../../../../../../../src/plugins/data/public';
+import { Filter } from '../../../../../../../src/plugins/data/public';
 import { NarrowDateRange } from '../../../common/components/ml/types';
 import { GlobalTimeArgs } from '../../../common/containers/use_global_time';
 import { HostsTableType, HostsType } from '../../store/model';
@@ -34,7 +35,7 @@ export interface QueryTabBodyProps {
 export type HostsComponentsQueryProps = QueryTabBodyProps & {
   deleteQuery?: GlobalTimeArgs['deleteQuery'];
   docValueFields?: DocValueFields[];
-  indexPattern: IIndexPattern;
+  indexNames: string[];
   pageFilters?: Filter[];
   skip: boolean;
   setQuery: GlobalTimeArgs['setQuery'];

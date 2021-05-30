@@ -1,27 +1,16 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import React from 'react';
 import { shallow } from 'enzyme';
 
 import { ScriptedFieldsTable } from '../scripted_fields_table';
-import { IIndexPattern } from '../../../../../../plugins/data/common/index_patterns';
+import { IIndexPattern, IndexPattern } from '../../../../../../plugins/data/common/index_patterns';
 
 jest.mock('@elastic/eui', () => ({
   EuiTitle: 'eui-title',
@@ -46,14 +35,6 @@ jest.mock('./components/table', () => ({
   },
 }));
 
-jest.mock('ui/documentation_links', () => ({
-  documentationLinks: {
-    scriptedFields: {
-      painless: 'painlessDocs',
-    },
-  },
-}));
-
 const helpers = {
   redirectToRoute: () => {},
   getRouteHref: () => '#',
@@ -62,7 +43,7 @@ const helpers = {
 const getIndexPatternMock = (mockedFields: any = {}) => ({ ...mockedFields } as IIndexPattern);
 
 describe('ScriptedFieldsTable', () => {
-  let indexPattern: IIndexPattern;
+  let indexPattern: IndexPattern;
 
   beforeEach(() => {
     indexPattern = getIndexPatternMock({
@@ -70,7 +51,7 @@ describe('ScriptedFieldsTable', () => {
         { name: 'ScriptedField', lang: 'painless', script: 'x++' },
         { name: 'JustATest', lang: 'painless', script: 'z++' },
       ],
-    });
+    }) as IndexPattern;
   });
 
   test('should render normally', async () => {
@@ -79,6 +60,7 @@ describe('ScriptedFieldsTable', () => {
         indexPattern={indexPattern}
         helpers={helpers}
         painlessDocLink={'painlessDoc'}
+        saveIndexPattern={async () => {}}
       />
     );
 
@@ -96,6 +78,7 @@ describe('ScriptedFieldsTable', () => {
         indexPattern={indexPattern}
         helpers={helpers}
         painlessDocLink={'painlessDoc'}
+        saveIndexPattern={async () => {}}
       />
     );
 
@@ -113,15 +96,18 @@ describe('ScriptedFieldsTable', () => {
   test('should filter based on the lang filter', async () => {
     const component = shallow<ScriptedFieldsTable>(
       <ScriptedFieldsTable
-        indexPattern={getIndexPatternMock({
-          getScriptedFields: () => [
-            { name: 'ScriptedField', lang: 'painless', script: 'x++' },
-            { name: 'JustATest', lang: 'painless', script: 'z++' },
-            { name: 'Bad', lang: 'somethingElse', script: 'z++' },
-          ],
-        })}
+        indexPattern={
+          getIndexPatternMock({
+            getScriptedFields: () => [
+              { name: 'ScriptedField', lang: 'painless', script: 'x++' },
+              { name: 'JustATest', lang: 'painless', script: 'z++' },
+              { name: 'Bad', lang: 'somethingElse', script: 'z++' },
+            ],
+          }) as IndexPattern
+        }
         painlessDocLink={'painlessDoc'}
         helpers={helpers}
+        saveIndexPattern={async () => {}}
       />
     );
 
@@ -139,11 +125,14 @@ describe('ScriptedFieldsTable', () => {
   test('should hide the table if there are no scripted fields', async () => {
     const component = shallow(
       <ScriptedFieldsTable
-        indexPattern={getIndexPatternMock({
-          getScriptedFields: () => [],
-        })}
+        indexPattern={
+          getIndexPatternMock({
+            getScriptedFields: () => [],
+          }) as IndexPattern
+        }
         painlessDocLink={'painlessDoc'}
         helpers={helpers}
+        saveIndexPattern={async () => {}}
       />
     );
 
@@ -161,6 +150,7 @@ describe('ScriptedFieldsTable', () => {
         indexPattern={indexPattern}
         helpers={helpers}
         painlessDocLink={'painlessDoc'}
+        saveIndexPattern={async () => {}}
       />
     );
 
@@ -176,12 +166,15 @@ describe('ScriptedFieldsTable', () => {
     const removeScriptedField = jest.fn();
     const component = shallow<ScriptedFieldsTable>(
       <ScriptedFieldsTable
-        indexPattern={{
-          ...indexPattern,
-          removeScriptedField,
-        }}
+        indexPattern={
+          ({
+            ...indexPattern,
+            removeScriptedField,
+          } as unknown) as IndexPattern
+        }
         helpers={helpers}
         painlessDocLink={'painlessDoc'}
+        saveIndexPattern={async () => {}}
       />
     );
 

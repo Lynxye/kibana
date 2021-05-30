@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { mount } from 'enzyme';
@@ -11,13 +12,12 @@ import { Provider as ReduxStoreProvider } from 'react-redux';
 import { DEFAULT_TIMEPICKER_QUICK_RANGES } from '../../../../common/constants';
 import { useUiSetting$ } from '../../lib/kibana';
 import {
-  apolloClientObservable,
   mockGlobalState,
   SUB_PLUGINS_REDUCER,
   kibanaObservable,
   createSecuritySolutionStorageMock,
 } from '../../mock';
-import { createUseUiSetting$Mock } from '../../mock/kibana_react';
+import { createUseUiSetting$Mock } from '../../lib/kibana/kibana_react.mock';
 import { createStore, State } from '../../store';
 
 import { SuperDatePicker, makeMapStateToProps } from '.';
@@ -82,23 +82,11 @@ describe('SIEM Super Date Picker', () => {
   describe('#SuperDatePicker', () => {
     const state: State = mockGlobalState;
     const { storage } = createSecuritySolutionStorageMock();
-    let store = createStore(
-      state,
-      SUB_PLUGINS_REDUCER,
-      apolloClientObservable,
-      kibanaObservable,
-      storage
-    );
+    let store = createStore(state, SUB_PLUGINS_REDUCER, kibanaObservable, storage);
 
     beforeEach(() => {
       jest.clearAllMocks();
-      store = createStore(
-        state,
-        SUB_PLUGINS_REDUCER,
-        apolloClientObservable,
-        kibanaObservable,
-        storage
-      );
+      store = createStore(state, SUB_PLUGINS_REDUCER, kibanaObservable, storage);
       mockUseUiSetting$.mockImplementation((key, defaultValue) => {
         const useUiSetting$Mock = createUseUiSetting$Mock();
 
@@ -134,12 +122,12 @@ describe('SIEM Super Date Picker', () => {
         expect(store.getState().inputs.global.timerange.kind).toBe('relative');
       });
 
-      test('Make Sure it is last 24 hours date', () => {
-        expect(store.getState().inputs.global.timerange.fromStr).toBe('now-24h');
+      test('Make Sure it is last "now-${x}h" where ${x} is in hours/minutes/seconds date', () => {
+        expect(store.getState().inputs.global.timerange.fromStr).toMatch(/^now-[0-9]+/);
         expect(store.getState().inputs.global.timerange.toStr).toBe('now');
       });
 
-      test('Make Sure it is Today date', () => {
+      test('Make Sure it is Today date is an absolute date', () => {
         wrapper
           .find('[data-test-subj="superDatePickerToggleQuickMenuButton"]')
           .first()
@@ -151,8 +139,22 @@ describe('SIEM Super Date Picker', () => {
           .first()
           .simulate('click');
         wrapper.update();
-        expect(store.getState().inputs.global.timerange.fromStr).toBe('now/d');
-        expect(store.getState().inputs.global.timerange.toStr).toBe('now/d');
+        expect(store.getState().inputs.global.timerange.kind).toBe('absolute');
+      });
+
+      test('Make Sure it is This Week date is an absolute date', () => {
+        wrapper
+          .find('[data-test-subj="superDatePickerToggleQuickMenuButton"]')
+          .first()
+          .simulate('click');
+        wrapper.update();
+
+        wrapper
+          .find('[data-test-subj="superDatePickerCommonlyUsed_This_week"]')
+          .first()
+          .simulate('click');
+        wrapper.update();
+        expect(store.getState().inputs.global.timerange.kind).toBe('absolute');
       });
 
       test('Make Sure to (end date) is superior than from (start date)', () => {
@@ -191,7 +193,7 @@ describe('SIEM Super Date Picker', () => {
         expect(wrapper.find('div.euiQuickSelectPopover__section').at(1).text()).toBe('Today');
       });
 
-      test('Today and Last 24 hours are in Recently used date ranges', () => {
+      test('Today and "Last ${x} hours" where ${x} is in hours are in Recently used date ranges', () => {
         wrapper
           .find('[data-test-subj="superDatePickerToggleQuickMenuButton"]')
           .first()
@@ -201,8 +203,8 @@ describe('SIEM Super Date Picker', () => {
         wrapper.find('button.euiQuickSelect__applyButton').first().simulate('click');
         wrapper.update();
 
-        expect(wrapper.find('div.euiQuickSelectPopover__section').at(1).text()).toBe(
-          'Last 24 hoursToday'
+        expect(wrapper.find('div.euiQuickSelectPopover__section').at(1).text()).toMatch(
+          /^Last\s[0-9]+\s(.)+Today/
         );
       });
 

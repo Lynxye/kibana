@@ -1,17 +1,20 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import React from 'react';
+import React, { FC } from 'react';
+import { IntlProvider } from 'react-intl';
 
-import { render, wait } from '@testing-library/react';
+import '@testing-library/jest-dom/extend-expect';
+import { render, screen, waitFor } from '@testing-library/react';
 import { renderHook } from '@testing-library/react-hooks';
 
 import { CoreSetup } from 'src/core/public';
 
-import { DataGrid, UseIndexDataReturnType, INDEX_STATUS } from '../../shared_imports';
+import { getMlSharedImports, UseIndexDataReturnType } from '../../shared_imports';
 
 import { SimpleQuery } from '../common';
 
@@ -22,6 +25,10 @@ jest.mock('../../shared_imports');
 jest.mock('../app_dependencies');
 jest.mock('./use_api');
 
+import { useAppDependencies } from '../__mocks__/app_dependencies';
+import { MlSharedContext } from '../__mocks__/shared_context';
+import { RuntimeField } from '../../../../../../src/plugins/data/common/index_patterns';
+
 const query: SimpleQuery = {
   query_string: {
     query: '*',
@@ -29,41 +36,64 @@ const query: SimpleQuery = {
   },
 };
 
+const runtimeMappings = {
+  rt_bytes_bigger: {
+    type: 'double',
+    script: {
+      source: "emit(doc['bytes'].value * 2.0)",
+    },
+  } as RuntimeField,
+};
+
 describe('Transform: useIndexData()', () => {
-  test('indexPattern set triggers loading', async (done) => {
-    const { result, waitForNextUpdate } = renderHook(() =>
-      useIndexData(
-        ({
-          id: 'the-id',
-          title: 'the-title',
-          fields: [],
-        } as unknown) as SearchItems['indexPattern'],
-        query
-      )
+  test('indexPattern set triggers loading', async () => {
+    const mlShared = await getMlSharedImports();
+    const wrapper: FC = ({ children }) => (
+      <IntlProvider locale="en">
+        <MlSharedContext.Provider value={mlShared}>{children}</MlSharedContext.Provider>
+      </IntlProvider>
     );
+
+    const { result, waitForNextUpdate } = renderHook(
+      () =>
+        useIndexData(
+          ({
+            id: 'the-id',
+            title: 'the-title',
+            fields: [],
+          } as unknown) as SearchItems['indexPattern'],
+          query,
+          runtimeMappings
+        ),
+      { wrapper }
+    );
+
     const IndexObj: UseIndexDataReturnType = result.current;
 
     await waitForNextUpdate();
 
     expect(IndexObj.errorMessage).toBe('');
-    expect(IndexObj.status).toBe(INDEX_STATUS.LOADING);
+    expect(IndexObj.status).toBe(1);
     expect(IndexObj.tableItems).toEqual([]);
-    done();
   });
 });
 
 describe('Transform: <DataGrid /> with useIndexData()', () => {
-  // Using the async/await wait()/done() pattern to avoid act() errors.
-  test('Minimal initialization', async (done) => {
+  test('Minimal initialization, no cross cluster search warning.', async () => {
     // Arrange
     const indexPattern = {
       title: 'the-index-pattern-title',
       fields: [] as any[],
     } as SearchItems['indexPattern'];
 
+    const mlSharedImports = await getMlSharedImports();
+
     const Wrapper = () => {
+      const {
+        ml: { DataGrid },
+      } = useAppDependencies();
       const props = {
-        ...useIndexData(indexPattern, { match_all: {} }),
+        ...useIndexData(indexPattern, { match_all: {} }, runtimeMappings),
         copyToClipboard: 'the-copy-to-clipboard-code',
         copyToClipboardDescription: 'the-copy-to-clipboard-description',
         dataTestSubj: 'the-data-test-subj',
@@ -73,12 +103,65 @@ describe('Transform: <DataGrid /> with useIndexData()', () => {
 
       return <DataGrid {...props} />;
     };
-    const { getByText } = render(<Wrapper />);
+
+    render(
+      <IntlProvider locale="en">
+        <MlSharedContext.Provider value={mlSharedImports}>
+          <Wrapper />
+        </MlSharedContext.Provider>
+      </IntlProvider>
+    );
 
     // Act
     // Assert
-    expect(getByText('the-index-preview-title')).toBeInTheDocument();
-    await wait();
-    done();
+    await waitFor(() => {
+      expect(screen.queryByText('the-index-preview-title')).toBeInTheDocument();
+      expect(
+        screen.queryByText('Cross-cluster search returned no fields data.')
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  test('Cross-cluster search warning', async () => {
+    // Arrange
+    const indexPattern = {
+      title: 'remote:the-index-pattern-title',
+      fields: [] as any[],
+    } as SearchItems['indexPattern'];
+
+    const mlSharedImports = await getMlSharedImports();
+
+    const Wrapper = () => {
+      const {
+        ml: { DataGrid },
+      } = useAppDependencies();
+      const props = {
+        ...useIndexData(indexPattern, { match_all: {} }, runtimeMappings),
+        copyToClipboard: 'the-copy-to-clipboard-code',
+        copyToClipboardDescription: 'the-copy-to-clipboard-description',
+        dataTestSubj: 'the-data-test-subj',
+        title: 'the-index-preview-title',
+        toastNotifications: {} as CoreSetup['notifications']['toasts'],
+      };
+
+      return <DataGrid {...props} />;
+    };
+
+    render(
+      <IntlProvider locale="en">
+        <MlSharedContext.Provider value={mlSharedImports}>
+          <Wrapper />
+        </MlSharedContext.Provider>
+      </IntlProvider>
+    );
+
+    // Act
+    // Assert
+    await waitFor(() => {
+      expect(screen.queryByText('the-index-preview-title')).toBeInTheDocument();
+      expect(
+        screen.queryByText('Cross-cluster search returned no fields data.')
+      ).toBeInTheDocument();
+    });
   });
 });

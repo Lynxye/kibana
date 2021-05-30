@@ -1,11 +1,12 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React from 'react';
-import { mountWithIntl as mount } from 'test_utils/enzyme_helpers';
+import { mountWithIntl as mount } from '@kbn/test/jest';
 import { debouncedComponent } from './debounced_component';
 import { act } from 'react-dom/test-utils';
 
@@ -25,7 +26,7 @@ describe('debouncedComponent', () => {
     component.setProps({ title: 'yall' });
     expect(component.text()).toEqual('there');
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 1));
+      await new Promise((r) => setTimeout(r, 10));
     });
     expect(component.text()).toEqual('yall');
   });

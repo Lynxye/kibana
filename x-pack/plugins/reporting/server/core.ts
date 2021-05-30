@@ -1,46 +1,60 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
+import Hapi from '@hapi/hapi';
 import * as Rx from 'rxjs';
 import { first, map, take } from 'rxjs/operators';
+import { ScreenshotModePluginSetup } from 'src/plugins/screenshot_mode/server';
 import {
   BasePath,
-  ElasticsearchServiceSetup,
-  IRouter,
+  IClusterClient,
   KibanaRequest,
+  PluginInitializerContext,
   SavedObjectsClientContract,
   SavedObjectsServiceStart,
   UiSettingsServiceStart,
-} from 'src/core/server';
+} from '../../../../src/core/server';
+import { PluginStart as DataPluginStart } from '../../../../src/plugins/data/server';
+import { PluginSetupContract as FeaturesPluginSetup } from '../../features/server';
 import { LicensingPluginSetup } from '../../licensing/server';
 import { SecurityPluginSetup } from '../../security/server';
-import { ScreenshotsObservableFn } from '../server/types';
-import { ReportingConfig } from './';
+import { DEFAULT_SPACE_ID } from '../../spaces/common/constants';
+import { SpacesPluginSetup } from '../../spaces/server';
+import { TaskManagerSetupContract, TaskManagerStartContract } from '../../task_manager/server';
+import { ReportingConfig, ReportingSetup } from './';
 import { HeadlessChromiumDriverFactory } from './browsers/chromium/driver_factory';
-import { screenshotsObservableFactory } from './lib/screenshots';
-import { checkLicense, getExportTypesRegistry } from './lib';
-import { ESQueueInstance } from './lib/create_queue';
-import { EnqueueJobFn } from './lib/enqueue_job';
+import { ReportingConfigType } from './config';
+import { checkLicense, getExportTypesRegistry, LevelLogger } from './lib';
+import { screenshotsObservableFactory, ScreenshotsObservableFn } from './lib/screenshots';
 import { ReportingStore } from './lib/store';
+import { ExecuteReportTask, MonitorReportsTask, ReportTaskParams } from './lib/tasks';
+import { ReportingPluginRouter } from './types';
 
 export interface ReportingInternalSetup {
-  elasticsearch: ElasticsearchServiceSetup;
+  basePath: Pick<BasePath, 'set'>;
+  router: ReportingPluginRouter;
+  features: FeaturesPluginSetup;
   licensing: LicensingPluginSetup;
-  basePath: BasePath['get'];
-  router: IRouter;
   security?: SecurityPluginSetup;
+  spaces?: SpacesPluginSetup;
+  taskManager: TaskManagerSetupContract;
+  screenshotMode: ScreenshotModePluginSetup;
+  logger: LevelLogger;
 }
 
 export interface ReportingInternalStart {
   browserDriverFactory: HeadlessChromiumDriverFactory;
-  enqueueJob: EnqueueJobFn;
-  esqueue: ESQueueInstance;
   store: ReportingStore;
   savedObjects: SavedObjectsServiceStart;
   uiSettings: UiSettingsServiceStart;
+  esClient: IClusterClient;
+  data: DataPluginStart;
+  taskManager: TaskManagerStartContract;
+  logger: LevelLogger;
 }
 
 export class ReportingCore {
@@ -48,10 +62,27 @@ export class ReportingCore {
   private pluginStartDeps?: ReportingInternalStart;
   private readonly pluginSetup$ = new Rx.ReplaySubject<boolean>(); // observe async background setupDeps and config each are done
   private readonly pluginStart$ = new Rx.ReplaySubject<ReportingInternalStart>(); // observe async background startDeps
+  private deprecatedAllowedRoles: string[] | false = false; // DEPRECATED. If `false`, the deprecated features have been disableed
   private exportTypesRegistry = getExportTypesRegistry();
-  private config?: ReportingConfig;
+  private executeTask: ExecuteReportTask;
+  private monitorTask: MonitorReportsTask;
+  private config?: ReportingConfig; // final config, includes dynamic values based on OS type
+  private executing: Set<string>;
 
-  constructor() {}
+  public getContract: () => ReportingSetup;
+
+  constructor(private logger: LevelLogger, context: PluginInitializerContext<ReportingConfigType>) {
+    const syncConfig = context.config.get<ReportingConfigType>();
+    this.deprecatedAllowedRoles = syncConfig.roles.enabled ? syncConfig.roles.allow : false;
+    this.executeTask = new ExecuteReportTask(this, syncConfig, this.logger);
+    this.monitorTask = new MonitorReportsTask(this, syncConfig, this.logger);
+
+    this.getContract = () => ({
+      usesUiCapabilities: () => syncConfig.roles.enabled === false,
+    });
+
+    this.executing = new Set();
+  }
 
   /*
    * Register setupDeps
@@ -59,14 +90,25 @@ export class ReportingCore {
   public pluginSetup(setupDeps: ReportingInternalSetup) {
     this.pluginSetup$.next(true); // trigger the observer
     this.pluginSetupDeps = setupDeps; // cache
+
+    const { executeTask, monitorTask } = this;
+    setupDeps.taskManager.registerTaskDefinitions({
+      [executeTask.TYPE]: executeTask.getTaskDefinition(),
+      [monitorTask.TYPE]: monitorTask.getTaskDefinition(),
+    });
   }
 
   /*
    * Register startDeps
    */
-  public pluginStart(startDeps: ReportingInternalStart) {
+  public async pluginStart(startDeps: ReportingInternalStart) {
     this.pluginStart$.next(startDeps); // trigger the observer
     this.pluginStartDeps = startDeps; // cache
+
+    const { taskManager } = startDeps;
+    const { executeTask, monitorTask } = this;
+    // enable this instance to generate reports and to monitor for pending reports
+    await Promise.all([executeTask.init(taskManager), monitorTask.init(taskManager)]);
   }
 
   /*
@@ -102,6 +144,41 @@ export class ReportingCore {
     this.pluginSetup$.next(true);
   }
 
+  /**
+   * If xpack.reporting.roles.enabled === true, register Reporting as a feature
+   * that is controlled by user role names
+   */
+  public registerFeature() {
+    const { features } = this.getPluginSetupDeps();
+    const deprecatedRoles = this.getDeprecatedAllowedRoles();
+
+    if (deprecatedRoles !== false) {
+      // refer to roles.allow configuration (deprecated path)
+      const allowedRoles = ['superuser', ...(deprecatedRoles ?? [])];
+      const privileges = allowedRoles.map((role) => ({
+        requiredClusterPrivileges: [],
+        requiredRoles: [role],
+        ui: [],
+      }));
+
+      // self-register as an elasticsearch feature (deprecated)
+      features.registerElasticsearchFeature({
+        id: 'reporting',
+        catalogue: ['reporting'],
+        management: {
+          insightsAndAlerting: ['reporting'],
+        },
+        privileges,
+      });
+    } else {
+      this.logger.debug(
+        `Reporting roles configuration is disabled. Please assign access to Reporting use Kibana feature controls for applications.`
+      );
+      // trigger application to register Reporting as a subfeature
+      features.enableReportingUiCapabilities();
+    }
+  }
+
   /*
    * Gives synchronous access to the config
    */
@@ -113,9 +190,18 @@ export class ReportingCore {
   }
 
   /*
+   * If deprecated feature has not been disabled,
+   * this returns an array of allowed role names
+   * that have access to Reporting.
+   */
+  public getDeprecatedAllowedRoles(): string[] | false {
+    return this.deprecatedAllowedRoles;
+  }
+
+  /*
    * Gives async access to the startDeps
    */
-  private async getPluginStartDeps() {
+  public async getPluginStartDeps() {
     if (this.pluginStartDeps) {
       return this.pluginStartDeps;
     }
@@ -127,12 +213,12 @@ export class ReportingCore {
     return this.exportTypesRegistry;
   }
 
-  public async getEsqueue() {
-    return (await this.getPluginStartDeps()).esqueue;
+  public async scheduleTask(report: ReportTaskParams) {
+    return await this.executeTask.scheduleTask(report);
   }
 
-  public async getEnqueueJob() {
-    return (await this.getPluginStartDeps()).enqueueJob;
+  public async getStore() {
+    return (await this.getPluginStartDeps()).store;
   }
 
   public async getLicenseInfo() {
@@ -151,6 +237,11 @@ export class ReportingCore {
     return screenshotsObservableFactory(config.get('capture'), browserDriverFactory);
   }
 
+  public getEnableScreenshotMode() {
+    const { screenshotMode } = this.getPluginSetupDeps();
+    return screenshotMode.setScreenshotModeEnabled;
+  }
+
   /*
    * Gives synchronous access to the setupDeps
    */
@@ -161,18 +252,80 @@ export class ReportingCore {
     return this.pluginSetupDeps;
   }
 
-  public getElasticsearchService() {
-    return this.getPluginSetupDeps().elasticsearch;
-  }
-
-  public async getSavedObjectsClient(fakeRequest: KibanaRequest) {
+  private async getSavedObjectsClient(request: KibanaRequest) {
     const { savedObjects } = await this.getPluginStartDeps();
-    return savedObjects.getScopedClient(fakeRequest) as SavedObjectsClientContract;
+    return savedObjects.getScopedClient(request) as SavedObjectsClientContract;
   }
 
   public async getUiSettingsServiceFactory(savedObjectsClient: SavedObjectsClientContract) {
     const { uiSettings: uiSettingsService } = await this.getPluginStartDeps();
     const scopedUiSettingsService = uiSettingsService.asScopedToClient(savedObjectsClient);
     return scopedUiSettingsService;
+  }
+
+  public getSpaceId(request: KibanaRequest, logger = this.logger): string | undefined {
+    const spacesService = this.getPluginSetupDeps().spaces?.spacesService;
+    if (spacesService) {
+      const spaceId = spacesService?.getSpaceId(request);
+
+      if (spaceId !== DEFAULT_SPACE_ID) {
+        logger.info(`Request uses Space ID: ${spaceId}`);
+        return spaceId;
+      } else {
+        logger.debug(`Request uses default Space`);
+      }
+    }
+  }
+
+  public getFakeRequest(baseRequest: object, spaceId: string | undefined, logger = this.logger) {
+    const fakeRequest = KibanaRequest.from({
+      path: '/',
+      route: { settings: {} },
+      url: { href: '/' },
+      raw: { req: { url: '/' } },
+      ...baseRequest,
+    } as Hapi.Request);
+
+    const spacesService = this.getPluginSetupDeps().spaces?.spacesService;
+    if (spacesService) {
+      if (spaceId && spaceId !== DEFAULT_SPACE_ID) {
+        logger.info(`Generating request for space: ${spaceId}`);
+        this.getPluginSetupDeps().basePath.set(fakeRequest, `/s/${spaceId}`);
+      }
+    }
+
+    return fakeRequest;
+  }
+
+  public async getUiSettingsClient(request: KibanaRequest, logger = this.logger) {
+    const spacesService = this.getPluginSetupDeps().spaces?.spacesService;
+    const spaceId = this.getSpaceId(request, logger);
+    if (spacesService && spaceId) {
+      logger.info(`Creating UI Settings Client for space: ${spaceId}`);
+    }
+    const savedObjectsClient = await this.getSavedObjectsClient(request);
+    return await this.getUiSettingsServiceFactory(savedObjectsClient);
+  }
+
+  public async getDataService() {
+    const startDeps = await this.getPluginStartDeps();
+    return startDeps.data;
+  }
+
+  public async getEsClient() {
+    const startDeps = await this.getPluginStartDeps();
+    return startDeps.esClient;
+  }
+
+  public trackReport(reportId: string) {
+    this.executing.add(reportId);
+  }
+
+  public untrackReport(reportId: string) {
+    this.executing.delete(reportId);
+  }
+
+  public countConcurrentReports(): number {
+    return this.executing.size;
   }
 }

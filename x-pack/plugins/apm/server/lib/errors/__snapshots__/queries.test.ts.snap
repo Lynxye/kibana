@@ -30,11 +30,6 @@ Object {
               },
             },
           },
-          Object {
-            "term": Object {
-              "my.custom.ui.filter": "foo-bar",
-            },
-          },
         ],
         "should": Array [
           Object {
@@ -117,11 +112,6 @@ Object {
               },
             },
           },
-          Object {
-            "term": Object {
-              "my.custom.ui.filter": "foo-bar",
-            },
-          },
         ],
       },
     },
@@ -190,11 +180,6 @@ Object {
                 "gte": 1528113600000,
                 "lte": 1528977600000,
               },
-            },
-          },
-          Object {
-            "term": Object {
-              "my.custom.ui.filter": "foo-bar",
             },
           },
         ],

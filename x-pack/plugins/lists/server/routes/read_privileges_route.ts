@@ -1,22 +1,19 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { IRouter } from 'kibana/server';
+import { readPrivileges, transformError } from '@kbn/securitysolution-es-utils';
 import { merge } from 'lodash/fp';
+import { LIST_PRIVILEGES_URL } from '@kbn/securitysolution-list-constants';
 
-import { SecurityPluginSetup } from '../../../security/server';
-import { LIST_PRIVILEGES_URL } from '../../common/constants';
-import { buildSiemResponse, readPrivileges, transformError } from '../siem_server_deps';
+import type { ListsPluginRouter } from '../types';
 
-import { getListClient } from './utils';
+import { buildSiemResponse, getListClient } from './utils';
 
-export const readPrivilegesRoute = (
-  router: IRouter,
-  security: SecurityPluginSetup | null | undefined
-): void => {
+export const readPrivilegesRoute = (router: ListsPluginRouter): void => {
   router.get(
     {
       options: {
@@ -36,7 +33,7 @@ export const readPrivilegesRoute = (
         );
         const clusterPrivilegesListItems = await readPrivileges(
           clusterClient.callAsCurrentUser,
-          lists.getListIndex()
+          lists.getListItemIndex()
         );
         const privileges = merge(
           {
@@ -44,7 +41,7 @@ export const readPrivilegesRoute = (
             lists: clusterPrivilegesLists,
           },
           {
-            is_authenticated: security?.authc.isAuthenticated(request) ?? false,
+            is_authenticated: request.auth.isAuthenticated ?? false,
           }
         );
         return response.ok({ body: privileges });

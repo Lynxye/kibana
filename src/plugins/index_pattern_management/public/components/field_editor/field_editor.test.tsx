@@ -1,32 +1,22 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import {
   IndexPattern,
   IndexPatternField,
-  IIndexPatternFieldList,
   FieldFormatInstanceType,
+  IndexPatternsService,
 } from 'src/plugins/data/public';
+import { findTestSubject } from '@elastic/eui/lib/test';
 
 jest.mock('brace/mode/groovy', () => ({}));
 
-import { FieldEditor } from './field_editor';
+import { FieldEditor, FieldEdiorProps } from './field_editor';
 
 import { mockManagementPlugin } from '../../mocks';
 import { createComponentWithContext } from '../test_utils';
@@ -37,6 +27,7 @@ jest.mock('@elastic/eui', () => ({
   EuiButtonEmpty: 'eui-button-empty',
   EuiCallOut: 'eui-call-out',
   EuiCode: 'eui-code',
+  EuiCodeEditor: 'eui-code-editor',
   EuiConfirmModal: 'eui-confirm-modal',
   EuiFieldNumber: 'eui-field-number',
   EuiFieldText: 'eui-field-text',
@@ -71,15 +62,19 @@ jest.mock('./components/field_format_editor', () => ({
   FieldFormatEditor: 'field-format-editor',
 }));
 
-const fields: IndexPatternField[] = [
+const fieldList = [
   {
     name: 'foobar',
   } as IndexPatternField,
 ];
 
+const fields = {
+  getAll: () => fieldList,
+};
+
 // @ts-ignore
 fields.getByName = (name: string) => {
-  return fields.find((field) => field.name === name);
+  return fields.getAll().find((field) => field.name === name);
 };
 
 class Format {
@@ -93,6 +88,12 @@ const field = {
   type: 'number',
   lang: 'painless',
   format: new Format(),
+};
+
+const services = {
+  redirectAway: () => {},
+  saveIndexPattern: async () => {},
+  indexPatternService: {} as IndexPatternsService,
 };
 
 describe('FieldEditor', () => {
@@ -112,17 +113,19 @@ describe('FieldEditor', () => {
 
   beforeEach(() => {
     indexPattern = ({
-      fields: fields as IIndexPatternFieldList,
+      fields,
+      getFormatterForField: () => ({ params: () => ({}) }),
+      getFormatterForFieldNoDefault: () => ({ params: () => ({}) }),
     } as unknown) as IndexPattern;
   });
 
   it('should render create new scripted field correctly', async () => {
-    const component = createComponentWithContext(
+    const component = createComponentWithContext<FieldEdiorProps>(
       FieldEditor,
       {
         indexPattern,
-        field: (field as unknown) as IndexPatternField,
-        services: { redirectAway: () => {} },
+        spec: (field as unknown) as IndexPatternField,
+        services,
       },
       mockContext
     );
@@ -138,20 +141,20 @@ describe('FieldEditor', () => {
       name: 'test',
       script: 'doc.test.value',
     };
-    indexPattern.fields.push(testField as IndexPatternField);
+    fieldList.push((testField as unknown) as IndexPatternField);
     indexPattern.fields.getByName = (name) => {
       const flds = {
         [testField.name]: testField,
       };
-      return flds[name] as IndexPatternField;
+      return (flds[name] as unknown) as IndexPatternField;
     };
 
-    const component = createComponentWithContext(
+    const component = createComponentWithContext<FieldEdiorProps>(
       FieldEditor,
       {
         indexPattern,
-        field: (testField as unknown) as IndexPatternField,
-        services: { redirectAway: () => {} },
+        spec: (testField as unknown) as IndexPatternField,
+        services,
       },
       mockContext
     );
@@ -161,6 +164,60 @@ describe('FieldEditor', () => {
     expect(component).toMatchSnapshot();
   });
 
+  it('should display and update a custom label correctly', async () => {
+    let testField = ({
+      name: 'test',
+      format: new Format(),
+      lang: undefined,
+      type: 'string',
+      customLabel: 'Test',
+    } as unknown) as IndexPatternField;
+    fieldList.push(testField);
+    indexPattern.fields.getByName = (name) => {
+      const flds = {
+        [testField.name]: testField,
+      };
+      return flds[name];
+    };
+    indexPattern.fields = {
+      ...indexPattern.fields,
+      ...{
+        update: (fld) => {
+          testField = (fld as unknown) as IndexPatternField;
+        },
+        add: jest.fn(),
+      },
+    };
+    indexPattern.fieldFormatMap = { test: field };
+    (indexPattern.deleteFieldFormat as any) = jest.fn();
+
+    const component = createComponentWithContext<FieldEdiorProps>(
+      FieldEditor,
+      {
+        indexPattern,
+        spec: (testField as unknown) as IndexPatternField,
+        services: {
+          redirectAway: () => {},
+          indexPatternService: ({
+            updateSavedObject: jest.fn(() => Promise.resolve()),
+          } as unknown) as IndexPatternsService,
+        },
+      },
+      mockContext
+    );
+
+    await new Promise((resolve) => process.nextTick(resolve));
+    component.update();
+    const input = findTestSubject(component, 'editorFieldCustomLabel');
+    expect(input.props().value).toBe('Test');
+    input.simulate('change', { target: { value: 'new Test' } });
+    const saveBtn = findTestSubject(component, 'fieldSaveButton');
+
+    await saveBtn.simulate('click');
+    await new Promise((resolve) => process.nextTick(resolve));
+    expect(testField.customLabel).toEqual('new Test');
+  });
+
   it('should show deprecated lang warning', async () => {
     const testField = {
       ...field,
@@ -168,20 +225,20 @@ describe('FieldEditor', () => {
       script: 'doc.test.value',
       lang: 'testlang',
     };
-    indexPattern.fields.push((testField as unknown) as IndexPatternField);
+    fieldList.push((testField as unknown) as IndexPatternField);
     indexPattern.fields.getByName = (name) => {
       const flds = {
         [testField.name]: testField,
       };
-      return flds[name] as IndexPatternField;
+      return (flds[name] as unknown) as IndexPatternField;
     };
 
-    const component = createComponentWithContext(
+    const component = createComponentWithContext<FieldEdiorProps>(
       FieldEditor,
       {
         indexPattern,
-        field: (testField as unknown) as IndexPatternField,
-        services: { redirectAway: () => {} },
+        spec: (testField as unknown) as IndexPatternField,
+        services,
       },
       mockContext
     );
@@ -193,12 +250,12 @@ describe('FieldEditor', () => {
 
   it('should show conflict field warning', async () => {
     const testField = { ...field };
-    const component = createComponentWithContext(
+    const component = createComponentWithContext<FieldEdiorProps>(
       FieldEditor,
       {
         indexPattern,
-        field: (testField as unknown) as IndexPatternField,
-        services: { redirectAway: () => {} },
+        spec: (testField as unknown) as IndexPatternField,
+        services,
       },
       mockContext
     );
@@ -218,12 +275,12 @@ describe('FieldEditor', () => {
         text: ['index_name_3'],
       },
     };
-    const component = createComponentWithContext(
+    const component = createComponentWithContext<FieldEdiorProps>(
       FieldEditor,
       {
         indexPattern,
-        field: (testField as unknown) as IndexPatternField,
-        services: { redirectAway: () => {} },
+        spec: (testField as unknown) as IndexPatternField,
+        services,
       },
       mockContext
     );

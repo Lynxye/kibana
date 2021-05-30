@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
@@ -12,7 +13,7 @@ import { DATATABLE, TYPE_BOOLEAN, BOOLEAN_TRUE, BOOLEAN_FALSE } from '../../cons
 
 export const help: FunctionHelp<FunctionFactory<typeof filterrows>> = {
   help: i18n.translate('xpack.canvas.functions.filterrowsHelpText', {
-    defaultMessage: 'Filter rows in a {DATATABLE} based on the return value of a sub-expression.',
+    defaultMessage: 'Filters rows in a {DATATABLE} based on the return value of a sub-expression.',
     values: {
       DATATABLE,
     },

@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { find } from 'lodash';
@@ -28,6 +29,9 @@ uiRoutes.when('/elasticsearch/ml_jobs', {
       super({
         title: i18n.translate('xpack.monitoring.elasticsearch.mlJobs.routeTitle', {
           defaultMessage: 'Elasticsearch - Machine Learning Jobs',
+        }),
+        pageTitle: i18n.translate('xpack.monitoring.elasticsearch.mlJobs.pageTitle', {
+          defaultMessage: 'Elasticsearch machine learning jobs',
         }),
         storageKey: 'elasticsearch.mlJobs',
         getPageData,

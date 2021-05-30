@@ -1,20 +1,9 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import { configureClientMock } from './cluster_client.test.mocks';
@@ -24,12 +13,12 @@ import { GetAuthHeaders } from '../../http';
 import { elasticsearchClientMock } from './mocks';
 import { ClusterClient } from './cluster_client';
 import { ElasticsearchClientConfig } from './client_config';
+import { DEFAULT_HEADERS } from '../default_headers';
 
 const createConfig = (
   parts: Partial<ElasticsearchClientConfig> = {}
 ): ElasticsearchClientConfig => {
   return {
-    logQueries: false,
     sniffOnStart: false,
     sniffOnConnectionFault: false,
     sniffInterval: false,
@@ -67,16 +56,25 @@ describe('ClusterClient', () => {
   it('creates a single internal and scoped client during initialization', () => {
     const config = createConfig();
 
-    new ClusterClient(config, logger, getAuthHeaders);
+    new ClusterClient(config, logger, 'custom-type', getAuthHeaders);
 
     expect(configureClientMock).toHaveBeenCalledTimes(2);
-    expect(configureClientMock).toHaveBeenCalledWith(config, { logger });
-    expect(configureClientMock).toHaveBeenCalledWith(config, { logger, scoped: true });
+    expect(configureClientMock).toHaveBeenCalledWith(config, { logger, type: 'custom-type' });
+    expect(configureClientMock).toHaveBeenCalledWith(config, {
+      logger,
+      type: 'custom-type',
+      scoped: true,
+    });
   });
 
   describe('#asInternalUser', () => {
     it('returns the internal client', () => {
-      const clusterClient = new ClusterClient(createConfig(), logger, getAuthHeaders);
+      const clusterClient = new ClusterClient(
+        createConfig(),
+        logger,
+        'custom-type',
+        getAuthHeaders
+      );
 
       expect(clusterClient.asInternalUser).toBe(internalClient);
     });
@@ -84,7 +82,12 @@ describe('ClusterClient', () => {
 
   describe('#asScoped', () => {
     it('returns a scoped cluster client bound to the request', () => {
-      const clusterClient = new ClusterClient(createConfig(), logger, getAuthHeaders);
+      const clusterClient = new ClusterClient(
+        createConfig(),
+        logger,
+        'custom-type',
+        getAuthHeaders
+      );
       const request = httpServerMock.createKibanaRequest();
 
       const scopedClusterClient = clusterClient.asScoped(request);
@@ -96,8 +99,13 @@ describe('ClusterClient', () => {
       expect(scopedClusterClient.asCurrentUser).toBe(scopedClient.child.mock.results[0].value);
     });
 
-    it('returns a distinct  scoped cluster client on each call', () => {
-      const clusterClient = new ClusterClient(createConfig(), logger, getAuthHeaders);
+    it('returns a distinct scoped cluster client on each call', () => {
+      const clusterClient = new ClusterClient(
+        createConfig(),
+        logger,
+        'custom-type',
+        getAuthHeaders
+      );
       const request = httpServerMock.createKibanaRequest();
 
       const scopedClusterClient1 = clusterClient.asScoped(request);
@@ -115,7 +123,7 @@ describe('ClusterClient', () => {
       });
       getAuthHeaders.mockReturnValue({});
 
-      const clusterClient = new ClusterClient(config, logger, getAuthHeaders);
+      const clusterClient = new ClusterClient(config, logger, 'custom-type', getAuthHeaders);
       const request = httpServerMock.createKibanaRequest({
         headers: {
           foo: 'bar',
@@ -127,7 +135,7 @@ describe('ClusterClient', () => {
 
       expect(scopedClient.child).toHaveBeenCalledTimes(1);
       expect(scopedClient.child).toHaveBeenCalledWith({
-        headers: { foo: 'bar' },
+        headers: { ...DEFAULT_HEADERS, foo: 'bar', 'x-opaque-id': expect.any(String) },
       });
     });
 
@@ -140,14 +148,14 @@ describe('ClusterClient', () => {
         other: 'nope',
       });
 
-      const clusterClient = new ClusterClient(config, logger, getAuthHeaders);
+      const clusterClient = new ClusterClient(config, logger, 'custom-type', getAuthHeaders);
       const request = httpServerMock.createKibanaRequest({});
 
       clusterClient.asScoped(request);
 
       expect(scopedClient.child).toHaveBeenCalledTimes(1);
       expect(scopedClient.child).toHaveBeenCalledWith({
-        headers: { authorization: 'auth' },
+        headers: { ...DEFAULT_HEADERS, authorization: 'auth', 'x-opaque-id': expect.any(String) },
       });
     });
 
@@ -160,7 +168,7 @@ describe('ClusterClient', () => {
         other: 'nope',
       });
 
-      const clusterClient = new ClusterClient(config, logger, getAuthHeaders);
+      const clusterClient = new ClusterClient(config, logger, 'custom-type', getAuthHeaders);
       const request = httpServerMock.createKibanaRequest({
         headers: {
           authorization: 'override',
@@ -171,7 +179,7 @@ describe('ClusterClient', () => {
 
       expect(scopedClient.child).toHaveBeenCalledTimes(1);
       expect(scopedClient.child).toHaveBeenCalledWith({
-        headers: { authorization: 'auth' },
+        headers: { ...DEFAULT_HEADERS, authorization: 'auth', 'x-opaque-id': expect.any(String) },
       });
     });
 
@@ -185,7 +193,7 @@ describe('ClusterClient', () => {
       });
       getAuthHeaders.mockReturnValue({});
 
-      const clusterClient = new ClusterClient(config, logger, getAuthHeaders);
+      const clusterClient = new ClusterClient(config, logger, 'custom-type', getAuthHeaders);
       const request = httpServerMock.createKibanaRequest({});
 
       clusterClient.asScoped(request);
@@ -193,8 +201,30 @@ describe('ClusterClient', () => {
       expect(scopedClient.child).toHaveBeenCalledTimes(1);
       expect(scopedClient.child).toHaveBeenCalledWith({
         headers: {
+          ...DEFAULT_HEADERS,
           foo: 'bar',
           hello: 'dolly',
+          'x-opaque-id': expect.any(String),
+        },
+      });
+    });
+
+    it('adds the x-opaque-id header based on the request id', () => {
+      const config = createConfig();
+      getAuthHeaders.mockReturnValue({});
+
+      const clusterClient = new ClusterClient(config, logger, 'custom-type', getAuthHeaders);
+      const request = httpServerMock.createKibanaRequest({
+        kibanaRequestState: { requestId: 'my-fake-id', requestUuid: 'ignore-this-id' },
+      });
+
+      clusterClient.asScoped(request);
+
+      expect(scopedClient.child).toHaveBeenCalledTimes(1);
+      expect(scopedClient.child).toHaveBeenCalledWith({
+        headers: {
+          ...DEFAULT_HEADERS,
+          'x-opaque-id': 'my-fake-id',
         },
       });
     });
@@ -211,7 +241,7 @@ describe('ClusterClient', () => {
         foo: 'auth',
       });
 
-      const clusterClient = new ClusterClient(config, logger, getAuthHeaders);
+      const clusterClient = new ClusterClient(config, logger, 'custom-type', getAuthHeaders);
       const request = httpServerMock.createKibanaRequest({});
 
       clusterClient.asScoped(request);
@@ -219,8 +249,10 @@ describe('ClusterClient', () => {
       expect(scopedClient.child).toHaveBeenCalledTimes(1);
       expect(scopedClient.child).toHaveBeenCalledWith({
         headers: {
+          ...DEFAULT_HEADERS,
           foo: 'auth',
           hello: 'dolly',
+          'x-opaque-id': expect.any(String),
         },
       });
     });
@@ -235,7 +267,7 @@ describe('ClusterClient', () => {
       });
       getAuthHeaders.mockReturnValue({});
 
-      const clusterClient = new ClusterClient(config, logger, getAuthHeaders);
+      const clusterClient = new ClusterClient(config, logger, 'custom-type', getAuthHeaders);
       const request = httpServerMock.createKibanaRequest({
         headers: { foo: 'request' },
       });
@@ -245,8 +277,81 @@ describe('ClusterClient', () => {
       expect(scopedClient.child).toHaveBeenCalledTimes(1);
       expect(scopedClient.child).toHaveBeenCalledWith({
         headers: {
+          ...DEFAULT_HEADERS,
           foo: 'request',
           hello: 'dolly',
+          'x-opaque-id': expect.any(String),
+        },
+      });
+    });
+
+    it('respect the precedence of config headers over default headers', () => {
+      const headerKey = Object.keys(DEFAULT_HEADERS)[0];
+      const config = createConfig({
+        customHeaders: {
+          [headerKey]: 'foo',
+        },
+      });
+      getAuthHeaders.mockReturnValue({});
+
+      const clusterClient = new ClusterClient(config, logger, 'custom-type', getAuthHeaders);
+      const request = httpServerMock.createKibanaRequest();
+
+      clusterClient.asScoped(request);
+
+      expect(scopedClient.child).toHaveBeenCalledTimes(1);
+      expect(scopedClient.child).toHaveBeenCalledWith({
+        headers: {
+          [headerKey]: 'foo',
+          'x-opaque-id': expect.any(String),
+        },
+      });
+    });
+
+    it('respect the precedence of request headers over default headers', () => {
+      const headerKey = Object.keys(DEFAULT_HEADERS)[0];
+      const config = createConfig({
+        requestHeadersWhitelist: [headerKey],
+      });
+      getAuthHeaders.mockReturnValue({});
+
+      const clusterClient = new ClusterClient(config, logger, 'custom-type', getAuthHeaders);
+      const request = httpServerMock.createKibanaRequest({
+        headers: { [headerKey]: 'foo' },
+      });
+
+      clusterClient.asScoped(request);
+
+      expect(scopedClient.child).toHaveBeenCalledTimes(1);
+      expect(scopedClient.child).toHaveBeenCalledWith({
+        headers: {
+          [headerKey]: 'foo',
+          'x-opaque-id': expect.any(String),
+        },
+      });
+    });
+
+    it('respect the precedence of x-opaque-id header over config headers', () => {
+      const config = createConfig({
+        customHeaders: {
+          'x-opaque-id': 'from config',
+        },
+      });
+      getAuthHeaders.mockReturnValue({});
+
+      const clusterClient = new ClusterClient(config, logger, 'custom-type', getAuthHeaders);
+      const request = httpServerMock.createKibanaRequest({
+        headers: { foo: 'request' },
+        kibanaRequestState: { requestId: 'from request', requestUuid: 'ignore-this-id' },
+      });
+
+      clusterClient.asScoped(request);
+
+      expect(scopedClient.child).toHaveBeenCalledTimes(1);
+      expect(scopedClient.child).toHaveBeenCalledWith({
+        headers: {
+          ...DEFAULT_HEADERS,
+          'x-opaque-id': 'from request',
         },
       });
     });
@@ -257,7 +362,7 @@ describe('ClusterClient', () => {
       });
       getAuthHeaders.mockReturnValue({});
 
-      const clusterClient = new ClusterClient(config, logger, getAuthHeaders);
+      const clusterClient = new ClusterClient(config, logger, 'custom-type', getAuthHeaders);
       const request = {
         headers: {
           authorization: 'auth',
@@ -269,7 +374,7 @@ describe('ClusterClient', () => {
 
       expect(scopedClient.child).toHaveBeenCalledTimes(1);
       expect(scopedClient.child).toHaveBeenCalledWith({
-        headers: { authorization: 'auth' },
+        headers: { ...DEFAULT_HEADERS, authorization: 'auth' },
       });
     });
 
@@ -281,7 +386,7 @@ describe('ClusterClient', () => {
         authorization: 'auth',
       });
 
-      const clusterClient = new ClusterClient(config, logger, getAuthHeaders);
+      const clusterClient = new ClusterClient(config, logger, 'custom-type', getAuthHeaders);
       const request = {
         headers: {
           foo: 'bar',
@@ -293,14 +398,19 @@ describe('ClusterClient', () => {
 
       expect(scopedClient.child).toHaveBeenCalledTimes(1);
       expect(scopedClient.child).toHaveBeenCalledWith({
-        headers: { foo: 'bar' },
+        headers: { ...DEFAULT_HEADERS, foo: 'bar' },
       });
     });
   });
 
   describe('#close', () => {
     it('closes both underlying clients', async () => {
-      const clusterClient = new ClusterClient(createConfig(), logger, getAuthHeaders);
+      const clusterClient = new ClusterClient(
+        createConfig(),
+        logger,
+        'custom-type',
+        getAuthHeaders
+      );
 
       await clusterClient.close();
 
@@ -311,7 +421,12 @@ describe('ClusterClient', () => {
     it('waits for both clients to close', async (done) => {
       expect.assertions(4);
 
-      const clusterClient = new ClusterClient(createConfig(), logger, getAuthHeaders);
+      const clusterClient = new ClusterClient(
+        createConfig(),
+        logger,
+        'custom-type',
+        getAuthHeaders
+      );
 
       let internalClientClosed = false;
       let scopedClientClosed = false;
@@ -321,7 +436,7 @@ describe('ClusterClient', () => {
       let closeScopedClient: () => void;
 
       internalClient.close.mockReturnValue(
-        new Promise((resolve) => {
+        new Promise<void>((resolve) => {
           closeInternalClient = resolve;
         }).then(() => {
           expect(clusterClientClosed).toBe(false);
@@ -329,7 +444,7 @@ describe('ClusterClient', () => {
         })
       );
       scopedClient.close.mockReturnValue(
-        new Promise((resolve) => {
+        new Promise<void>((resolve) => {
           closeScopedClient = resolve;
         }).then(() => {
           expect(clusterClientClosed).toBe(false);
@@ -349,7 +464,12 @@ describe('ClusterClient', () => {
     });
 
     it('return a rejected promise is any client rejects', async () => {
-      const clusterClient = new ClusterClient(createConfig(), logger, getAuthHeaders);
+      const clusterClient = new ClusterClient(
+        createConfig(),
+        logger,
+        'custom-type',
+        getAuthHeaders
+      );
 
       internalClient.close.mockRejectedValue(new Error('error closing client'));
 
@@ -359,7 +479,12 @@ describe('ClusterClient', () => {
     });
 
     it('does nothing after the first call', async () => {
-      const clusterClient = new ClusterClient(createConfig(), logger, getAuthHeaders);
+      const clusterClient = new ClusterClient(
+        createConfig(),
+        logger,
+        'custom-type',
+        getAuthHeaders
+      );
 
       await clusterClient.close();
 

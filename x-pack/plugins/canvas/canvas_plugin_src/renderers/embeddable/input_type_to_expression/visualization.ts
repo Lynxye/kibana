@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { VisualizeInput } from 'src/plugins/visualizations/public';
@@ -11,6 +12,10 @@ export function toExpression(input: VisualizeInput): string {
 
   expressionParts.push('savedVisualization');
   expressionParts.push(`id="${input.id}"`);
+
+  if (input.title !== undefined) {
+    expressionParts.push(`title="${input.title}"`);
+  }
 
   if (input.timeRange) {
     expressionParts.push(

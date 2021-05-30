@@ -1,35 +1,36 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React from 'react';
-import styled from 'styled-components';
 import { i18n } from '@kbn/i18n';
 import { EuiAccordion, EuiTitle } from '@elastic/eui';
-import { px, unit } from '../../../style/variables';
+import { euiStyled } from '../../../../../../../src/plugins/kibana_react/common';
+import { px, unit, units } from '../../../style/variables';
 import { Stacktrace } from '.';
-import { IStackframe } from '../../../../typings/es_schemas/raw/fields/stackframe';
+import { Stackframe } from '../../../../typings/es_schemas/raw/fields/stackframe';
 
-// @ts-ignore Styled Components has trouble inferring the types of the default props here.
-const Accordion = styled(EuiAccordion)`
+const Accordion = euiStyled(EuiAccordion)`
   border-top: ${({ theme }) => theme.eui.euiBorderThin};
+  margin-top: ${px(units.half)};
 `;
 
-const CausedByContainer = styled('h5')`
+const CausedByContainer = euiStyled('h5')`
   padding: ${({ theme }) => theme.eui.spacerSizes.s} 0;
 `;
 
-const CausedByHeading = styled('span')`
-  color: ${({ theme }) => theme.eui.textColors.subdued};
+const CausedByHeading = euiStyled('span')`
+  color: ${({ theme }) => theme.eui.euiTextSubduedColor};
   display: block;
   font-size: ${({ theme }) => theme.eui.euiFontSizeXS};
   font-weight: ${({ theme }) => theme.eui.euiFontWeightBold};
   text-transform: uppercase;
 `;
 
-const FramesContainer = styled('div')`
+const FramesContainer = euiStyled('div')`
   padding-left: ${px(unit)};
 `;
 
@@ -55,7 +56,7 @@ interface CauseStacktraceProps {
   codeLanguage?: string;
   id: string;
   message?: string;
-  stackframes?: IStackframe[];
+  stackframes?: Stackframe[];
 }
 
 export function CauseStacktrace({

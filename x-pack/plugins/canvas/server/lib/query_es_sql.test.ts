@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { zipObject } from 'lodash';
@@ -53,7 +54,11 @@ describe('query_es_sql', () => {
 
     const result = await queryEsSQL(api, baseArgs);
 
-    const expectedColumns = response.columns.map((c) => ({ name: c.name, type: 'string' }));
+    const expectedColumns = response.columns.map((c) => ({
+      id: c.name,
+      name: c.name,
+      meta: { type: 'string' },
+    }));
     const columnNames = expectedColumns.map((c) => c.name);
     const expectedRows = response.rows.map((r) => zipObject(columnNames, r));
 

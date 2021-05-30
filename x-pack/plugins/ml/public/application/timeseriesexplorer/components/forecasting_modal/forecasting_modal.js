@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 /*
@@ -9,7 +10,7 @@
  */
 
 import PropTypes from 'prop-types';
-import _ from 'lodash';
+import { get } from 'lodash';
 
 import React, { Component } from 'react';
 
@@ -250,8 +251,8 @@ export class ForecastingModalUI extends Component {
         .getForecastRequestStats(this.props.job, forecastId)
         .then((resp) => {
           // Get the progress (stats value is between 0 and 1).
-          const progress = _.get(resp, ['stats', 'forecast_progress'], previousProgress);
-          const status = _.get(resp, ['stats', 'forecast_status']);
+          const progress = get(resp, ['stats', 'forecast_progress'], previousProgress);
+          const status = get(resp, ['stats', 'forecast_status']);
 
           // The requests for forecast stats can get routed to different shards,
           // and if these operate at different speeds there is a chance that a
@@ -263,7 +264,7 @@ export class ForecastingModalUI extends Component {
           }
 
           // Display any messages returned in the request stats.
-          let messages = _.get(resp, ['stats', 'forecast_messages'], []);
+          let messages = get(resp, ['stats', 'forecast_messages'], []);
           messages = messages.map((message) => ({ message, status: MESSAGE_LEVEL.WARNING }));
           this.setState({ messages });
 

@@ -1,16 +1,18 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import _ from 'lodash';
 import React from 'react';
 import { render } from 'react-dom';
 import { I18nProvider } from '@kbn/i18n/react';
-import { CoreStart } from 'kibana/public';
+import { CoreStart, SavedObjectReference } from 'kibana/public';
 import { i18n } from '@kbn/i18n';
 import { IStorageWrapper } from 'src/plugins/kibana_utils/public';
+import { IndexPatternFieldEditorStart } from '../../../../../src/plugins/index_pattern_field_editor/public';
 import {
   DatasourceDimensionEditorProps,
   DatasourceDimensionTriggerProps,
@@ -18,42 +20,44 @@ import {
   Operation,
   DatasourceLayerPanelProps,
   PublicAPIProps,
+  InitializationOptions,
 } from '../types';
-import { loadInitialState, changeIndexPattern, changeLayerIndexPattern } from './loader';
+import {
+  loadInitialState,
+  changeIndexPattern,
+  changeLayerIndexPattern,
+  extractReferences,
+} from './loader';
 import { toExpression } from './to_expression';
 import {
   IndexPatternDimensionTrigger,
   IndexPatternDimensionEditor,
-  canHandleDrop,
+  getDropProps,
   onDrop,
 } from './dimension_panel';
 import { IndexPatternDataPanel } from './datapanel';
 import {
   getDatasourceSuggestionsForField,
   getDatasourceSuggestionsFromCurrentState,
+  getDatasourceSuggestionsForVisualizeField,
 } from './indexpattern_suggestions';
 
 import { isDraggedField, normalizeOperationDataType } from './utils';
 import { LayerPanel } from './layerpanel';
-import { IndexPatternColumn } from './operations';
-import {
-  IndexPatternField,
-  IndexPatternLayer,
-  IndexPatternPrivateState,
-  IndexPatternPersistedState,
-} from './types';
+import { IndexPatternColumn, getErrorMessages, IncompleteColumn } from './operations';
+import { IndexPatternField, IndexPatternPrivateState, IndexPatternPersistedState } from './types';
 import { KibanaContextProvider } from '../../../../../src/plugins/kibana_react/public';
 import { DataPublicPluginStart } from '../../../../../src/plugins/data/public';
-import { deleteColumn } from './state_helpers';
-import { Datasource, StateSetter } from '../index';
+import { VisualizeFieldContext } from '../../../../../src/plugins/ui_actions/public';
+import { mergeLayer } from './state_helpers';
+import { Datasource, StateSetter } from '../types';
 import { ChartsPluginSetup } from '../../../../../src/plugins/charts/public';
+import { deleteColumn, isReferenced } from './operations';
+import { UiActionsStart } from '../../../../../src/plugins/ui_actions/public';
+import { GeoFieldWorkspacePanel } from '../editor_frame_service/editor_frame/workspace_panel/geo_field_workspace_panel';
+import { DraggingIdentifier } from '../drag_drop';
 
-export { OperationType, IndexPatternColumn } from './operations';
-
-export interface DraggedField {
-  field: IndexPatternField;
-  indexPatternId: string;
-}
+export { OperationType, IndexPatternColumn, deleteColumn } from './operations';
 
 export function columnToOperation(column: IndexPatternColumn, uniqueLabel?: string): Operation {
   const { dataType, label, isBucketed, scale } = column;
@@ -65,52 +69,27 @@ export function columnToOperation(column: IndexPatternColumn, uniqueLabel?: stri
   };
 }
 
-/**
- * Return a map of columnId => unique column label. Exported for testing reasons.
- */
-export function uniqueLabels(layers: Record<string, IndexPatternLayer>) {
-  const columnLabelMap = {} as Record<string, string>;
-  const counts = {} as Record<string, number>;
-
-  const makeUnique = (label: string) => {
-    let uniqueLabel = label;
-
-    while (counts[uniqueLabel] >= 0) {
-      const num = ++counts[uniqueLabel];
-      uniqueLabel = i18n.translate('xpack.lens.indexPattern.uniqueLabel', {
-        defaultMessage: '{label} [{num}]',
-        values: { label, num },
-      });
-    }
-
-    counts[uniqueLabel] = 0;
-    return uniqueLabel;
-  };
-
-  Object.values(layers).forEach((layer) => {
-    if (!layer.columns) {
-      return;
-    }
-    Object.entries(layer.columns).forEach(([columnId, column]) => {
-      columnLabelMap[columnId] = makeUnique(column.label);
-    });
-  });
-
-  return columnLabelMap;
-}
+export * from './rename_columns';
+export * from './format_column';
+export * from './time_scale';
+export * from './counter_rate';
+export * from './suffix_formatter';
 
 export function getIndexPatternDatasource({
   core,
   storage,
   data,
   charts,
+  indexPatternFieldEditor,
+  uiActions,
 }: {
   core: CoreStart;
   storage: IStorageWrapper;
   data: DataPublicPluginStart;
   charts: ChartsPluginSetup;
+  indexPatternFieldEditor: IndexPatternFieldEditorStart;
+  uiActions: UiActionsStart;
 }) {
-  const savedObjectsClient = core.savedObjects.client;
   const uiSettings = core.uiSettings;
   const onIndexPatternLoadError = (err: Error) =>
     core.notifications.toasts.addError(err, {
@@ -119,21 +98,46 @@ export function getIndexPatternDatasource({
       }),
     });
 
+  const indexPatternsService = data.indexPatterns;
+
+  const handleChangeIndexPattern = (
+    id: string,
+    state: IndexPatternPrivateState,
+    setState: StateSetter<IndexPatternPrivateState>
+  ) => {
+    changeIndexPattern({
+      id,
+      state,
+      setState,
+      onError: onIndexPatternLoadError,
+      storage,
+      indexPatternsService,
+    });
+  };
+
   // Not stateful. State is persisted to the frame
   const indexPatternDatasource: Datasource<IndexPatternPrivateState, IndexPatternPersistedState> = {
     id: 'indexpattern',
 
-    async initialize(state?: IndexPatternPersistedState) {
+    async initialize(
+      persistedState?: IndexPatternPersistedState,
+      references?: SavedObjectReference[],
+      initialContext?: VisualizeFieldContext,
+      options?: InitializationOptions
+    ) {
       return loadInitialState({
-        state,
-        savedObjectsClient: await savedObjectsClient,
+        persistedState,
+        references,
         defaultIndexPatternId: core.uiSettings.get('defaultIndex'),
         storage,
+        indexPatternsService,
+        initialContext,
+        options,
       });
     },
 
-    getPersistableState({ currentIndexPatternId, layers }: IndexPatternPrivateState) {
-      return { currentIndexPatternId, layers };
+    getPersistableState(state: IndexPatternPrivateState) {
+      return extractReferences(state);
     },
 
     insertLayer(state: IndexPatternPrivateState, newLayerId: string) {
@@ -171,27 +175,19 @@ export function getIndexPatternDatasource({
     },
 
     removeColumn({ prevState, layerId, columnId }) {
-      return deleteColumn({
+      const indexPattern = prevState.indexPatterns[prevState.layers[layerId]?.indexPatternId];
+      return mergeLayer({
         state: prevState,
         layerId,
-        columnId,
+        newLayer: deleteColumn({
+          layer: prevState.layers[layerId],
+          columnId,
+          indexPattern,
+        }),
       });
     },
 
-    toExpression,
-
-    getMetaData(state: IndexPatternPrivateState) {
-      return {
-        filterableIndexPatterns: _.uniq(
-          Object.values(state.layers)
-            .map((layer) => layer.indexPatternId)
-            .map((indexPatternId) => ({
-              id: indexPatternId,
-              title: state.indexPatterns[indexPatternId].title,
-            }))
-        ),
-      };
-    },
+    toExpression: (state, layerId) => toExpression(state, layerId, uiSettings),
 
     renderDataPanel(
       domElement: Element,
@@ -200,34 +196,56 @@ export function getIndexPatternDatasource({
       render(
         <I18nProvider>
           <IndexPatternDataPanel
-            changeIndexPattern={(
-              id: string,
-              state: IndexPatternPrivateState,
-              setState: StateSetter<IndexPatternPrivateState>
-            ) => {
-              changeIndexPattern({
-                id,
-                state,
-                setState,
-                savedObjectsClient,
-                onError: onIndexPatternLoadError,
-                storage,
-              });
-            }}
+            changeIndexPattern={handleChangeIndexPattern}
             data={data}
             charts={charts}
+            indexPatternFieldEditor={indexPatternFieldEditor}
             {...props}
+            core={core}
+            uiActions={uiActions}
           />
         </I18nProvider>,
         domElement
       );
     },
 
+    uniqueLabels(state: IndexPatternPrivateState) {
+      const layers = state.layers;
+      const columnLabelMap = {} as Record<string, string>;
+      const counts = {} as Record<string, number>;
+
+      const makeUnique = (label: string) => {
+        let uniqueLabel = label;
+
+        while (counts[uniqueLabel] >= 0) {
+          const num = ++counts[uniqueLabel];
+          uniqueLabel = i18n.translate('xpack.lens.indexPattern.uniqueLabel', {
+            defaultMessage: '{label} [{num}]',
+            values: { label, num },
+          });
+        }
+
+        counts[uniqueLabel] = 0;
+        return uniqueLabel;
+      };
+
+      Object.values(layers).forEach((layer) => {
+        if (!layer.columns) {
+          return;
+        }
+        Object.entries(layer.columns).forEach(([columnId, column]) => {
+          columnLabelMap[columnId] = makeUnique(column.label);
+        });
+      });
+
+      return columnLabelMap;
+    },
+
     renderDimensionTrigger: (
       domElement: Element,
       props: DatasourceDimensionTriggerProps<IndexPatternPrivateState>
     ) => {
-      const columnLabelMap = uniqueLabels(props.state.layers);
+      const columnLabelMap = indexPatternDatasource.uniqueLabels(props.state);
 
       render(
         <I18nProvider>
@@ -252,7 +270,7 @@ export function getIndexPatternDatasource({
       domElement: Element,
       props: DatasourceDimensionEditorProps<IndexPatternPrivateState>
     ) => {
-      const columnLabelMap = uniqueLabels(props.state.layers);
+      const columnLabelMap = indexPatternDatasource.uniqueLabels(props.state);
 
       render(
         <I18nProvider>
@@ -264,6 +282,7 @@ export function getIndexPatternDatasource({
               data,
               savedObjects: core.savedObjects,
               docLinks: core.docLinks,
+              http: core.http,
             }}
           >
             <IndexPatternDimensionEditor
@@ -289,7 +308,6 @@ export function getIndexPatternDatasource({
         <LayerPanel
           onChangeIndexPattern={(indexPatternId) => {
             changeLayerIndexPattern({
-              savedObjectsClient,
               indexPatternId,
               setState: props.setState,
               state: props.state,
@@ -297,6 +315,7 @@ export function getIndexPatternDatasource({
               onError: onIndexPatternLoadError,
               replaceIfPossible: true,
               storage,
+              indexPatternsService,
             });
           }}
           {...props}
@@ -304,24 +323,72 @@ export function getIndexPatternDatasource({
         domElement
       );
     },
-
-    canHandleDrop,
+    getDropProps,
     onDrop,
 
+    getCustomWorkspaceRenderer: (state: IndexPatternPrivateState, dragging: DraggingIdentifier) => {
+      if (dragging.field === undefined || dragging.indexPatternId === undefined) {
+        return undefined;
+      }
+
+      const draggedField = dragging as DraggingIdentifier & {
+        field: IndexPatternField;
+        indexPatternId: string;
+      };
+      const geoFieldType =
+        draggedField.field.esTypes &&
+        draggedField.field.esTypes.find((esType) => {
+          return ['geo_point', 'geo_shape'].includes(esType);
+        });
+      return geoFieldType
+        ? () => {
+            return (
+              <GeoFieldWorkspacePanel
+                uiActions={uiActions}
+                fieldType={geoFieldType}
+                indexPatternId={draggedField.indexPatternId}
+                fieldName={draggedField.field.name}
+              />
+            );
+          }
+        : undefined;
+    },
+
+    // Reset the temporary invalid state when closing the editor, but don't
+    // update the state if it's not needed
+    updateStateOnCloseDimension: ({ state, layerId, columnId }) => {
+      const layer = { ...state.layers[layerId] };
+      const current = state.layers[layerId].incompleteColumns || {};
+      if (!Object.values(current).length) {
+        return;
+      }
+      const newIncomplete: Record<string, IncompleteColumn> = { ...current };
+      delete newIncomplete[columnId];
+      return mergeLayer({
+        state,
+        layerId,
+        newLayer: { ...layer, incompleteColumns: newIncomplete },
+      });
+    },
+
     getPublicAPI({ state, layerId }: PublicAPIProps<IndexPatternPrivateState>) {
-      const columnLabelMap = uniqueLabels(state.layers);
+      const columnLabelMap = indexPatternDatasource.uniqueLabels(state);
 
       return {
         datasourceId: 'indexpattern',
 
         getTableSpec: () => {
-          return state.layers[layerId].columnOrder.map((colId) => ({ columnId: colId }));
+          return state.layers[layerId].columnOrder
+            .filter((colId) => !isReferenced(state.layers[layerId], colId))
+            .map((colId) => ({ columnId: colId }));
         },
         getOperationForColumnId: (columnId: string) => {
           const layer = state.layers[layerId];
 
           if (layer && layer.columns[columnId]) {
-            return columnToOperation(layer.columns[columnId], columnLabelMap[columnId]);
+            if (!isReferenced(layer, columnId)) {
+              return columnToOperation(layer.columns[columnId], columnLabelMap[columnId]);
+            }
           }
           return null;
         },
@@ -333,6 +400,60 @@ export function getIndexPatternDatasource({
         : [];
     },
     getDatasourceSuggestionsFromCurrentState,
+    getDatasourceSuggestionsForVisualizeField,
+
+    getErrorMessages(state, layersGroups) {
+      if (!state) {
+        return;
+      }
+
+      // Forward the indexpattern as well, as it is required by some operationType checks
+      const layerErrors = Object.values(state.layers).map((layer) =>
+        (getErrorMessages(layer, state.indexPatterns[layer.indexPatternId]) ?? []).map(
+          (message) => ({
+            shortMessage: '', // Not displayed currently
+            longMessage: message,
+          })
+        )
+      );
+
+      // Single layer case, no need to explain more
+      if (layerErrors.length <= 1) {
+        return layerErrors[0]?.length ? layerErrors[0] : undefined;
+      }
+
+      // For multiple layers we will prepend each error with the layer number
+      const messages = layerErrors.flatMap((errors, index) => {
+        return errors.map((error) => {
+          const { shortMessage, longMessage } = error;
+          return {
+            shortMessage: shortMessage
+              ? i18n.translate('xpack.lens.indexPattern.layerErrorWrapper', {
+                  defaultMessage: 'Layer {position} error: {wrappedMessage}',
+                  values: {
+                    position: index + 1,
+                    wrappedMessage: shortMessage,
+                  },
+                })
+              : '',
+            longMessage: longMessage
+              ? i18n.translate('xpack.lens.indexPattern.layerErrorWrapper', {
+                  defaultMessage: 'Layer {position} error: {wrappedMessage}',
+                  values: {
+                    position: index + 1,
+                    wrappedMessage: longMessage,
+                  },
+                })
+              : '',
+          };
+        });
+      });
+      return messages.length ? messages : undefined;
+    },
+    checkIntegrity: (state) => {
+      const ids = Object.values(state.layers || {}).map(({ indexPatternId }) => indexPatternId);
+      return ids.filter((id) => !state.indexPatterns[id]);
+    },
   };
 
   return indexPatternDatasource;

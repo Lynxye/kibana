@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import {
@@ -146,22 +147,17 @@ export function updateJobRules(job, detectorIndex, rules) {
   }
 
   return new Promise((resolve, reject) => {
-    mlJobService
-      .updateJob(jobId, jobData)
-      .then((resp) => {
-        if (resp.success) {
-          // Refresh the job data in the job service before resolving.
-          mlJobService
-            .refreshJob(jobId)
-            .then(() => {
-              resolve({ success: true });
-            })
-            .catch((refreshResp) => {
-              reject(refreshResp);
-            });
-        } else {
-          reject(resp);
-        }
+    ml.updateJob({ jobId: jobId, job: jobData })
+      .then(() => {
+        // Refresh the job data in the job service before resolving.
+        mlJobService
+          .refreshJob(jobId)
+          .then(() => {
+            resolve({ success: true });
+          })
+          .catch((refreshResp) => {
+            reject(refreshResp);
+          });
       })
       .catch((resp) => {
         reject(resp);

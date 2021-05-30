@@ -1,27 +1,13 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 export * from './api';
-import '../../../../built_assets/css/plugins/kibana/index.light.css';
+// eslint-disable-next-line @kbn/eslint/no-restricted-paths
+import '../../../../src/core/server/core_app/assets/legacy_light_theme.css';
 import '../public/style/index.scss';
 import '@elastic/eui/dist/eui_theme_light.css';
 import '@kbn/ui-framework/dist/kui_light.css';
-
-const css = require.context(
-  '../../../../built_assets/css',
-  true,
-  /\.\/plugins\/(?!canvas).*light\.css/
-);
-css.keys().forEach((filename) => {
-  css(filename);
-});
-
-const uiStyles = require.context(
-  '../../../../src/legacy/ui/public/styles',
-  false,
-  /[\/\\](?!mixins|variables|_|\.|bootstrap_(light|dark))[^\/\\]+\.less/
-);
-uiStyles.keys().forEach((key) => uiStyles(key));

@@ -1,36 +1,37 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { EuiSpacer, EuiWindowEvent } from '@elastic/eui';
+import styled from 'styled-components';
 import { noop } from 'lodash/fp';
-import React, { useCallback, useMemo, useState } from 'react';
-import { connect, ConnectedProps } from 'react-redux';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { useDispatch } from 'react-redux';
 import { useHistory } from 'react-router-dom';
+import { useIsExperimentalFeatureEnabled } from '../../../common/hooks/use_experimental_features';
 
+import { useDeepEqualSelector, useShallowEqualSelector } from '../../../common/hooks/use_selector';
 import { SecurityPageName } from '../../../app/types';
 import { TimelineId } from '../../../../common/types/timeline';
 import { useGlobalTime } from '../../../common/containers/use_global_time';
-import { useWithSource } from '../../../common/containers/source';
+import { isTab } from '../../../common/components/accessibility/helpers';
 import { UpdateDateRange } from '../../../common/components/charts/common';
 import { FiltersGlobal } from '../../../common/components/filters_global';
 import { getRulesUrl } from '../../../common/components/link_to/redirect_to_detection_engine';
 import { SiemSearchBar } from '../../../common/components/search_bar';
 import { WrapperPage } from '../../../common/components/wrapper_page';
-import { State } from '../../../common/store';
 import { inputsSelectors } from '../../../common/store/inputs';
-import { setAbsoluteRangeDatePicker as dispatchSetAbsoluteRangeDatePicker } from '../../../common/store/inputs/actions';
+import { setAbsoluteRangeDatePicker } from '../../../common/store/inputs/actions';
 import { SpyRoute } from '../../../common/utils/route/spy_routes';
-import { InputsRange } from '../../../common/store/inputs/model';
 import { useAlertInfo } from '../../components/alerts_info';
 import { AlertsTable } from '../../components/alerts_table';
-import { NoApiIntegrationKeyCallOut } from '../../components/no_api_integration_callout';
-import { NoWriteAlertsCallOut } from '../../components/no_write_alerts_callout';
+import { NoApiIntegrationKeyCallOut } from '../../components/callouts/no_api_integration_callout';
 import { AlertsHistogramPanel } from '../../components/alerts_histogram_panel';
 import { alertsHistogramOptions } from '../../components/alerts_histogram_panel/config';
-import { useUserInfo } from '../../components/user_info';
+import { useUserData } from '../../components/user_info';
 import { OverviewEmpty } from '../../../overview/components/overview_empty';
 import { DetectionEngineNoIndex } from './detection_engine_no_index';
 import { DetectionEngineHeaderPage } from '../../components/detection_engine_header_page';
@@ -39,31 +40,65 @@ import { DetectionEngineUserUnauthenticated } from './detection_engine_user_unau
 import * as i18n from './translations';
 import { LinkButton } from '../../../common/components/links';
 import { useFormatUrl } from '../../../common/components/link_to';
-import { useFullScreen } from '../../../common/containers/use_full_screen';
+import { useGlobalFullScreen } from '../../../common/containers/use_full_screen';
 import { Display } from '../../../hosts/pages/display';
-import { showGlobalFilters } from '../../../timelines/components/timeline/helpers';
+import {
+  focusUtilityBarAction,
+  onTimelineTabKeyPressed,
+  resetKeyboardFocus,
+  showGlobalFilters,
+} from '../../../timelines/components/timeline/helpers';
 import { timelineSelectors } from '../../../timelines/store/timeline';
 import { timelineDefaults } from '../../../timelines/store/timeline/defaults';
-import { TimelineModel } from '../../../timelines/store/timeline/model';
-import { buildShowBuildingBlockFilter } from '../../components/alerts_table/default_config';
+import {
+  buildShowBuildingBlockFilter,
+  buildShowBuildingBlockFilterRuleRegistry,
+  buildThreatMatchFilter,
+} from '../../components/alerts_table/default_config';
+import { useSourcererScope } from '../../../common/containers/sourcerer';
+import { SourcererScopeName } from '../../../common/store/sourcerer/model';
+import { NeedAdminForUpdateRulesCallOut } from '../../components/callouts/need_admin_for_update_callout';
+import { MissingPrivilegesCallOut } from '../../components/callouts/missing_privileges_callout';
 
-export const DetectionEnginePageComponent: React.FC<PropsFromRedux> = ({
-  filters,
-  graphEventId,
-  query,
-  setAbsoluteRangeDatePicker,
-}) => {
+/**
+ * Need a 100% height here to account for the graph/analyze tool, which sets no explicit height parameters, but fills the available space.
+ */
+const StyledFullHeightContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+`;
+
+const DetectionEnginePageComponent = () => {
+  const dispatch = useDispatch();
+  const containerElement = useRef<HTMLDivElement | null>(null);
+  const getTimeline = useMemo(() => timelineSelectors.getTimelineByIdSelector(), []);
+  const graphEventId = useShallowEqualSelector(
+    (state) => (getTimeline(state, TimelineId.detectionsPage) ?? timelineDefaults).graphEventId
+  );
+  const getGlobalFiltersQuerySelector = useMemo(
+    () => inputsSelectors.globalFiltersQuerySelector(),
+    []
+  );
+  const getGlobalQuerySelector = useMemo(() => inputsSelectors.globalQuerySelector(), []);
+  const query = useDeepEqualSelector(getGlobalQuerySelector);
+  const filters = useDeepEqualSelector(getGlobalFiltersQuerySelector);
+  // TODO: Once we are past experimental phase this code should be removed
+  const ruleRegistryEnabled = useIsExperimentalFeatureEnabled('ruleRegistryEnabled');
+
   const { to, from, deleteQuery, setQuery } = useGlobalTime();
-  const { globalFullScreen } = useFullScreen();
-  const {
-    loading: userInfoLoading,
-    isSignalIndexExists,
-    isAuthenticated: isUserAuthenticated,
-    hasEncryptionKey,
-    canUserCRUD,
-    signalIndexName,
-    hasIndexWrite,
-  } = useUserInfo();
+  const { globalFullScreen } = useGlobalFullScreen();
+  const [
+    {
+      loading: userInfoLoading,
+      isSignalIndexExists,
+      isAuthenticated: isUserAuthenticated,
+      hasEncryptionKey,
+      signalIndexName,
+      hasIndexWrite,
+      hasIndexMaintenance,
+    },
+  ] = useUserData();
   const {
     loading: listsConfigLoading,
     needsConfiguration: needsListsConfiguration,
@@ -72,6 +107,7 @@ export const DetectionEnginePageComponent: React.FC<PropsFromRedux> = ({
   const [lastAlerts] = useAlertInfo({});
   const { formatUrl } = useFormatUrl(SecurityPageName.detections);
   const [showBuildingBlockAlerts, setShowBuildingBlockAlerts] = useState(false);
+  const [showOnlyThreatIndicatorAlerts, setShowOnlyThreatIndicatorAlerts] = useState(false);
   const loading = userInfoLoading || listsConfigLoading;
 
   const updateDateRangeCallback = useCallback<UpdateDateRange>(
@@ -80,13 +116,15 @@ export const DetectionEnginePageComponent: React.FC<PropsFromRedux> = ({
         return;
       }
       const [min, max] = x;
-      setAbsoluteRangeDatePicker({
-        id: 'global',
-        from: new Date(min).toISOString(),
-        to: new Date(max).toISOString(),
-      });
+      dispatch(
+        setAbsoluteRangeDatePicker({
+          id: 'global',
+          from: new Date(min).toISOString(),
+          to: new Date(max).toISOString(),
+        })
+      );
     },
-    [setAbsoluteRangeDatePicker]
+    [dispatch]
   );
 
   const goToRules = useCallback(
@@ -98,14 +136,25 @@ export const DetectionEnginePageComponent: React.FC<PropsFromRedux> = ({
   );
 
   const alertsHistogramDefaultFilters = useMemo(
-    () => [...filters, ...buildShowBuildingBlockFilter(showBuildingBlockAlerts)],
-    [filters, showBuildingBlockAlerts]
+    () => [
+      ...filters,
+      ...(ruleRegistryEnabled
+        ? buildShowBuildingBlockFilterRuleRegistry(showBuildingBlockAlerts) // TODO: Once we are past experimental phase this code should be removed
+        : buildShowBuildingBlockFilter(showBuildingBlockAlerts)),
+      ...buildThreatMatchFilter(showOnlyThreatIndicatorAlerts),
+    ],
+    [filters, ruleRegistryEnabled, showBuildingBlockAlerts, showOnlyThreatIndicatorAlerts]
   );
 
   // AlertsTable manages global filters itself, so not including `filters`
   const alertsTableDefaultFilters = useMemo(
-    () => buildShowBuildingBlockFilter(showBuildingBlockAlerts),
-    [showBuildingBlockAlerts]
+    () => [
+      ...(ruleRegistryEnabled
+        ? buildShowBuildingBlockFilterRuleRegistry(showBuildingBlockAlerts) // TODO: Once we are past experimental phase this code should be removed
+        : buildShowBuildingBlockFilter(showBuildingBlockAlerts)),
+      ...buildThreatMatchFilter(showOnlyThreatIndicatorAlerts),
+    ],
+    [ruleRegistryEnabled, showBuildingBlockAlerts, showOnlyThreatIndicatorAlerts]
   );
 
   const onShowBuildingBlockAlertsChangedCallback = useCallback(
@@ -115,10 +164,36 @@ export const DetectionEnginePageComponent: React.FC<PropsFromRedux> = ({
     [setShowBuildingBlockAlerts]
   );
 
-  const indexToAdd = useMemo(() => (signalIndexName == null ? [] : [signalIndexName]), [
-    signalIndexName,
-  ]);
-  const { indicesExist, indexPattern } = useWithSource('default', indexToAdd);
+  const onShowOnlyThreatIndicatorAlertsCallback = useCallback(
+    (newShowOnlyThreatIndicatorAlerts: boolean) => {
+      setShowOnlyThreatIndicatorAlerts(newShowOnlyThreatIndicatorAlerts);
+    },
+    [setShowOnlyThreatIndicatorAlerts]
+  );
+
+  const { indicesExist, indexPattern } = useSourcererScope(SourcererScopeName.detections);
+
+  const onSkipFocusBeforeEventsTable = useCallback(() => {
+    focusUtilityBarAction(containerElement.current);
+  }, [containerElement]);
+
+  const onSkipFocusAfterEventsTable = useCallback(() => {
+    resetKeyboardFocus();
+  }, []);
+
+  const onKeyDown = useCallback(
+    (keyboardEvent: React.KeyboardEvent) => {
+      if (isTab(keyboardEvent)) {
+        onTimelineTabKeyPressed({
+          containerElement: containerElement.current,
+          keyboardEvent,
+          onSkipFocusBeforeEventsTable,
+          onSkipFocusAfterEventsTable,
+        });
+      }
+    },
+    [containerElement, onSkipFocusBeforeEventsTable, onSkipFocusAfterEventsTable]
+  );
 
   if (isUserAuthenticated != null && !isUserAuthenticated && !loading) {
     return (
@@ -144,9 +219,10 @@ export const DetectionEnginePageComponent: React.FC<PropsFromRedux> = ({
   return (
     <>
       {hasEncryptionKey != null && !hasEncryptionKey && <NoApiIntegrationKeyCallOut />}
-      {hasIndexWrite != null && !hasIndexWrite && <NoWriteAlertsCallOut />}
+      <NeedAdminForUpdateRulesCallOut />
+      <MissingPrivilegesCallOut />
       {indicesExist ? (
-        <>
+        <StyledFullHeightContainer onKeyDown={onKeyDown} ref={containerElement}>
           <EuiWindowEvent event="resize" handler={noop} />
           <FiltersGlobal show={showGlobalFilters({ globalFullScreen, graphEventId })}>
             <SiemSearchBar id="global" indexPattern={indexPattern} />
@@ -195,16 +271,17 @@ export const DetectionEnginePageComponent: React.FC<PropsFromRedux> = ({
               timelineId={TimelineId.detectionsPage}
               loading={loading}
               hasIndexWrite={hasIndexWrite ?? false}
-              canUserCRUD={(canUserCRUD ?? false) && (hasEncryptionKey ?? false)}
+              hasIndexMaintenance={hasIndexMaintenance ?? false}
               from={from}
               defaultFilters={alertsTableDefaultFilters}
               showBuildingBlockAlerts={showBuildingBlockAlerts}
               onShowBuildingBlockAlertsChanged={onShowBuildingBlockAlertsChangedCallback}
-              signalsIndex={signalIndexName ?? ''}
+              showOnlyThreatIndicatorAlerts={showOnlyThreatIndicatorAlerts}
+              onShowOnlyThreatIndicatorAlertsChanged={onShowOnlyThreatIndicatorAlertsCallback}
               to={to}
             />
           </WrapperPage>
-        </>
+        </StyledFullHeightContainer>
       ) : (
         <WrapperPage>
           <DetectionEngineHeaderPage border title={i18n.PAGE_TITLE} />
@@ -216,31 +293,4 @@ export const DetectionEnginePageComponent: React.FC<PropsFromRedux> = ({
   );
 };
 
-const makeMapStateToProps = () => {
-  const getGlobalInputs = inputsSelectors.globalSelector();
-  const getTimeline = timelineSelectors.getTimelineByIdSelector();
-  return (state: State) => {
-    const globalInputs: InputsRange = getGlobalInputs(state);
-    const { query, filters } = globalInputs;
-
-    const timeline: TimelineModel =
-      getTimeline(state, TimelineId.detectionsPage) ?? timelineDefaults;
-    const { graphEventId } = timeline;
-
-    return {
-      query,
-      filters,
-      graphEventId,
-    };
-  };
-};
-
-const mapDispatchToProps = {
-  setAbsoluteRangeDatePicker: dispatchSetAbsoluteRangeDatePicker,
-};
-
-const connector = connect(makeMapStateToProps, mapDispatchToProps);
-
-type PropsFromRedux = ConnectedProps<typeof connector>;
-
-export const DetectionEnginePage = connector(React.memo(DetectionEnginePageComponent));
+export const DetectionEnginePage = React.memo(DetectionEnginePageComponent);

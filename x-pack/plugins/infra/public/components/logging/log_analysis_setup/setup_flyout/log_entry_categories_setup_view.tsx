@@ -1,11 +1,13 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { EuiSpacer, EuiSteps, EuiText, EuiTitle } from '@elastic/eui';
 import React, { useCallback, useMemo } from 'react';
+import useMount from 'react-use/lib/useMount';
 import { useLogEntryCategoriesSetup } from '../../../../containers/logs/log_analysis/modules/log_entry_categories';
 import { createInitialConfigurationStep } from '../initial_configuration_step';
 import { createProcessStep } from '../process_step';
@@ -14,8 +16,10 @@ export const LogEntryCategoriesSetupView: React.FC<{
   onClose: () => void;
 }> = ({ onClose }) => {
   const {
+    categoryQualityWarnings,
     cleanUpAndSetUp,
     endTime,
+    fetchJobStatus,
     isValidating,
     lastSetupErrorMessages,
     moduleDescriptor,
@@ -29,6 +33,10 @@ export const LogEntryCategoriesSetupView: React.FC<{
     validationErrors,
     viewResults,
   } = useLogEntryCategoriesSetup();
+
+  useMount(() => {
+    fetchJobStatus();
+  });
 
   const viewResultsAndClose = useCallback(() => {
     viewResults();
@@ -47,6 +55,7 @@ export const LogEntryCategoriesSetupView: React.FC<{
         setupStatus,
         setValidatedIndices,
         validationErrors,
+        previousQualityWarnings: categoryQualityWarnings,
       }),
       createProcessStep({
         cleanUpAndSetUp,
@@ -58,6 +67,7 @@ export const LogEntryCategoriesSetupView: React.FC<{
       }),
     ],
     [
+      categoryQualityWarnings,
       cleanUpAndSetUp,
       endTime,
       isValidating,

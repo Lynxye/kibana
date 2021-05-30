@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 const path = require('path');
@@ -57,7 +58,10 @@ module.exports = async ({ config: storybookConfig }) => {
                 prependData(loaderContext) {
                   return `@import ${stringifyRequest(
                     loaderContext,
-                    path.resolve(KIBANA_ROOT, 'src/legacy/ui/public/styles/_globals_v7light.scss')
+                    path.resolve(
+                      KIBANA_ROOT,
+                      'src/core/public/core_app/styles/_globals_v7light.scss'
+                    )
                   )};\n`;
                 },
                 sassOptions: {
@@ -173,6 +177,10 @@ module.exports = async ({ config: storybookConfig }) => {
         /(lib)?\/ui_metric/,
         path.resolve(__dirname, '../tasks/mocks/uiMetric')
       ),
+      new webpack.NormalModuleReplacementPlugin(
+        /lib\/es_service/,
+        path.resolve(__dirname, '../tasks/mocks/esService')
+      ),
     ],
     resolve: {
       extensions: ['.ts', '.tsx', '.scss', '.mjs', '.html'],
@@ -181,9 +189,8 @@ module.exports = async ({ config: storybookConfig }) => {
           __dirname,
           '../tasks/mocks/uiAbsoluteToParsedUrl'
         ),
-        ui: path.resolve(KIBANA_ROOT, 'src/legacy/ui/public'),
-        ng_mock$: path.resolve(KIBANA_ROOT, 'src/test_utils/public/ng_mock'),
       },
+      symlinks: false,
     },
   };
 

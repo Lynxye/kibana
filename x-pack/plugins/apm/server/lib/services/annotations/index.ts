@@ -1,9 +1,11 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
-import { LegacyAPICaller, Logger } from 'kibana/server';
+
+import { ElasticsearchClient, Logger } from 'kibana/server';
 import { ScopedAnnotationsClient } from '../../../../../observability/server';
 import { getDerivedServiceAnnotations } from './get_derived_service_annotations';
 import { Setup, SetupTimeRange } from '../../helpers/setup_request';
@@ -11,17 +13,19 @@ import { getStoredAnnotations } from './get_stored_annotations';
 
 export async function getServiceAnnotations({
   setup,
+  searchAggregatedTransactions,
   serviceName,
   environment,
   annotationsClient,
-  apiCaller,
+  client,
   logger,
 }: {
   serviceName: string;
   environment?: string;
   setup: Setup & SetupTimeRange;
+  searchAggregatedTransactions: boolean;
   annotationsClient?: ScopedAnnotationsClient;
-  apiCaller: LegacyAPICaller;
+  client: ElasticsearchClient;
   logger: Logger;
 }) {
   // start fetching derived annotations (based on transactions), but don't wait on it
@@ -30,6 +34,7 @@ export async function getServiceAnnotations({
     setup,
     serviceName,
     environment,
+    searchAggregatedTransactions,
   });
 
   const storedAnnotations = annotationsClient
@@ -38,7 +43,7 @@ export async function getServiceAnnotations({
         serviceName,
         environment,
         annotationsClient,
-        apiCaller,
+        client,
         logger,
       })
     : [];

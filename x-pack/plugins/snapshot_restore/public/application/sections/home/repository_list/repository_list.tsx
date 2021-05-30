@@ -1,17 +1,21 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { Fragment, useEffect } from 'react';
 import { FormattedMessage } from '@kbn/i18n/react';
 import { RouteComponentProps } from 'react-router-dom';
-
 import { EuiButton, EuiEmptyPrompt } from '@elastic/eui';
+
+import { reactRouterNavigate } from '../../../../../../../../src/plugins/kibana_react/public';
+
 import { Repository } from '../../../../../common/types';
 import { SectionError, Error } from '../../../../shared_imports';
 import { SectionLoading } from '../../../components';
+import { useDecodedParams } from '../../../lib';
 import { BASE_PATH, UIM_REPOSITORY_LIST_LOAD } from '../../../constants';
 import { useServices } from '../../../app_context';
 import { useLoadRepositories } from '../../../services/http';
@@ -20,18 +24,14 @@ import { linkToAddRepository, linkToRepository } from '../../../services/navigat
 import { RepositoryDetails } from './repository_details';
 import { RepositoryTable } from './repository_table';
 
-import { reactRouterNavigate } from '../../../../../../../../src/plugins/kibana_react/public';
-
 interface MatchParams {
   repositoryName?: Repository['name'];
 }
 
 export const RepositoryList: React.FunctionComponent<RouteComponentProps<MatchParams>> = ({
-  match: {
-    params: { repositoryName },
-  },
   history,
 }) => {
+  const { repositoryName } = useDecodedParams<MatchParams>();
   const {
     error,
     isLoading,
@@ -41,7 +41,7 @@ export const RepositoryList: React.FunctionComponent<RouteComponentProps<MatchPa
         name: undefined,
       },
     },
-    sendRequest: reload,
+    resendRequest: reload,
   } = useLoadRepositories();
 
   const { uiMetricService } = useServices();

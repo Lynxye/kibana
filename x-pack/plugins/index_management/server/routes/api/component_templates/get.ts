@@ -1,8 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import { schema } from '@kbn/config-schema';
 
 import {
@@ -17,11 +19,11 @@ const paramsSchema = schema.object({
   name: schema.string(),
 });
 
-export function registerGetAllRoute({ router, license, lib: { isEsError } }: RouteDependencies) {
+export function registerGetAllRoute({ router, lib: { isEsError } }: RouteDependencies) {
   // Get all component templates
   router.get(
     { path: addBasePath('/component_templates'), validate: false },
-    license.guardApiRoute(async (ctx, req, res) => {
+    async (ctx, req, res) => {
       const { callAsCurrentUser } = ctx.dataManagement!.client;
 
       try {
@@ -52,9 +54,9 @@ export function registerGetAllRoute({ router, license, lib: { isEsError } }: Rou
           });
         }
 
-        return res.internalError({ body: error });
+        throw error;
       }
-    })
+    }
   );
 
   // Get single component template
@@ -65,7 +67,7 @@ export function registerGetAllRoute({ router, license, lib: { isEsError } }: Rou
         params: paramsSchema,
       },
     },
-    license.guardApiRoute(async (ctx, req, res) => {
+    async (ctx, req, res) => {
       const { callAsCurrentUser } = ctx.dataManagement!.client;
       const { name } = req.params;
 
@@ -92,8 +94,8 @@ export function registerGetAllRoute({ router, license, lib: { isEsError } }: Rou
           });
         }
 
-        return res.internalError({ body: error });
+        throw error;
       }
-    })
+    }
   );
 }

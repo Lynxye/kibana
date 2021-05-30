@@ -1,10 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { get } from 'lodash/fp';
 import sinon from 'sinon';
 import moment from 'moment';
 
@@ -12,21 +12,31 @@ import { sendAlertToTimelineAction, determineToAndFrom } from './actions';
 import {
   mockEcsDataWithAlert,
   defaultTimelineProps,
-  apolloClient,
-  mockTimelineApolloResult,
-  mockTimelineDetailsApollo,
+  mockTimelineResult,
+  mockTimelineDetails,
 } from '../../../common/mock/';
 import { CreateTimeline, UpdateTimelineLoading } from './types';
-import { Ecs } from '../../../graphql/types';
-import { TimelineType, TimelineStatus } from '../../../../common/types/timeline';
+import { Ecs } from '../../../../common/ecs';
+import {
+  TimelineId,
+  TimelineType,
+  TimelineStatus,
+  TimelineTabs,
+} from '../../../../common/types/timeline';
+import { ISearchStart } from '../../../../../../../src/plugins/data/public';
+import { dataPluginMock } from '../../../../../../../src/plugins/data/public/mocks';
+import { getTimelineTemplate } from '../../../timelines/containers/api';
 
-jest.mock('apollo-client');
+jest.mock('../../../timelines/containers/api', () => ({
+  getTimelineTemplate: jest.fn(),
+}));
 
 describe('alert actions', () => {
   const anchor = '2020-03-01T17:59:46.349Z';
   const unix = moment(anchor).valueOf();
   let createTimeline: CreateTimeline;
   let updateTimelineIsLoading: UpdateTimelineLoading;
+  let searchStrategyClient: jest.Mocked<ISearchStart>;
   let clock: sinon.SinonFakeTimers;
 
   beforeEach(() => {
@@ -40,13 +50,17 @@ describe('alert actions', () => {
     createTimeline = jest.fn() as jest.Mocked<CreateTimeline>;
     updateTimelineIsLoading = jest.fn() as jest.Mocked<UpdateTimelineLoading>;
 
-    jest.spyOn(apolloClient, 'query').mockImplementation((obj) => {
-      const id = get('variables.id', obj);
-      if (id != null) {
-        return Promise.resolve(mockTimelineApolloResult);
-      }
-      return Promise.resolve(mockTimelineDetailsApollo);
-    });
+    searchStrategyClient = {
+      ...dataPluginMock.createStartContract().search,
+      aggs: {} as ISearchStart['aggs'],
+      showError: jest.fn(),
+      search: jest
+        .fn()
+        .mockImplementation(() => ({ toPromise: () => ({ data: mockTimelineDetails }) })),
+      searchSource: {} as ISearchStart['searchSource'],
+    };
+
+    (getTimelineTemplate as jest.Mock).mockResolvedValue(mockTimelineResult);
 
     clock = sinon.useFakeTimers(unix);
   });
@@ -59,106 +73,70 @@ describe('alert actions', () => {
     describe('timeline id is NOT empty string and apollo client exists', () => {
       test('it invokes updateTimelineIsLoading to set to true', async () => {
         await sendAlertToTimelineAction({
-          apolloClient,
           createTimeline,
           ecsData: mockEcsDataWithAlert,
           nonEcsData: [],
           updateTimelineIsLoading,
+          searchStrategyClient,
         });
 
         expect(updateTimelineIsLoading).toHaveBeenCalledTimes(1);
-        expect(updateTimelineIsLoading).toHaveBeenCalledWith({ id: 'timeline-1', isLoading: true });
+        expect(updateTimelineIsLoading).toHaveBeenCalledWith({
+          id: TimelineId.active,
+          isLoading: true,
+        });
       });
 
       test('it invokes createTimeline with designated timeline template if "timelineTemplate" exists', async () => {
         await sendAlertToTimelineAction({
-          apolloClient,
           createTimeline,
           ecsData: mockEcsDataWithAlert,
           nonEcsData: [],
           updateTimelineIsLoading,
+          searchStrategyClient,
         });
         const expected = {
           from: '2018-11-05T18:58:25.937Z',
           notes: null,
           timeline: {
+            activeTab: TimelineTabs.query,
+            prevActiveTab: TimelineTabs.query,
             columns: [
               {
-                aggregatable: undefined,
-                category: undefined,
                 columnHeaderType: 'not-filtered',
-                description: undefined,
-                example: undefined,
                 id: '@timestamp',
-                placeholder: undefined,
-                type: undefined,
-                width: 190,
+                type: 'number',
+                initialWidth: 190,
               },
               {
-                aggregatable: undefined,
-                category: undefined,
                 columnHeaderType: 'not-filtered',
-                description: undefined,
-                example: undefined,
                 id: 'message',
-                placeholder: undefined,
-                type: undefined,
-                width: 180,
+                initialWidth: 180,
               },
               {
-                aggregatable: undefined,
-                category: undefined,
                 columnHeaderType: 'not-filtered',
-                description: undefined,
-                example: undefined,
                 id: 'event.category',
-                placeholder: undefined,
-                type: undefined,
-                width: 180,
+                initialWidth: 180,
               },
               {
-                aggregatable: undefined,
-                category: undefined,
                 columnHeaderType: 'not-filtered',
-                description: undefined,
-                example: undefined,
                 id: 'host.name',
-                placeholder: undefined,
-                type: undefined,
-                width: 180,
+                initialWidth: 180,
               },
               {
-                aggregatable: undefined,
-                category: undefined,
                 columnHeaderType: 'not-filtered',
-                description: undefined,
-                example: undefined,
                 id: 'source.ip',
-                placeholder: undefined,
-                type: undefined,
-                width: 180,
+                initialWidth: 180,
               },
               {
-                aggregatable: undefined,
-                category: undefined,
                 columnHeaderType: 'not-filtered',
-                description: undefined,
-                example: undefined,
                 id: 'destination.ip',
-                placeholder: undefined,
-                type: undefined,
-                width: 180,
+                initialWidth: 180,
               },
               {
-                aggregatable: undefined,
-                category: undefined,
                 columnHeaderType: 'not-filtered',
-                description: undefined,
-                example: undefined,
                 id: 'user.name',
-                placeholder: undefined,
-                type: undefined,
-                width: 180,
+                initialWidth: 180,
               },
             ],
             dataProviders: [],
@@ -168,9 +146,17 @@ describe('alert actions', () => {
             },
             deletedEventIds: [],
             description: 'This is a sample rule description',
+            eqlOptions: {
+              eventCategoryField: 'event.category',
+              query: '',
+              size: 100,
+              tiebreakerField: '',
+              timestampField: '@timestamp',
+            },
             eventIdToNoteIds: {},
             eventType: 'all',
             excludedRowRendererIds: [],
+            expandedDetail: {},
             filters: [
               {
                 $state: {
@@ -194,6 +180,7 @@ describe('alert actions', () => {
             highlightedDropAndProviderId: '',
             historyIds: [],
             id: '',
+            indexNames: [],
             isFavorite: false,
             isLive: false,
             isLoading: false,
@@ -210,10 +197,6 @@ describe('alert actions', () => {
                 },
                 serializedQuery: '',
               },
-              filterQueryDraft: {
-                expression: '',
-                kind: 'kuery',
-              },
             },
             loadingEventIds: [],
             noteIds: [],
@@ -223,17 +206,19 @@ describe('alert actions', () => {
             selectedEventIds: {},
             show: true,
             showCheckboxes: false,
-            sort: {
-              columnId: '@timestamp',
-              sortDirection: 'desc',
-            },
+            sort: [
+              {
+                columnId: '@timestamp',
+                columnType: 'number',
+                sortDirection: 'desc',
+              },
+            ],
             status: TimelineStatus.draft,
             title: '',
             timelineType: TimelineType.default,
             templateTimelineId: null,
             templateTimelineVersion: null,
             version: null,
-            width: 1100,
           },
           to: '2018-11-05T19:03:25.937Z',
           ruleNote: '# this is some markdown documentation',
@@ -243,27 +228,24 @@ describe('alert actions', () => {
       });
 
       test('it invokes createTimeline with kqlQuery.filterQuery.kuery.kind as "kuery" if not specified in returned timeline template', async () => {
-        const mockTimelineApolloResultModified = {
-          ...mockTimelineApolloResult,
+        const mockTimelineResultModified = {
+          ...mockTimelineResult,
           kqlQuery: {
             filterQuery: {
               kuery: {
                 expression: [''],
               },
             },
-            filterQueryDraft: {
-              expression: [''],
-            },
           },
         };
-        jest.spyOn(apolloClient, 'query').mockResolvedValue(mockTimelineApolloResultModified);
+        (getTimelineTemplate as jest.Mock).mockResolvedValue(mockTimelineResultModified);
 
         await sendAlertToTimelineAction({
-          apolloClient,
           createTimeline,
           ecsData: mockEcsDataWithAlert,
           nonEcsData: [],
           updateTimelineIsLoading,
+          searchStrategyClient,
         });
         const createTimelineArg = (createTimeline as jest.Mock).mock.calls[0][0];
 
@@ -271,51 +253,25 @@ describe('alert actions', () => {
         expect(createTimelineArg.timeline.kqlQuery.filterQuery.kuery.kind).toEqual('kuery');
       });
 
-      test('it invokes createTimeline with kqlQuery.filterQueryDraft.kuery.kind as "kuery" if not specified in returned timeline template', async () => {
-        const mockTimelineApolloResultModified = {
-          ...mockTimelineApolloResult,
-          kqlQuery: {
-            filterQuery: {
-              kuery: {
-                expression: [''],
-              },
-            },
-            filterQueryDraft: {
-              expression: [''],
-            },
-          },
-        };
-        jest.spyOn(apolloClient, 'query').mockResolvedValue(mockTimelineApolloResultModified);
-
-        await sendAlertToTimelineAction({
-          apolloClient,
-          createTimeline,
-          ecsData: mockEcsDataWithAlert,
-          nonEcsData: [],
-          updateTimelineIsLoading,
-        });
-        const createTimelineArg = (createTimeline as jest.Mock).mock.calls[0][0];
-
-        expect(createTimeline).toHaveBeenCalledTimes(1);
-        expect(createTimelineArg.timeline.kqlQuery.filterQueryDraft.kind).toEqual('kuery');
-      });
-
       test('it invokes createTimeline with default timeline if apolloClient throws', async () => {
-        jest.spyOn(apolloClient, 'query').mockImplementation(() => {
+        (getTimelineTemplate as jest.Mock).mockImplementation(() => {
           throw new Error('Test error');
         });
 
         await sendAlertToTimelineAction({
-          apolloClient,
           createTimeline,
           ecsData: mockEcsDataWithAlert,
           nonEcsData: [],
           updateTimelineIsLoading,
+          searchStrategyClient,
         });
 
-        expect(updateTimelineIsLoading).toHaveBeenCalledWith({ id: 'timeline-1', isLoading: true });
         expect(updateTimelineIsLoading).toHaveBeenCalledWith({
-          id: 'timeline-1',
+          id: TimelineId.active,
+          isLoading: true,
+        });
+        expect(updateTimelineIsLoading).toHaveBeenCalledWith({
+          id: TimelineId.active,
           isLoading: false,
         });
         expect(createTimeline).toHaveBeenCalledTimes(1);
@@ -330,17 +286,18 @@ describe('alert actions', () => {
           signal: {
             rule: {
               ...mockEcsDataWithAlert.signal?.rule!,
+              // @ts-expect-error
               timeline_id: null,
             },
           },
         };
 
         await sendAlertToTimelineAction({
-          apolloClient,
           createTimeline,
           ecsData: ecsDataMock,
           nonEcsData: [],
           updateTimelineIsLoading,
+          searchStrategyClient,
         });
 
         expect(updateTimelineIsLoading).not.toHaveBeenCalled();
@@ -366,6 +323,79 @@ describe('alert actions', () => {
           ecsData: ecsDataMock,
           nonEcsData: [],
           updateTimelineIsLoading,
+          searchStrategyClient,
+        });
+
+        expect(updateTimelineIsLoading).not.toHaveBeenCalled();
+        expect(createTimeline).toHaveBeenCalledTimes(1);
+        expect(createTimeline).toHaveBeenCalledWith(defaultTimelineProps);
+      });
+    });
+
+    describe('Eql', () => {
+      test(' with signal.group.id', async () => {
+        const ecsDataMock: Ecs = {
+          ...mockEcsDataWithAlert,
+          signal: {
+            rule: {
+              ...mockEcsDataWithAlert.signal?.rule!,
+              type: ['eql'],
+              timeline_id: [''],
+            },
+            group: {
+              id: ['my-group-id'],
+            },
+          },
+        };
+
+        await sendAlertToTimelineAction({
+          createTimeline,
+          ecsData: ecsDataMock,
+          nonEcsData: [],
+          updateTimelineIsLoading,
+          searchStrategyClient,
+        });
+
+        expect(updateTimelineIsLoading).not.toHaveBeenCalled();
+        expect(createTimeline).toHaveBeenCalledTimes(1);
+        expect(createTimeline).toHaveBeenCalledWith({
+          ...defaultTimelineProps,
+          timeline: {
+            ...defaultTimelineProps.timeline,
+            dataProviders: [
+              {
+                and: [],
+                enabled: true,
+                excluded: false,
+                id:
+                  'send-alert-to-timeline-action-default-draggable-event-details-value-formatted-field-value-timeline-1-alert-id-my-group-id',
+                kqlQuery: '',
+                name: '1',
+                queryMatch: { field: 'signal.group.id', operator: ':', value: 'my-group-id' },
+              },
+            ],
+          },
+        });
+      });
+
+      test(' with NO  signal.group.id', async () => {
+        const ecsDataMock: Ecs = {
+          ...mockEcsDataWithAlert,
+          signal: {
+            rule: {
+              ...mockEcsDataWithAlert.signal?.rule!,
+              type: ['eql'],
+              timeline_id: [''],
+            },
+          },
+        };
+
+        await sendAlertToTimelineAction({
+          createTimeline,
+          ecsData: ecsDataMock,
+          nonEcsData: [],
+          updateTimelineIsLoading,
+          searchStrategyClient,
         });
 
         expect(updateTimelineIsLoading).not.toHaveBeenCalled();
@@ -381,7 +411,7 @@ describe('alert actions', () => {
         ...mockEcsDataWithAlert,
         timestamp: '2020-03-20T17:59:46.349Z',
       };
-      const result = determineToAndFrom({ ecsData: ecsDataMock });
+      const result = determineToAndFrom({ ecs: ecsDataMock });
 
       expect(result.from).toEqual('2020-03-20T17:54:46.349Z');
       expect(result.to).toEqual('2020-03-20T17:59:46.349Z');
@@ -391,7 +421,7 @@ describe('alert actions', () => {
       const { timestamp, ...ecsDataMock } = {
         ...mockEcsDataWithAlert,
       };
-      const result = determineToAndFrom({ ecsData: ecsDataMock });
+      const result = determineToAndFrom({ ecs: ecsDataMock });
 
       expect(result.from).toEqual('2020-03-01T17:54:46.349Z');
       expect(result.to).toEqual('2020-03-01T17:59:46.349Z');

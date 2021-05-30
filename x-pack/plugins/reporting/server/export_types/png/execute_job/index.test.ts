@@ -1,16 +1,21 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import * as Rx from 'rxjs';
 import { ReportingCore } from '../../../';
 import { CancellationToken } from '../../../../common';
 import { cryptoFactory, LevelLogger } from '../../../lib';
-import { createMockReportingCore } from '../../../test_helpers';
-import { ScheduledTaskParamsPNG } from '../types';
+import {
+  createMockConfig,
+  createMockConfigSchema,
+  createMockReportingCore,
+} from '../../../test_helpers';
 import { generatePngObservableFactory } from '../lib/generate_png';
+import { TaskPayloadPNG } from '../types';
 import { runTaskFnFactory } from './';
 
 jest.mock('../lib/generate_png', () => ({ generatePngObservableFactory: jest.fn() }));
@@ -36,40 +41,20 @@ const encryptHeaders = async (headers: Record<string, string>) => {
   return await crypto.encrypt(headers);
 };
 
-const getScheduledTaskParams = (baseObj: any) => baseObj as ScheduledTaskParamsPNG;
+const getBasePayload = (baseObj: any) => baseObj as TaskPayloadPNG;
 
 beforeEach(async () => {
-  const kbnConfig = {
-    'server.basePath': '/sbp',
-  };
-  const reportingConfig = {
+  const mockReportingConfig = createMockConfigSchema({
     index: '.reporting-2018.10.10',
     encryptionKey: mockEncryptionKey,
-    'kibanaServer.hostname': 'localhost',
-    'kibanaServer.port': 5601,
-    'kibanaServer.protocol': 'http',
-    'queue.indexInterval': 'daily',
-    'queue.timeout': Infinity,
-  };
-  const mockReportingConfig = {
-    get: (...keys: string[]) => (reportingConfig as any)[keys.join('.')],
-    kbnConfig: { get: (...keys: string[]) => (kbnConfig as any)[keys.join('.')] },
-  };
+    queue: {
+      indexInterval: 'daily',
+      timeout: Infinity,
+    },
+  });
 
   mockReporting = await createMockReportingCore(mockReportingConfig);
-
-  const mockElasticsearch = {
-    legacy: {
-      client: {
-        asScoped: () => ({ callAsCurrentUser: jest.fn() }),
-      },
-    },
-  };
-  const mockGetElasticsearch = jest.fn();
-  mockGetElasticsearch.mockImplementation(() => Promise.resolve(mockElasticsearch));
-  mockReporting.getElasticsearchService = mockGetElasticsearch;
-  // @ts-ignore over-riding config method
-  mockReporting.config = mockReportingConfig;
+  mockReporting.setConfig(createMockConfig(mockReportingConfig));
 
   (generatePngObservableFactory as jest.Mock).mockReturnValue(jest.fn());
 });
@@ -85,7 +70,7 @@ test(`passes browserTimezone to generatePng`, async () => {
   const browserTimezone = 'UTC';
   await runTask(
     'pngJobId',
-    getScheduledTaskParams({
+    getBasePayload({
       relativeUrl: '/app/kibana#/something',
       browserTimezone,
       headers: encryptedHeaders,
@@ -107,14 +92,14 @@ test(`passes browserTimezone to generatePng`, async () => {
           ],
           "warning": [Function],
         },
-        "http://localhost:5601/sbp/app/kibana#/something",
+        "localhost:80undefined/app/kibana#/something",
         "UTC",
         Object {
           "conditions": Object {
-            "basePath": "/sbp",
+            "basePath": undefined,
             "hostname": "localhost",
-            "port": 5601,
-            "protocol": "http",
+            "port": 80,
+            "protocol": undefined,
           },
           "headers": Object {},
         },
@@ -133,7 +118,7 @@ test(`returns content_type of application/png`, async () => {
 
   const { content_type: contentType } = await runTask(
     'pngJobId',
-    getScheduledTaskParams({ relativeUrl: '/app/kibana#/something', headers: encryptedHeaders }),
+    getBasePayload({ relativeUrl: '/app/kibana#/something', headers: encryptedHeaders }),
     cancellationToken
   );
   expect(contentType).toBe('image/png');
@@ -148,7 +133,7 @@ test(`returns content of generatePng getBuffer base64 encoded`, async () => {
   const encryptedHeaders = await encryptHeaders({});
   const { content } = await runTask(
     'pngJobId',
-    getScheduledTaskParams({ relativeUrl: '/app/kibana#/something', headers: encryptedHeaders }),
+    getBasePayload({ relativeUrl: '/app/kibana#/something', headers: encryptedHeaders }),
     cancellationToken
   );
 

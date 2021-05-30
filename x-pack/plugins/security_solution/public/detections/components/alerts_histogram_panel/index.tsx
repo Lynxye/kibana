@@ -1,8 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import { Position } from '@elastic/charts';
 import { EuiFlexGroup, EuiFlexItem, EuiSelect, EuiPanel } from '@elastic/eui';
 import numeral from '@elastic/numeral';
@@ -56,6 +58,7 @@ const ViewAlertsFlexItem = styled(EuiFlexItem)`
 interface AlertsHistogramPanelProps
   extends Pick<GlobalTimeArgs, 'from' | 'to' | 'setQuery' | 'deleteQuery'> {
   chartHeight?: number;
+  combinedQueries?: string;
   defaultStackByOption?: AlertsHistogramOption;
   filters?: Filter[];
   headerChildren?: React.ReactNode;
@@ -84,9 +87,26 @@ const DEFAULT_STACK_BY = 'signal.rule.name';
 const getDefaultStackByOption = (): AlertsHistogramOption =>
   alertsHistogramOptions.find(({ text }) => text === DEFAULT_STACK_BY) ?? alertsHistogramOptions[0];
 
+export const parseCombinedQueries = (query?: string) => {
+  try {
+    return query != null && !isEmpty(query) ? JSON.parse(query) : {};
+  } catch {
+    return {};
+  }
+};
+
+export const buildCombinedQueries = (query?: string) => {
+  try {
+    return isEmpty(query) ? [] : [parseCombinedQueries(query)];
+  } catch {
+    return [];
+  }
+};
+
 export const AlertsHistogramPanel = memo<AlertsHistogramPanelProps>(
   ({
     chartHeight,
+    combinedQueries,
     defaultStackByOption = getDefaultStackByOption(),
     deleteQuery,
     filters,
@@ -121,10 +141,15 @@ export const AlertsHistogramPanel = memo<AlertsHistogramPanelProps>(
       response,
       request,
       refetch,
-    } = useQueryAlerts<{}, AlertsAggregation>(
-      getAlertsHistogramQuery(selectedStackByOption.value, from, to, []),
-      signalIndexName
-    );
+    } = useQueryAlerts<{}, AlertsAggregation>({
+      query: getAlertsHistogramQuery(
+        selectedStackByOption.value,
+        from,
+        to,
+        buildCombinedQueries(combinedQueries)
+      ),
+      indexName: signalIndexName,
+    });
     const kibana = useKibana();
     const { navigateToApp } = kibana.services.application;
     const { formatUrl, search: urlSearch } = useFormatUrl(SecurityPageName.detections);
@@ -171,7 +196,6 @@ export const AlertsHistogramPanel = memo<AlertsHistogramPanelProps>(
               value: bucket.key,
             }))
           : NO_LEGEND_DATA,
-      // eslint-disable-next-line react-hooks/exhaustive-deps
       [alertsData, selectedStackByOption.value, timelineId]
     );
 
@@ -221,26 +245,35 @@ export const AlertsHistogramPanel = memo<AlertsHistogramPanelProps>(
     }, [alertsData]);
 
     useEffect(() => {
-      const converted = esQuery.buildEsQuery(
-        undefined,
-        query != null ? [query] : [],
-        filters?.filter((f) => f.meta.disabled === false) ?? [],
-        {
-          ...esQuery.getEsQueryConfig(kibana.services.uiSettings),
-          dateFormatTZ: undefined,
+      try {
+        let converted = null;
+        if (combinedQueries != null) {
+          converted = parseCombinedQueries(combinedQueries);
+        } else {
+          converted = esQuery.buildEsQuery(
+            undefined,
+            query != null ? [query] : [],
+            filters?.filter((f) => f.meta.disabled === false) ?? [],
+            {
+              ...esQuery.getEsQueryConfig(kibana.services.uiSettings),
+              dateFormatTZ: undefined,
+            }
+          );
         }
-      );
 
-      setAlertsQuery(
-        getAlertsHistogramQuery(
-          selectedStackByOption.value,
-          from,
-          to,
-          !isEmpty(converted) ? [converted] : []
-        )
-      );
+        setAlertsQuery(
+          getAlertsHistogramQuery(
+            selectedStackByOption.value,
+            from,
+            to,
+            !isEmpty(converted) ? [converted] : []
+          )
+        );
+      } catch (e) {
+        setAlertsQuery(getAlertsHistogramQuery(selectedStackByOption.value, from, to, []));
+      }
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedStackByOption.value, from, to, query, filters]);
+    }, [selectedStackByOption.value, from, to, query, filters, combinedQueries]);
 
     const linkButton = useMemo(() => {
       if (showLinkToAlerts) {

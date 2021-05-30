@@ -1,14 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 /*
  * React component for rendering Single Metric Viewer.
  */
 
-import { debounce, each, find, get, has, isEqual } from 'lodash';
+import { find, get, has, isEqual } from 'lodash';
 import moment from 'moment-timezone';
 import { Subject, Subscription, forkJoin } from 'rxjs';
 import { map, debounceTime, switchMap, tap, withLatestFrom } from 'rxjs/operators';
@@ -25,14 +26,12 @@ import {
   EuiFlexGroup,
   EuiFlexItem,
   EuiFormRow,
-  EuiSelect,
   EuiSpacer,
+  EuiPanel,
   EuiTitle,
   EuiAccordion,
   EuiBadge,
 } from '@elastic/eui';
-
-import { getToastNotifications } from '../util/dependency_cache';
 import { ResizeChecker } from '../../../../../../src/plugins/kibana_utils/public';
 
 import { ANOMALIES_TABLE_DEFAULT_QUERY_SIZE } from '../../../common/constants/search';
@@ -40,20 +39,16 @@ import {
   isModelPlotEnabled,
   isModelPlotChartableForDetector,
   isSourceDataChartableForDetector,
-  isTimeSeriesViewDetector,
   mlFunctionToESAggregation,
 } from '../../../common/util/job_utils';
 
 import { AnnotationFlyout } from '../components/annotations/annotation_flyout';
 import { AnnotationsTable } from '../components/annotations/annotations_table';
 import { AnomaliesTable } from '../components/anomalies_table/anomalies_table';
-import { MlTooltipComponent } from '../components/chart_tooltip';
-import { EntityControl } from './components/entity_control';
 import { ForecastingModal } from './components/forecasting_modal/forecasting_modal';
 import { LoadingIndicator } from '../components/loading_indicator/loading_indicator';
 import { SelectInterval } from '../components/controls/select_interval/select_interval';
 import { SelectSeverity } from '../components/controls/select_severity/select_severity';
-import { TimeseriesChart } from './components/timeseries_chart/timeseries_chart';
 import { TimeseriesexplorerNoChartData } from './components/timeseriesexplorer_no_chart_data';
 import { TimeSeriesExplorerPage } from './timeseriesexplorer_page';
 
@@ -81,7 +76,14 @@ import {
   processRecordScoreResults,
   getFocusData,
 } from './timeseriesexplorer_utils';
-import { EMPTY_FIELD_VALUE_LABEL } from './components/entity_control/entity_control';
+import { ANOMALY_DETECTION_DEFAULT_TIME_RANGE } from '../../../common/constants/settings';
+import { getControlsForDetector } from './get_controls_for_detector';
+import { SeriesControls } from './components/series_controls';
+import { TimeSeriesChartWithTooltips } from './components/timeseries_chart/timeseries_chart_with_tooltip';
+import { aggregationTypeTransform } from '../../../common/util/anomaly_utils';
+import { isMetricDetector } from './get_function_description';
+import { getViewableDetectors } from './timeseriesexplorer_utils/get_viewable_detectors';
+import { TimeseriesexplorerChartDataError } from './components/timeseriesexplorer_chart_data_error';
 
 // Used to indicate the chart is being plotted across
 // all partition field values, where the cardinality of the field cannot be
@@ -89,32 +91,6 @@ import { EMPTY_FIELD_VALUE_LABEL } from './components/entity_control/entity_cont
 const allValuesLabel = i18n.translate('xpack.ml.timeSeriesExplorer.allPartitionValuesLabel', {
   defaultMessage: 'all',
 });
-
-function getEntityControlOptions(fieldValues) {
-  if (!Array.isArray(fieldValues)) {
-    return [];
-  }
-
-  fieldValues.sort();
-
-  return fieldValues.map((value) => {
-    return { label: value === '' ? EMPTY_FIELD_VALUE_LABEL : value, value };
-  });
-}
-
-function getViewableDetectors(selectedJob) {
-  const jobDetectors = selectedJob.analysis_config.detectors;
-  const viewableDetectors = [];
-  each(jobDetectors, (dtr, index) => {
-    if (isTimeSeriesViewDetector(selectedJob, index)) {
-      viewableDetectors.push({
-        index,
-        detector_description: dtr.detector_description,
-      });
-    }
-  });
-  return viewableDetectors;
-}
 
 function getTimeseriesexplorerDefaultState() {
   return {
@@ -152,6 +128,7 @@ function getTimeseriesexplorerDefaultState() {
     zoomTo: undefined,
     zoomFromFocusLoaded: undefined,
     zoomToFocusLoaded: undefined,
+    chartDataError: undefined,
   };
 }
 
@@ -172,6 +149,7 @@ export class TimeSeriesExplorer extends React.Component {
     tableInterval: PropTypes.string,
     tableSeverity: PropTypes.number,
     zoom: PropTypes.object,
+    toastNotificationService: PropTypes.object,
   };
 
   state = getTimeseriesexplorerDefaultState();
@@ -186,6 +164,7 @@ export class TimeSeriesExplorer extends React.Component {
         this.resizeRef.current !== null ? this.resizeRef.current.offsetWidth - containerPadding : 0,
     });
   };
+  unmounted = false;
 
   /**
    * Subject for listening brush time range selection.
@@ -210,14 +189,6 @@ export class TimeSeriesExplorer extends React.Component {
     return fieldNamesWithEmptyValues.length === 0;
   };
 
-  detectorIndexChangeHandler = (e) => {
-    const { appStateHandler } = this.props;
-    const id = e.target.value;
-    if (id !== undefined) {
-      appStateHandler(APP_STATE_ACTION.SET_DETECTOR_INDEX, +id);
-    }
-  };
-
   toggleShowAnnotationsHandler = () => {
     this.setState((prevState) => ({
       showAnnotations: !prevState.showAnnotations,
@@ -234,6 +205,10 @@ export class TimeSeriesExplorer extends React.Component {
     this.setState({
       showModelBounds: !this.state.showModelBounds,
     });
+  };
+
+  setFunctionDescription = (selectedFuction) => {
+    this.props.appStateHandler(APP_STATE_ACTION.SET_FUNCTION_DESCRIPTION, selectedFuction);
   };
 
   previousChartProps = {};
@@ -288,9 +263,17 @@ export class TimeSeriesExplorer extends React.Component {
    * Gets focus data for the current component state/
    */
   getFocusData(selection) {
-    const { selectedJobId, selectedForecastId, selectedDetectorIndex } = this.props;
+    const {
+      selectedJobId,
+      selectedForecastId,
+      selectedDetectorIndex,
+      functionDescription,
+    } = this.props;
     const { modelPlotEnabled } = this.state;
     const selectedJob = mlJobService.getJob(selectedJobId);
+    if (isMetricDetector(selectedJob, selectedDetectorIndex) && functionDescription === undefined) {
+      return;
+    }
     const entityControls = this.getControlsForDetector();
 
     // Calculate the aggregation interval for the focus chart.
@@ -311,6 +294,7 @@ export class TimeSeriesExplorer extends React.Component {
       entityControls.filter((entity) => entity.fieldValue !== null),
       searchBounds,
       selectedJob,
+      functionDescription,
       TIME_FIELD_NAME
     );
   }
@@ -333,28 +317,6 @@ export class TimeSeriesExplorer extends React.Component {
     this.props.appStateHandler(APP_STATE_ACTION.SET_ZOOM, zoomState);
   };
 
-  entityFieldValueChanged = (entity, fieldValue) => {
-    const { appStateHandler } = this.props;
-    const entityControls = this.getControlsForDetector();
-
-    const resultEntities = {
-      ...entityControls.reduce((appStateEntities, appStateEntity) => {
-        appStateEntities[appStateEntity.fieldName] = appStateEntity.fieldValue;
-        return appStateEntities;
-      }, {}),
-      [entity.fieldName]: fieldValue,
-    };
-
-    appStateHandler(APP_STATE_ACTION.SET_ENTITIES, resultEntities);
-  };
-
-  entityFieldSearchChanged = debounce((entity, queryTerm) => {
-    const entityControls = this.getControlsForDetector();
-    this.loadEntityValues(entityControls, {
-      [entity.fieldType]: queryTerm,
-    });
-  }, 500);
-
   loadAnomaliesTableData = (earliestMs, latestMs) => {
     const {
       dateFormatTz,
@@ -362,6 +324,7 @@ export class TimeSeriesExplorer extends React.Component {
       selectedJobId,
       tableInterval,
       tableSeverity,
+      functionDescription,
     } = this.props;
     const selectedJob = mlJobService.getJob(selectedJobId);
     const entityControls = this.getControlsForDetector();
@@ -376,7 +339,10 @@ export class TimeSeriesExplorer extends React.Component {
         earliestMs,
         latestMs,
         dateFormatTz,
-        ANOMALIES_TABLE_DEFAULT_QUERY_SIZE
+        ANOMALIES_TABLE_DEFAULT_QUERY_SIZE,
+        undefined,
+        undefined,
+        functionDescription
       )
       .pipe(
         map((resp) => {
@@ -419,61 +385,15 @@ export class TimeSeriesExplorer extends React.Component {
       );
   };
 
-  /**
-   * Loads available entity values.
-   * @param {Array} entities - Entity controls configuration
-   * @param {Object} searchTerm - Search term for partition, e.g. { partition_field: 'partition' }
-   */
-  loadEntityValues = async (entities, searchTerm = {}) => {
-    this.setState({ entitiesLoading: true });
-
-    const { bounds, selectedJobId, selectedDetectorIndex } = this.props;
-    const selectedJob = mlJobService.getJob(selectedJobId);
-
-    // Populate the entity input datalists with the values from the top records by score
-    // for the selected detector across the full time range. No need to pass through finish().
-    const detectorIndex = selectedDetectorIndex;
-
-    const {
-      partition_field: partitionField,
-      over_field: overField,
-      by_field: byField,
-    } = await mlResultsService
-      .fetchPartitionFieldsValues(
-        selectedJob.job_id,
-        searchTerm,
-        [
-          {
-            fieldName: 'detector_index',
-            fieldValue: detectorIndex,
-          },
-        ],
-        bounds.min.valueOf(),
-        bounds.max.valueOf()
-      )
-      .toPromise();
-
-    const entityValues = {};
-    entities.forEach((entity) => {
-      let fieldValues;
-
-      if (partitionField?.name === entity.fieldName) {
-        fieldValues = partitionField.values;
-      }
-      if (overField?.name === entity.fieldName) {
-        fieldValues = overField.values;
-      }
-      if (byField?.name === entity.fieldName) {
-        fieldValues = byField.values;
-      }
-      entityValues[entity.fieldName] = fieldValues;
-    });
-
-    this.setState({ entitiesLoading: false, entityValues });
-  };
-
   setForecastId = (forecastId) => {
     this.props.appStateHandler(APP_STATE_ACTION.SET_FORECAST_ID, forecastId);
+  };
+
+  displayErrorToastMessages = (error, errorMsg) => {
+    if (this.props.toastNotificationService) {
+      this.props.toastNotificationService.displayErrorToast(error, errorMsg, 2000);
+    }
+    this.setState({ loading: false, chartDataError: errorMsg });
   };
 
   loadSingleMetricData = (fullRefresh = true) => {
@@ -484,15 +404,23 @@ export class TimeSeriesExplorer extends React.Component {
       selectedForecastId,
       selectedJobId,
       zoom,
+      functionDescription,
     } = this.props;
 
     const { loadCounter: currentLoadCounter } = this.state;
 
     const currentSelectedJob = mlJobService.getJob(selectedJobId);
-
     if (currentSelectedJob === undefined) {
       return;
     }
+    if (
+      isMetricDetector(currentSelectedJob, selectedDetectorIndex) &&
+      functionDescription === undefined
+    ) {
+      return;
+    }
+
+    const functionToPlotByIfMetric = aggregationTypeTransform.toES(functionDescription);
 
     this.contextChartSelectedInitCallDone = false;
 
@@ -504,6 +432,7 @@ export class TimeSeriesExplorer extends React.Component {
         fullRefresh,
         loadCounter: currentLoadCounter + 1,
         loading: true,
+        chartDataError: undefined,
         ...(fullRefresh
           ? {
               chartDetails: undefined,
@@ -627,7 +556,8 @@ export class TimeSeriesExplorer extends React.Component {
             nonBlankEntities,
             searchBounds.min.valueOf(),
             searchBounds.max.valueOf(),
-            stateUpdate.contextAggregationInterval.expression
+            stateUpdate.contextAggregationInterval.asMilliseconds(),
+            functionToPlotByIfMetric
           )
           .toPromise()
           .then((resp) => {
@@ -635,11 +565,11 @@ export class TimeSeriesExplorer extends React.Component {
             stateUpdate.contextChartData = fullRangeChartData;
             finish(counter);
           })
-          .catch((resp) => {
-            console.log(
-              'Time series explorer - error getting metric data from elasticsearch:',
-              resp
-            );
+          .catch((err) => {
+            const errorMsg = i18n.translate('xpack.ml.timeSeriesExplorer.metricDataErrorMessage', {
+              defaultMessage: 'Error getting metric data',
+            });
+            this.displayErrorToastMessages(err, errorMsg);
           });
 
         // Query 2 - load max record score at same granularity as context chart
@@ -650,18 +580,23 @@ export class TimeSeriesExplorer extends React.Component {
             this.getCriteriaFields(detectorIndex, entityControls),
             searchBounds.min.valueOf(),
             searchBounds.max.valueOf(),
-            stateUpdate.contextAggregationInterval.expression
+            stateUpdate.contextAggregationInterval.asMilliseconds(),
+            functionToPlotByIfMetric
           )
           .then((resp) => {
             const fullRangeRecordScoreData = processRecordScoreResults(resp.results);
             stateUpdate.swimlaneData = fullRangeRecordScoreData;
             finish(counter);
           })
-          .catch((resp) => {
-            console.log(
-              'Time series explorer - error getting bucket anomaly scores from elasticsearch:',
-              resp
+          .catch((err) => {
+            const errorMsg = i18n.translate(
+              'xpack.ml.timeSeriesExplorer.bucketAnomalyScoresErrorMessage',
+              {
+                defaultMessage: 'Error getting bucket anomaly scores',
+              }
             );
+
+            this.displayErrorToastMessages(err, errorMsg);
           });
 
         // Query 3 - load details on the chart used in the chart title (charting function and entity(s)).
@@ -677,10 +612,12 @@ export class TimeSeriesExplorer extends React.Component {
             stateUpdate.chartDetails = resp.results;
             finish(counter);
           })
-          .catch((resp) => {
-            console.log(
-              'Time series explorer - error getting entity counts from elasticsearch:',
-              resp
+          .catch((err) => {
+            this.displayErrorToastMessages(
+              err,
+              i18n.translate('xpack.ml.timeSeriesExplorer.entityCountsErrorMessage', {
+                defaultMessage: 'Error getting entity counts',
+              })
             );
           });
 
@@ -701,7 +638,7 @@ export class TimeSeriesExplorer extends React.Component {
               nonBlankEntities,
               searchBounds.min.valueOf(),
               searchBounds.max.valueOf(),
-              stateUpdate.contextAggregationInterval.expression,
+              stateUpdate.contextAggregationInterval.asMilliseconds(),
               aggType
             )
             .toPromise()
@@ -709,10 +646,13 @@ export class TimeSeriesExplorer extends React.Component {
               stateUpdate.contextForecastData = processForecastResults(resp.results);
               finish(counter);
             })
-            .catch((resp) => {
-              console.log(
-                `Time series explorer - error loading data for forecast ID ${selectedForecastId}`,
-                resp
+            .catch((err) => {
+              this.displayErrorToastMessages(
+                err,
+                i18n.translate('xpack.ml.timeSeriesExplorer.forecastDataErrorMessage', {
+                  defaultMessage: 'Error loading forecast data for forecast ID {forecastId}',
+                  values: { forecastId: selectedForecastId },
+                })
               );
             });
         }
@@ -726,50 +666,7 @@ export class TimeSeriesExplorer extends React.Component {
    */
   getControlsForDetector = () => {
     const { selectedDetectorIndex, selectedEntities, selectedJobId } = this.props;
-    const selectedJob = mlJobService.getJob(selectedJobId);
-
-    const entities = [];
-
-    if (selectedJob === undefined) {
-      return entities;
-    }
-
-    // Update the entity dropdown control(s) according to the partitioning fields for the selected detector.
-    const detectorIndex = selectedDetectorIndex;
-    const detector = selectedJob.analysis_config.detectors[detectorIndex];
-
-    const entitiesState = selectedEntities;
-    const partitionFieldName = get(detector, 'partition_field_name');
-    const overFieldName = get(detector, 'over_field_name');
-    const byFieldName = get(detector, 'by_field_name');
-    if (partitionFieldName !== undefined) {
-      const partitionFieldValue = get(entitiesState, partitionFieldName, null);
-      entities.push({
-        fieldType: 'partition_field',
-        fieldName: partitionFieldName,
-        fieldValue: partitionFieldValue,
-      });
-    }
-    if (overFieldName !== undefined) {
-      const overFieldValue = get(entitiesState, overFieldName, null);
-      entities.push({
-        fieldType: 'over_field',
-        fieldName: overFieldName,
-        fieldValue: overFieldValue,
-      });
-    }
-
-    // For jobs with by and over fields, don't add the 'by' field as this
-    // field will only be added to the top-level fields for record type results
-    // if it also an influencer over the bucket.
-    // TODO - metric data can be filtered by this field, so should only exclude
-    // from filter for the anomaly records.
-    if (byFieldName !== undefined && overFieldName === undefined) {
-      const byFieldValue = get(entitiesState, byFieldName, null);
-      entities.push({ fieldType: 'by_field', fieldName: byFieldName, fieldValue: byFieldValue });
-    }
-
-    return entities;
+    return getControlsForDetector(selectedDetectorIndex, selectedEntities, selectedJobId);
   };
 
   /**
@@ -814,8 +711,10 @@ export class TimeSeriesExplorer extends React.Component {
           },
         }
       );
-      const toastNotifications = getToastNotifications();
-      toastNotifications.addWarning(warningText);
+      if (this.props.toastNotificationService) {
+        this.props.toastNotificationService.displayWarningToast(warningText);
+      }
+
       detectorIndex = detectors[0].index;
     }
 
@@ -824,7 +723,6 @@ export class TimeSeriesExplorer extends React.Component {
     if (detectorId !== selectedDetectorIndex) {
       appStateHandler(APP_STATE_ACTION.SET_DETECTOR_INDEX, detectorId);
     }
-
     // Populate the map of jobs / detectors / field formatters for the selected IDs and refresh.
     mlFieldFormatService.populateFormats([jobId]).catch((err) => {
       console.log('Error populating field formats:', err);
@@ -832,6 +730,23 @@ export class TimeSeriesExplorer extends React.Component {
   }
 
   componentDidMount() {
+    // if timeRange used in the url is incorrect
+    // perhaps due to user's advanced setting using incorrect date-maths
+    const { invalidTimeRangeError } = this.props;
+    if (invalidTimeRangeError) {
+      if (this.props.toastNotificationService) {
+        this.props.toastNotificationService.displayWarningToast(
+          i18n.translate('xpack.ml.timeSeriesExplorer.invalidTimeRangeInUrlCallout', {
+            defaultMessage:
+              'The time filter was changed to the full range for this job due to an invalid default time filter. Check the advanced settings for {field}.',
+            values: {
+              field: ANOMALY_DETECTION_DEFAULT_TIME_RANGE,
+            },
+          })
+        );
+      }
+    }
+
     // Required to redraw the time series chart when the container is resized.
     this.resizeChecker = new ResizeChecker(this.resizeRef.current);
     this.resizeChecker.on('resize', () => {
@@ -941,16 +856,6 @@ export class TimeSeriesExplorer extends React.Component {
 
     if (
       previousProps === undefined ||
-      previousProps.selectedJobId !== this.props.selectedJobId ||
-      previousProps.selectedDetectorIndex !== this.props.selectedDetectorIndex ||
-      !isEqual(previousProps.selectedEntities, this.props.selectedEntities)
-    ) {
-      const entityControls = this.getControlsForDetector();
-      this.loadEntityValues(entityControls);
-    }
-
-    if (
-      previousProps === undefined ||
       previousProps.selectedForecastId !== this.props.selectedForecastId
     ) {
       if (this.props.selectedForecastId !== undefined) {
@@ -967,11 +872,13 @@ export class TimeSeriesExplorer extends React.Component {
     if (
       previousProps === undefined ||
       !isEqual(previousProps.bounds, this.props.bounds) ||
-      !isEqual(previousProps.lastRefresh, this.props.lastRefresh) ||
+      (!isEqual(previousProps.lastRefresh, this.props.lastRefresh) &&
+        previousProps.lastRefresh !== 0) ||
       !isEqual(previousProps.selectedDetectorIndex, this.props.selectedDetectorIndex) ||
       !isEqual(previousProps.selectedEntities, this.props.selectedEntities) ||
       previousProps.selectedForecastId !== this.props.selectedForecastId ||
-      previousProps.selectedJobId !== this.props.selectedJobId
+      previousProps.selectedJobId !== this.props.selectedJobId ||
+      previousProps.functionDescription !== this.props.functionDescription
     ) {
       const fullRefresh =
         previousProps === undefined ||
@@ -979,7 +886,8 @@ export class TimeSeriesExplorer extends React.Component {
         !isEqual(previousProps.selectedDetectorIndex, this.props.selectedDetectorIndex) ||
         !isEqual(previousProps.selectedEntities, this.props.selectedEntities) ||
         previousProps.selectedForecastId !== this.props.selectedForecastId ||
-        previousProps.selectedJobId !== this.props.selectedJobId;
+        previousProps.selectedJobId !== this.props.selectedJobId ||
+        previousProps.functionDescription !== this.props.functionDescription;
       this.loadSingleMetricData(fullRefresh);
     }
 
@@ -1008,6 +916,7 @@ export class TimeSeriesExplorer extends React.Component {
   componentWillUnmount() {
     this.subscriptions.unsubscribe();
     this.resizeChecker.destroy();
+    this.unmounted = true;
   }
 
   render() {
@@ -1026,8 +935,8 @@ export class TimeSeriesExplorer extends React.Component {
       contextChartData,
       contextForecastData,
       dataNotChartable,
-      entityValues,
       focusAggregationInterval,
+      focusAnnotationError,
       focusAnnotationData,
       focusAggregations,
       focusChartData,
@@ -1049,8 +958,8 @@ export class TimeSeriesExplorer extends React.Component {
       zoomTo,
       zoomFromFocusLoaded,
       zoomToFocusLoaded,
+      chartDataError,
     } = this.state;
-
     const chartProps = {
       modelPlotEnabled,
       contextChartData,
@@ -1069,7 +978,6 @@ export class TimeSeriesExplorer extends React.Component {
       zoomToFocusLoaded,
       autoZoomDuration,
     };
-
     const jobs = createTimeSeriesJobData(mlJobService.jobs);
 
     if (selectedDetectorIndex === undefined || mlJobService.getJob(selectedJobId) === undefined) {
@@ -1081,10 +989,6 @@ export class TimeSeriesExplorer extends React.Component {
     const fieldNamesWithEmptyValues = this.getFieldNamesWithEmptyValues();
     const arePartitioningFieldsProvided = this.arePartitioningFieldsProvided();
     const detectors = getViewableDetectors(selectedJob);
-    const detectorSelectOptions = detectors.map((d) => ({
-      value: d.index,
-      text: d.detector_description,
-    }));
 
     let renderFocusChartOnly = true;
 
@@ -1092,7 +996,6 @@ export class TimeSeriesExplorer extends React.Component {
       isEqual(this.previousChartProps.focusForecastData, chartProps.focusForecastData) &&
       isEqual(this.previousChartProps.focusChartData, chartProps.focusChartData) &&
       isEqual(this.previousChartProps.focusAnnotationData, chartProps.focusAnnotationData) &&
-      this.previousShowAnnotations === showAnnotations &&
       this.previousShowForecast === showForecast &&
       this.previousShowModelBounds === showModelBounds &&
       this.props.previousRefresh === lastRefresh
@@ -1101,86 +1004,54 @@ export class TimeSeriesExplorer extends React.Component {
     }
 
     this.previousChartProps = chartProps;
-    this.previousShowAnnotations = showAnnotations;
     this.previousShowForecast = showForecast;
     this.previousShowModelBounds = showModelBounds;
-
-    /**
-     * Indicates if any of the previous controls is empty.
-     * @type {boolean}
-     */
-    let hasEmptyFieldValues = false;
 
     return (
       <TimeSeriesExplorerPage dateFormatTz={dateFormatTz} resizeRef={this.resizeRef}>
         {fieldNamesWithEmptyValues.length > 0 && (
-          <EuiCallOut
-            className="single-metric-request-callout"
-            title={
-              <FormattedMessage
-                id="xpack.ml.timeSeriesExplorer.singleMetricRequiredMessage"
-                defaultMessage="To view a single metric you must select {missingValuesCount, plural, one {a value for {fieldName1}} other {values for {fieldName1} and {fieldName2}}}"
-                values={{
-                  missingValuesCount: fieldNamesWithEmptyValues.length,
-                  fieldName1: fieldNamesWithEmptyValues[0],
-                  fieldName2: fieldNamesWithEmptyValues[1],
-                }}
-              />
-            }
-            color="warning"
-            iconType="help"
-            size="s"
-          />
+          <>
+            <EuiCallOut
+              title={
+                <FormattedMessage
+                  id="xpack.ml.timeSeriesExplorer.singleMetricRequiredMessage"
+                  defaultMessage="To view a single metric, select {missingValuesCount, plural, one {a value for {fieldName1}} other {values for {fieldName1} and {fieldName2}}}."
+                  values={{
+                    missingValuesCount: fieldNamesWithEmptyValues.length,
+                    fieldName1: fieldNamesWithEmptyValues[0],
+                    fieldName2: fieldNamesWithEmptyValues[1],
+                  }}
+                />
+              }
+              iconType="help"
+              size="s"
+            />
+            <EuiSpacer size="m" />
+          </>
         )}
-
-        <div className="series-controls" data-test-subj="mlSingleMetricViewerSeriesControls">
-          <EuiFlexGroup>
-            <EuiFlexItem grow={false}>
-              <EuiFormRow
-                label={i18n.translate('xpack.ml.timeSeriesExplorer.detectorLabel', {
-                  defaultMessage: 'Detector',
-                })}
-              >
-                <EuiSelect
-                  onChange={this.detectorIndexChangeHandler}
-                  value={selectedDetectorIndex}
-                  options={detectorSelectOptions}
-                  data-test-subj="mlSingleMetricViewerDetectorSelect"
+        <SeriesControls
+          selectedJobId={selectedJobId}
+          appStateHandler={this.props.appStateHandler}
+          selectedDetectorIndex={selectedDetectorIndex}
+          selectedEntities={this.props.selectedEntities}
+          bounds={bounds}
+          functionDescription={this.props.functionDescription}
+          setFunctionDescription={this.setFunctionDescription}
+        >
+          {arePartitioningFieldsProvided && (
+            <EuiFlexItem style={{ textAlign: 'right' }}>
+              <EuiFormRow hasEmptyLabelSpace style={{ maxWidth: '100%' }}>
+                <ForecastingModal
+                  job={selectedJob}
+                  detectorIndex={selectedDetectorIndex}
+                  entities={entityControls}
+                  setForecastId={this.setForecastId}
+                  className="forecast-controls"
                 />
               </EuiFormRow>
             </EuiFlexItem>
-            {entityControls.map((entity) => {
-              const entityKey = `${entity.fieldName}`;
-              const forceSelection = !hasEmptyFieldValues && entity.fieldValue === null;
-              hasEmptyFieldValues = !hasEmptyFieldValues && forceSelection;
-              return (
-                <EntityControl
-                  entity={entity}
-                  entityFieldValueChanged={this.entityFieldValueChanged}
-                  isLoading={this.state.entitiesLoading}
-                  onSearchChange={this.entityFieldSearchChanged}
-                  forceSelection={forceSelection}
-                  key={entityKey}
-                  options={getEntityControlOptions(entityValues[entity.fieldName])}
-                />
-              );
-            })}
-            {arePartitioningFieldsProvided && (
-              <EuiFlexItem style={{ textAlign: 'right' }}>
-                <EuiFormRow hasEmptyLabelSpace style={{ maxWidth: '100%' }}>
-                  <ForecastingModal
-                    job={selectedJob}
-                    detectorIndex={selectedDetectorIndex}
-                    entities={entityControls}
-                    setForecastId={this.setForecastId}
-                    className="forecast-controls"
-                  />
-                </EuiFormRow>
-              </EuiFlexItem>
-            )}
-          </EuiFlexGroup>
-        </div>
-
+          )}
+        </SeriesControls>
         <EuiSpacer size="m" />
 
         {fullRefresh && loading === true && (
@@ -1191,10 +1062,15 @@ export class TimeSeriesExplorer extends React.Component {
           />
         )}
 
+        {loading === false && chartDataError !== undefined && (
+          <TimeseriesexplorerChartDataError errorMsg={chartDataError} />
+        )}
+
         {arePartitioningFieldsProvided &&
           jobs.length > 0 &&
           (fullRefresh === false || loading === false) &&
-          hasResults === false && (
+          hasResults === false &&
+          chartDataError === undefined && (
             <TimeseriesexplorerNoChartData
               dataNotChartable={dataNotChartable}
               entities={entityControls}
@@ -1299,23 +1175,50 @@ export class TimeSeriesExplorer extends React.Component {
                     </EuiFlexItem>
                   )}
                 </EuiFlexGroup>
-                <div className="ml-timeseries-chart" data-test-subj="mlSingleMetricViewerChart">
-                  <MlTooltipComponent>
-                    {(tooltipService) => (
-                      <TimeseriesChart
-                        {...chartProps}
-                        bounds={bounds}
-                        detectorIndex={selectedDetectorIndex}
-                        renderFocusChartOnly={renderFocusChartOnly}
-                        selectedJob={selectedJob}
-                        showAnnotations={showAnnotations}
-                        showForecast={showForecast}
-                        showModelBounds={showModelBounds}
-                        tooltipService={tooltipService}
-                      />
-                    )}
-                  </MlTooltipComponent>
-                </div>
+
+                <TimeSeriesChartWithTooltips
+                  chartProps={chartProps}
+                  contextAggregationInterval={contextAggregationInterval}
+                  bounds={bounds}
+                  detectorIndex={selectedDetectorIndex}
+                  renderFocusChartOnly={renderFocusChartOnly}
+                  selectedJob={selectedJob}
+                  selectedEntities={this.props.selectedEntities}
+                  showAnnotations={showAnnotations}
+                  showForecast={showForecast}
+                  showModelBounds={showModelBounds}
+                  lastRefresh={lastRefresh}
+                />
+                {focusAnnotationError !== undefined && (
+                  <>
+                    <EuiTitle
+                      className="panel-title"
+                      data-test-subj="mlAnomalyExplorerAnnotations error"
+                    >
+                      <h2>
+                        <FormattedMessage
+                          id="xpack.ml.timeSeriesExplorer.annotationsErrorTitle"
+                          defaultMessage="Annotations"
+                        />
+                      </h2>
+                    </EuiTitle>
+                    <EuiPanel>
+                      <EuiCallOut
+                        title={i18n.translate(
+                          'xpack.ml.timeSeriesExplorer.annotationsErrorCallOutTitle',
+                          {
+                            defaultMessage: 'An error occurred loading annotations:',
+                          }
+                        )}
+                        color="danger"
+                        iconType="alert"
+                      >
+                        <p>{focusAnnotationError}</p>
+                      </EuiCallOut>
+                    </EuiPanel>
+                    <EuiSpacer size="m" />
+                  </>
+                )}
                 {focusAnnotationData && focusAnnotationData.length > 0 && (
                   <EuiAccordion
                     id={'EuiAccordion-blah'}
@@ -1340,6 +1243,7 @@ export class TimeSeriesExplorer extends React.Component {
                         </h2>
                       </EuiTitle>
                     }
+                    data-test-subj="mlAnomalyExplorerAnnotations loaded"
                   >
                     <AnnotationsTable
                       chartDetails={chartDetails}
@@ -1367,29 +1271,12 @@ export class TimeSeriesExplorer extends React.Component {
                     />
                   </h2>
                 </EuiTitle>
-                <EuiFlexGroup
-                  direction="row"
-                  gutterSize="l"
-                  responsive={true}
-                  className="ml-anomalies-controls"
-                >
-                  <EuiFlexItem grow={false} style={{ width: '170px' }}>
-                    <EuiFormRow
-                      label={i18n.translate('xpack.ml.timeSeriesExplorer.severityThresholdLabel', {
-                        defaultMessage: 'Severity threshold',
-                      })}
-                    >
-                      <SelectSeverity />
-                    </EuiFormRow>
+                <EuiFlexGroup direction="row" gutterSize="l" responsive={true}>
+                  <EuiFlexItem grow={false}>
+                    <SelectSeverity />
                   </EuiFlexItem>
-                  <EuiFlexItem grow={false} style={{ width: '170px' }}>
-                    <EuiFormRow
-                      label={i18n.translate('xpack.ml.timeSeriesExplorer.intervalLabel', {
-                        defaultMessage: 'Interval',
-                      })}
-                    >
-                      <SelectInterval />
-                    </EuiFormRow>
+                  <EuiFlexItem grow={false}>
+                    <SelectInterval />
                   </EuiFlexItem>
                 </EuiFlexGroup>
                 <EuiSpacer size="m" />

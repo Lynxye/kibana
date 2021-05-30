@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import * as actions from '../actions/resolved_args';
@@ -162,22 +163,22 @@ describe('resolved args reducer', () => {
         resolvedArgs: {
           'element-1': {
             expressionContext: {
-              '1': {
+              1: {
                 state: 'ready',
                 value: 'test-1',
                 error: null,
               },
-              '2': {
+              2: {
                 state: 'ready',
                 value: 'test-2',
                 error: null,
               },
-              '3': {
+              3: {
                 state: 'ready',
                 value: 'test-3',
                 error: null,
               },
-              '4': {
+              4: {
                 state: 'ready',
                 value: 'test-4',
                 error: null,

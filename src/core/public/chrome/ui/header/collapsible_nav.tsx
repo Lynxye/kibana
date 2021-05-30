@@ -1,20 +1,9 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import './collapsible_nav.scss';
@@ -31,7 +20,7 @@ import {
 import { i18n } from '@kbn/i18n';
 import { groupBy, sortBy } from 'lodash';
 import React, { Fragment, useRef } from 'react';
-import { useObservable } from 'react-use';
+import useObservable from 'react-use/lib/useObservable';
 import * as Rx from 'rxjs';
 import { ChromeNavLink, ChromeRecentlyAccessedHistoryItem } from '../..';
 import { AppCategory } from '../../../../types';
@@ -79,15 +68,15 @@ interface Props {
   basePath: HttpStart['basePath'];
   id: string;
   isLocked: boolean;
-  isOpen: boolean;
+  isNavOpen: boolean;
   homeHref: string;
-  legacyMode: boolean;
   navLinks$: Rx.Observable<ChromeNavLink[]>;
   recentlyAccessed$: Rx.Observable<ChromeRecentlyAccessedHistoryItem[]>;
   storage?: Storage;
   onIsLockedUpdate: OnIsLockedUpdate;
   closeNav: () => void;
   navigateToApp: InternalApplicationStart['navigateToApp'];
+  navigateToUrl: InternalApplicationStart['navigateToUrl'];
   customNavLink$: Rx.Observable<ChromeNavLink | undefined>;
 }
 
@@ -95,13 +84,13 @@ export function CollapsibleNav({
   basePath,
   id,
   isLocked,
-  isOpen,
+  isNavOpen,
   homeHref,
-  legacyMode,
   storage = window.localStorage,
   onIsLockedUpdate,
   closeNav,
   navigateToApp,
+  navigateToUrl,
   ...observables
 }: Props) {
   const navLinks = useObservable(observables.navLinks$, []).filter((link) => !link.hidden);
@@ -116,7 +105,6 @@ export function CollapsibleNav({
   const readyForEUI = (link: ChromeNavLink, needsIcon: boolean = false) => {
     return createEuiListItem({
       link,
-      legacyMode,
       appId,
       dataTestSubj: 'collapsibleNavAppLink',
       navigateToApp,
@@ -132,7 +120,7 @@ export function CollapsibleNav({
       aria-label={i18n.translate('core.ui.primaryNav.screenReaderLabel', {
         defaultMessage: 'Primary',
       })}
-      isOpen={isOpen}
+      isOpen={isNavOpen}
       isDocked={isLocked}
       onClose={closeNav}
     >
@@ -148,7 +136,6 @@ export function CollapsibleNav({
                 listItems={[
                   createEuiListItem({
                     link: customNavLink,
-                    legacyMode,
                     basePath,
                     navigateToApp,
                     dataTestSubj: 'collapsibleNavCustomNavLink',
@@ -184,6 +171,7 @@ export function CollapsibleNav({
                 label: 'Home',
                 iconType: 'home',
                 href: homeHref,
+                'data-test-subj': 'homeLink',
                 onClick: (event) => {
                   if (isModifiedOrPrevented(event)) {
                     return;
@@ -221,17 +209,21 @@ export function CollapsibleNav({
             listItems={recentlyAccessed.map((link) => {
               // TODO #64541
               // Can remove icon from recent links completely
-              const { iconType, ...hydratedLink } = createRecentNavLink(link, navLinks, basePath);
+              const { iconType, onClick, ...hydratedLink } = createRecentNavLink(
+                link,
+                navLinks,
+                basePath,
+                navigateToUrl
+              );
 
               return {
                 ...hydratedLink,
                 'data-test-subj': 'collapsibleNavAppLink--recent',
                 onClick: (event) => {
-                  if (isModifiedOrPrevented(event)) {
-                    return;
+                  if (!isModifiedOrPrevented(event)) {
+                    closeNav();
+                    onClick(event);
                   }
-
-                  closeNav();
                 },
               };
             })}

@@ -60,7 +60,7 @@ exports[`Table prevents saved objects from being deleted 1`] = `
           display="inlineBlock"
           hasArrow={true}
           isOpen={false}
-          ownFocus={false}
+          ownFocus={true}
           panelPaddingSize="m"
         >
           <EuiFormRow
@@ -164,6 +164,7 @@ exports[`Table prevents saved objects from being deleted 1`] = `
               },
             ],
             "name": "Actions",
+            "width": "80px",
           },
         ]
       }
@@ -275,7 +276,7 @@ exports[`Table should render normally 1`] = `
           display="inlineBlock"
           hasArrow={true}
           isOpen={false}
-          ownFocus={false}
+          ownFocus={true}
           panelPaddingSize="m"
         >
           <EuiFormRow
@@ -379,6 +380,7 @@ exports[`Table should render normally 1`] = `
               },
             ],
             "name": "Actions",
+            "width": "80px",
           },
         ]
       }

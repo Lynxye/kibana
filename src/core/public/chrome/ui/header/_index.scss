@@ -1,12 +1,17 @@
-@include euiHeaderAffordForFixed;
+@import './banner';
 
-// TODO #64541
-// Delete this block
-.chrHeaderWrapper:not(.headerWrapper) {
-  width: 100%;
-  position: fixed;
-  top: 0;
-  z-index: 10;
+.euiDataGrid__restrictBody {
+  .headerGlobalNav,
+  .kbnQueryBar {
+    display: none;
+  }
+}
+
+.euiDataGrid__restrictBody.euiBody--headerIsFixed {
+  .euiFlyout {
+    top: 0;
+    height: 100%;
+  }
 }
 
 .chrHeaderHelpMenu__version {
@@ -22,4 +27,19 @@
   .euiBody--collapsibleNavIsDocked & {
     display: none;
   }
+}
+
+.header__breadcrumbsWithExtensionContainer {
+  overflow: hidden; // enables text-ellipsis in the last breadcrumb
+  .euiHeaderBreadcrumbs {
+    // stop breadcrumbs from growing.
+    // this makes the extension appear right next to the last breadcrumb
+    flex-grow: 0;
+    margin-right: 0;
+
+    overflow: hidden; // enables text-ellipsis in the last breadcrumb
+  }
+}
+.header__breadcrumbsAppendExtension {
+  flex-grow: 1;
 }

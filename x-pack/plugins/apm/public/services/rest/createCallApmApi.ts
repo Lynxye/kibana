@@ -1,23 +1,72 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
-import { HttpSetup } from 'kibana/public';
-import { callApi, FetchOptions } from './callApi';
-// eslint-disable-next-line @kbn/eslint/no-restricted-paths
-import { APMAPI } from '../../../server/routes/create_apm_api';
-// eslint-disable-next-line @kbn/eslint/no-restricted-paths
-import { Client, HttpMethod } from '../../../server/routes/typings';
 
-export type APMClient = Client<APMAPI['_S']>;
-export type APMClientOptions = Omit<FetchOptions, 'query' | 'body'> & {
-  params?: {
-    body?: any;
-    query?: any;
-    path?: any;
-  };
+import { CoreSetup, CoreStart } from 'kibana/public';
+import * as t from 'io-ts';
+import type {
+  ClientRequestParamsOf,
+  EndpointOf,
+  ReturnOf,
+  RouteRepositoryClient,
+  ServerRouteRepository,
+  ServerRoute,
+} from '@kbn/server-route-repository';
+import { formatRequest } from '@kbn/server-route-repository/target/format_request';
+import { FetchOptions } from '../../../common/fetch_options';
+import { callApi } from './callApi';
+import type {
+  APMServerRouteRepository,
+  InspectResponse,
+  APMRouteHandlerResources,
+  // eslint-disable-next-line @kbn/eslint/no-restricted-paths
+} from '../../../server';
+
+export type APMClientOptions = Omit<
+  FetchOptions,
+  'query' | 'body' | 'pathname' | 'signal'
+> & {
+  signal: AbortSignal | null;
 };
+
+export type APMClient = RouteRepositoryClient<
+  APMServerRouteRepository,
+  APMClientOptions
+>;
+
+export type AutoAbortedAPMClient = RouteRepositoryClient<
+  APMServerRouteRepository,
+  Omit<APMClientOptions, 'signal'>
+>;
+
+export type APIReturnType<
+  TEndpoint extends EndpointOf<APMServerRouteRepository>
+> = ReturnOf<APMServerRouteRepository, TEndpoint> & {
+  _inspect?: InspectResponse;
+};
+
+export type APIEndpoint = EndpointOf<APMServerRouteRepository>;
+
+export type APIClientRequestParamsOf<
+  TEndpoint extends EndpointOf<APMServerRouteRepository>
+> = ClientRequestParamsOf<APMServerRouteRepository, TEndpoint>;
+
+export type AbstractAPMRepository = ServerRouteRepository<
+  APMRouteHandlerResources,
+  {},
+  Record<
+    string,
+    ServerRoute<string, t.Mixed | undefined, APMRouteHandlerResources, any, {}>
+  >
+>;
+
+export type AbstractAPMClient = RouteRepositoryClient<
+  AbstractAPMRepository,
+  APMClientOptions
+>;
 
 export let callApmApi: APMClient = () => {
   throw new Error(
@@ -25,29 +74,21 @@ export let callApmApi: APMClient = () => {
   );
 };
 
-export function createCallApmApi(http: HttpSetup) {
-  callApmApi = ((options: APMClientOptions) => {
-    const { pathname, params = {}, ...opts } = options;
+export function createCallApmApi(core: CoreStart | CoreSetup) {
+  callApmApi = ((options) => {
+    const { endpoint, ...opts } = options;
+    const { params } = (options as unknown) as {
+      params?: Partial<Record<string, any>>;
+    };
 
-    const path = (params.path || {}) as Record<string, any>;
+    const { method, pathname } = formatRequest(endpoint, params?.path);
 
-    const formattedPathname = Object.keys(path).reduce((acc, paramName) => {
-      return acc.replace(`{${paramName}}`, path[paramName]);
-    }, pathname);
-
-    return callApi(http, {
+    return callApi(core, {
       ...opts,
-      pathname: formattedPathname,
-      body: params.body,
-      query: params.query,
+      method,
+      pathname,
+      body: params?.body,
+      query: params?.query,
     });
   }) as APMClient;
 }
-
-// infer return type from API
-export type APIReturnType<
-  TPath extends keyof APMAPI['_S'],
-  TMethod extends HttpMethod = 'GET'
-> = APMAPI['_S'][TPath] extends { [key in TMethod]: { ret: any } }
-  ? APMAPI['_S'][TPath][TMethod]['ret']
-  : unknown;

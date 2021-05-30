@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { get } from 'lodash';
@@ -47,7 +48,7 @@ export function BeatsPanel(props) {
     />
   ) : null;
 
-  const beatTypes = props.beats.types.map((beat, index) => {
+  const beatTypes = get(props, 'beats.types', []).map((beat, index) => {
     return [
       <EuiDescriptionListTitle
         key={`beat-types-type-${index}`}
@@ -96,7 +97,7 @@ export function BeatsPanel(props) {
             </EuiTitle>
             <EuiHorizontalRule margin="m" />
             <EuiDescriptionList type="column">
-              <EuiDescriptionListTitle>
+              <EuiDescriptionListTitle className="eui-textBreakWord">
                 <FormattedMessage
                   id="xpack.monitoring.cluster.overview.beatsPanel.totalEventsLabel"
                   defaultMessage="Total Events"
@@ -105,7 +106,7 @@ export function BeatsPanel(props) {
               <EuiDescriptionListDescription data-test-subj="beatsTotalEvents">
                 {formatMetric(props.totalEvents, '0.[0]a')}
               </EuiDescriptionListDescription>
-              <EuiDescriptionListTitle>
+              <EuiDescriptionListTitle className="eui-textBreakWord">
                 <FormattedMessage
                   id="xpack.monitoring.cluster.overview.beatsPanel.bytesSentLabel"
                   defaultMessage="Bytes Sent"
@@ -145,7 +146,11 @@ export function BeatsPanel(props) {
                   </h3>
                 </EuiTitle>
               </EuiFlexItem>
-              {setupModeMetricbeatMigrationTooltip}
+              <EuiFlexItem grow={false}>
+                <EuiFlexGroup gutterSize="s" alignItems="center">
+                  {setupModeMetricbeatMigrationTooltip}
+                </EuiFlexGroup>
+              </EuiFlexItem>
             </EuiFlexGroup>
             <EuiHorizontalRule margin="m" />
             <EuiDescriptionList type="column">{beatTypes}</EuiDescriptionList>

@@ -1,22 +1,19 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { Unionize, Overwrite } from 'utility-types';
-import {
-  Setup,
-  SetupTimeRange,
-  SetupUIFilters,
-} from '../helpers/setup_request';
-import { getMetricsDateHistogramParams } from '../helpers/metrics';
-import { ChartBase } from './types';
-import { transformDataToMetricsChart } from './transform_metrics_chart';
+import { Overwrite, Unionize } from 'utility-types';
+import { AggregationOptionsByType } from '../../../../../../typings/elasticsearch';
 import { getMetricsProjection } from '../../projections/metrics';
 import { mergeProjection } from '../../projections/util/merge_projection';
-import { AggregationOptionsByType } from '../../../typings/elasticsearch/aggregations';
 import { APMEventESSearchRequest } from '../helpers/create_es_client/create_apm_event_client';
+import { getMetricsDateHistogramParams } from '../helpers/metrics';
+import { Setup, SetupTimeRange } from '../helpers/setup_request';
+import { transformDataToMetricsChart } from './transform_metrics_chart';
+import { ChartBase } from './types';
 
 type MetricsAggregationMap = Unionize<{
   min: AggregationOptionsByType['min'];
@@ -51,6 +48,8 @@ interface Filter {
 }
 
 export async function fetchAndTransformMetrics<T extends MetricAggs>({
+  environment,
+  kuery,
   setup,
   serviceName,
   serviceNodeName,
@@ -58,16 +57,20 @@ export async function fetchAndTransformMetrics<T extends MetricAggs>({
   aggs,
   additionalFilters = [],
 }: {
-  setup: Setup & SetupTimeRange & SetupUIFilters;
+  environment?: string;
+  kuery?: string;
+  setup: Setup & SetupTimeRange;
   serviceName: string;
   serviceNodeName?: string;
   chartBase: ChartBase;
   aggs: T;
   additionalFilters?: Filter[];
 }) {
-  const { start, end, apmEventClient } = setup;
+  const { start, end, apmEventClient, config } = setup;
 
   const projection = getMetricsProjection({
+    environment,
+    kuery,
     setup,
     serviceName,
     serviceNodeName,
@@ -83,7 +86,11 @@ export async function fetchAndTransformMetrics<T extends MetricAggs>({
       },
       aggs: {
         timeseriesData: {
-          date_histogram: getMetricsDateHistogramParams(start, end),
+          date_histogram: getMetricsDateHistogramParams(
+            start,
+            end,
+            config['xpack.apm.metricsInterval']
+          ),
           aggs,
         },
         ...aggs,

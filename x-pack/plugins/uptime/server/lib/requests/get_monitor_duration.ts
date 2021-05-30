@@ -1,12 +1,14 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
+import { QueryContainer } from '@elastic/elasticsearch/api/types';
 import { UMElasticsearchQueryFn } from '../adapters';
 import { LocationDurationLine, MonitorDurationResult } from '../../../common/types';
-import { QUERY } from '../../../common/constants';
+import { QUERY, UNNAMED_LOCATION } from '../../../common/constants';
 
 export interface GetMonitorChartsParams {
   /** @member monitorId ID value for the selected monitor */
@@ -23,35 +25,32 @@ export interface GetMonitorChartsParams {
 export const getMonitorDurationChart: UMElasticsearchQueryFn<
   GetMonitorChartsParams,
   MonitorDurationResult
-> = async ({ callES, dynamicSettings, dateStart, dateEnd, monitorId }) => {
+> = async ({ uptimeEsClient, dateStart, dateEnd, monitorId }) => {
   const params = {
-    index: dynamicSettings.heartbeatIndices,
-    body: {
-      query: {
-        bool: {
-          filter: [
-            { range: { '@timestamp': { gte: dateStart, lte: dateEnd } } },
-            { term: { 'monitor.id': monitorId } },
-            { range: { 'monitor.duration.us': { gt: 0 } } },
-          ],
-        },
+    query: {
+      bool: {
+        filter: [
+          { range: { '@timestamp': { gte: dateStart, lte: dateEnd } } },
+          { term: { 'monitor.id': monitorId } },
+          { range: { 'monitor.duration.us': { gt: 0 } } },
+        ] as QueryContainer[],
       },
-      size: 0,
-      aggs: {
-        timeseries: {
-          auto_date_histogram: {
-            field: '@timestamp',
-            buckets: QUERY.DEFAULT_BUCKET_COUNT,
-          },
-          aggs: {
-            location: {
-              terms: {
-                field: 'observer.geo.name',
-                missing: 'N/A',
-              },
-              aggs: {
-                duration: { stats: { field: 'monitor.duration.us' } },
-              },
+    },
+    size: 0,
+    aggs: {
+      timeseries: {
+        auto_date_histogram: {
+          field: '@timestamp',
+          buckets: QUERY.DEFAULT_BUCKET_COUNT,
+        },
+        aggs: {
+          location: {
+            terms: {
+              field: 'observer.geo.name',
+              missing: UNNAMED_LOCATION,
+            },
+            aggs: {
+              duration: { stats: { field: 'monitor.duration.us' } },
             },
           },
         },
@@ -59,7 +58,7 @@ export const getMonitorDurationChart: UMElasticsearchQueryFn<
     },
   };
 
-  const result = await callES('search', params);
+  const { body: result } = await uptimeEsClient.search({ body: params });
 
   const dateHistogramBuckets: any[] = result?.aggregations?.timeseries?.buckets ?? [];
 

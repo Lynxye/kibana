@@ -1,13 +1,16 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import ApolloClient from 'apollo-client';
-
+import { ISearchStart } from '../../../../../../../src/plugins/data/public';
 import { Status } from '../../../../common/detection_engine/schemas/common/schemas';
-import { Ecs, NoteResult, TimelineNonEcsData } from '../../../graphql/types';
+import { Ecs } from '../../../../common/ecs';
+import { TimelineNonEcsData } from '../../../../common/search_strategy/timeline';
+import { NoteResult } from '../../../../common/types/timeline/note';
+import { DataProvider } from '../../../timelines/components/timeline/data_providers/data_provider';
 import { TimelineModel } from '../../../timelines/store/timeline/model';
 import { inputsModel } from '../../../common/store';
 
@@ -41,20 +44,19 @@ export type UpdateAlertsStatus = ({
 export interface UpdateAlertStatusActionProps {
   query?: string;
   alertIds: string[];
-  status: Status;
   selectedStatus: Status;
   setEventsLoading: ({ eventIds, isLoading }: SetEventsLoadingProps) => void;
   setEventsDeleted: ({ eventIds, isDeleted }: SetEventsDeletedProps) => void;
-  onAlertStatusUpdateSuccess: (count: number, status: Status) => void;
+  onAlertStatusUpdateSuccess: (updated: number, conflicts: number, status: Status) => void;
   onAlertStatusUpdateFailure: (status: Status, error: Error) => void;
 }
 
 export interface SendAlertToTimelineActionProps {
-  apolloClient?: ApolloClient<{}>;
   createTimeline: CreateTimeline;
-  ecsData: Ecs;
+  ecsData: Ecs | Ecs[];
   nonEcsData: TimelineNonEcsData[];
   updateTimelineIsLoading: UpdateTimelineLoading;
+  searchStrategyClient: ISearchStart;
 }
 
 export type UpdateTimelineLoading = ({ id, isLoading }: { id: string; isLoading: boolean }) => void;
@@ -68,3 +70,9 @@ export interface CreateTimelineProps {
 }
 
 export type CreateTimeline = ({ from, timeline, to }: CreateTimelineProps) => void;
+
+export interface ThresholdAggregationData {
+  thresholdFrom: string;
+  thresholdTo: string;
+  dataProviders: DataProvider[];
+}

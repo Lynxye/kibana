@@ -1,8 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import classNames from 'classnames';
 import React, { useState, useMemo } from 'react';
 import { i18n } from '@kbn/i18n';
@@ -145,12 +147,13 @@ export const ComponentTemplates = ({ isLoading, components, listItemProps }: Pro
             />
           </EuiButton>
         }
+        data-test-subj="emptySearchResult"
       />
     );
   };
 
   return (
-    <div className="componentTemplates">
+    <div className="componentTemplates" data-test-subj="componentTemplates">
       <div className="componentTemplates__header">
         <EuiFlexGroup gutterSize="none">
           <EuiFlexItem>
@@ -162,6 +165,7 @@ export const ComponentTemplates = ({ isLoading, components, listItemProps }: Pro
               }}
               aria-label={i18nTexts.searchBoxPlaceholder}
               className="componentTemplates__searchBox"
+              data-test-subj="componentTemplateSearchBox"
             />
           </EuiFlexItem>
           <EuiFlexItem grow={false}>

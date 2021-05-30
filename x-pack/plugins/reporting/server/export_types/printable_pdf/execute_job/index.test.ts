@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 jest.mock('../lib/generate_pdf', () => ({ generatePdfObservableFactory: jest.fn() }));
@@ -10,9 +11,9 @@ import * as Rx from 'rxjs';
 import { ReportingCore } from '../../../';
 import { CancellationToken } from '../../../../common';
 import { cryptoFactory, LevelLogger } from '../../../lib';
-import { createMockReportingCore } from '../../../test_helpers';
+import { createMockConfigSchema, createMockReportingCore } from '../../../test_helpers';
 import { generatePdfObservableFactory } from '../lib/generate_pdf';
-import { ScheduledTaskParamsPDF } from '../types';
+import { TaskPayloadPDF } from '../types';
 import { runTaskFnFactory } from './';
 
 let mockReporting: ReportingCore;
@@ -36,38 +37,19 @@ const encryptHeaders = async (headers: Record<string, string>) => {
   return await crypto.encrypt(headers);
 };
 
-const getScheduledTaskParams = (baseObj: any) => baseObj as ScheduledTaskParamsPDF;
+const getBasePayload = (baseObj: any) => baseObj as TaskPayloadPDF;
 
 beforeEach(async () => {
-  const kbnConfig = {
-    'server.basePath': '/sbp',
-  };
   const reportingConfig = {
+    'server.basePath': '/sbp',
     index: '.reports-test',
     encryptionKey: mockEncryptionKey,
     'kibanaServer.hostname': 'localhost',
     'kibanaServer.port': 5601,
     'kibanaServer.protocol': 'http',
   };
-  const mockReportingConfig = {
-    get: (...keys: string[]) => (reportingConfig as any)[keys.join('.')],
-    kbnConfig: { get: (...keys: string[]) => (kbnConfig as any)[keys.join('.')] },
-  };
-
-  mockReporting = await createMockReportingCore(mockReportingConfig);
-
-  const mockElasticsearch = {
-    legacy: {
-      client: {
-        asScoped: () => ({ callAsCurrentUser: jest.fn() }),
-      },
-    },
-  };
-  const mockGetElasticsearch = jest.fn();
-  mockGetElasticsearch.mockImplementation(() => Promise.resolve(mockElasticsearch));
-  mockReporting.getElasticsearchService = mockGetElasticsearch;
-  // @ts-ignore over-riding config
-  mockReporting.config = mockReportingConfig;
+  const mockSchema = createMockConfigSchema(reportingConfig);
+  mockReporting = await createMockReportingCore(mockSchema);
 
   (generatePdfObservableFactory as jest.Mock).mockReturnValue(jest.fn());
 });
@@ -79,11 +61,11 @@ test(`passes browserTimezone to generatePdf`, async () => {
   const generatePdfObservable = (await generatePdfObservableFactory(mockReporting)) as jest.Mock;
   generatePdfObservable.mockReturnValue(Rx.of(Buffer.from('')));
 
-  const runTask = await runTaskFnFactory(mockReporting, getMockLogger());
+  const runTask = runTaskFnFactory(mockReporting, getMockLogger());
   const browserTimezone = 'UTC';
   await runTask(
     'pdfJobId',
-    getScheduledTaskParams({
+    getBasePayload({
       title: 'PDF Params Timezone Test',
       relativeUrl: '/app/kibana#/something',
       browserTimezone,
@@ -98,7 +80,7 @@ test(`passes browserTimezone to generatePdf`, async () => {
 
 test(`returns content_type of application/pdf`, async () => {
   const logger = getMockLogger();
-  const runTask = await runTaskFnFactory(mockReporting, logger);
+  const runTask = runTaskFnFactory(mockReporting, logger);
   const encryptedHeaders = await encryptHeaders({});
 
   const generatePdfObservable = await generatePdfObservableFactory(mockReporting);
@@ -106,7 +88,7 @@ test(`returns content_type of application/pdf`, async () => {
 
   const { content_type: contentType } = await runTask(
     'pdfJobId',
-    getScheduledTaskParams({ relativeUrls: [], headers: encryptedHeaders }),
+    getBasePayload({ relativeUrls: [], headers: encryptedHeaders }),
     cancellationToken
   );
   expect(contentType).toBe('application/pdf');
@@ -117,11 +99,11 @@ test(`returns content of generatePdf getBuffer base64 encoded`, async () => {
   const generatePdfObservable = await generatePdfObservableFactory(mockReporting);
   (generatePdfObservable as jest.Mock).mockReturnValue(Rx.of({ buffer: Buffer.from(testContent) }));
 
-  const runTask = await runTaskFnFactory(mockReporting, getMockLogger());
+  const runTask = runTaskFnFactory(mockReporting, getMockLogger());
   const encryptedHeaders = await encryptHeaders({});
   const { content } = await runTask(
     'pdfJobId',
-    getScheduledTaskParams({ relativeUrls: [], headers: encryptedHeaders }),
+    getBasePayload({ relativeUrls: [], headers: encryptedHeaders }),
     cancellationToken
   );
 

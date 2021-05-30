@@ -1,20 +1,22 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
 
-import { StartServicesAccessor } from 'kibana/public';
+import type { StartServicesAccessor } from 'kibana/public';
 
-import {
+import { PLUGIN_ID, PLUGIN_ICON, ML_APP_NAME } from '../../../common/constants/app';
+import type {
   EmbeddableFactoryDefinition,
   IContainer,
 } from '../../../../../../src/plugins/embeddable/public';
 import { HttpService } from '../../application/services/http_service';
-import { MlPluginStart, MlStartDependencies } from '../../plugin';
-import { MlDependencies } from '../../application/app';
+import type { MlPluginStart, MlStartDependencies } from '../../plugin';
+import type { MlDependencies } from '../../application/app';
 import {
   ANOMALY_SWIMLANE_EMBEDDABLE_TYPE,
   AnomalySwimlaneEmbeddableInput,
@@ -24,6 +26,14 @@ import {
 export class AnomalySwimlaneEmbeddableFactory
   implements EmbeddableFactoryDefinition<AnomalySwimlaneEmbeddableInput> {
   public readonly type = ANOMALY_SWIMLANE_EMBEDDABLE_TYPE;
+
+  public readonly grouping = [
+    {
+      id: PLUGIN_ID,
+      getDisplayName: () => ML_APP_NAME,
+      getIconType: () => PLUGIN_ICON,
+    },
+  ];
 
   constructor(
     private getStartServices: StartServicesAccessor<MlStartDependencies, MlPluginStart>
@@ -35,7 +45,13 @@ export class AnomalySwimlaneEmbeddableFactory
 
   public getDisplayName() {
     return i18n.translate('xpack.ml.components.jobAnomalyScoreEmbeddable.displayName', {
-      defaultMessage: 'ML Anomaly Swim Lane',
+      defaultMessage: 'Anomaly swim lane',
+    });
+  }
+
+  public getDescription() {
+    return i18n.translate('xpack.ml.components.jobAnomalyScoreEmbeddable.description', {
+      defaultMessage: 'View anomaly detection results in a timeline.',
     });
   }
 

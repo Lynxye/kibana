@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
@@ -20,7 +21,7 @@ import { ManagementSetup } from '../../../../src/plugins/management/public';
 import { IndexManagementPluginSetup } from '../../index_management/public';
 import { IndexPatternManagementSetup } from '../../../../src/plugins/index_pattern_management/public';
 // @ts-ignore
-import { setEsBaseAndXPackBase, setHttp } from './crud_app/services/index';
+import { setHttp, init as initDocumentation } from './crud_app/services/index';
 import { setNotifications, setFatalErrors, setUiStatsReporter } from './kibana_services';
 import { UsageCollectionSetup } from '../../../../src/plugins/usage_collection/public';
 
@@ -45,7 +46,7 @@ export class RollupPlugin implements Plugin {
   ) {
     setFatalErrors(core.fatalErrors);
     if (usageCollection) {
-      setUiStatsReporter(usageCollection.reportUiStats.bind(usageCollection, UIM_APP_NAME));
+      setUiStatsReporter(usageCollection.reportUiCounter.bind(usageCollection, UIM_APP_NAME));
     }
 
     if (indexManagement) {
@@ -70,7 +71,7 @@ export class RollupPlugin implements Plugin {
         }),
         icon: 'indexRollupApp',
         path: `/app/management/data/rollup_jobs/job_list`,
-        showOnHomePage: true,
+        showOnHomePage: false,
         category: FeatureCatalogueCategory.ADMIN,
       });
     }
@@ -107,6 +108,6 @@ export class RollupPlugin implements Plugin {
   start(core: CoreStart) {
     setHttp(core.http);
     setNotifications(core.notifications);
-    setEsBaseAndXPackBase(core.docLinks.ELASTIC_WEBSITE_URL, core.docLinks.DOC_LINK_VERSION);
+    initDocumentation(core.docLinks);
   }
 }

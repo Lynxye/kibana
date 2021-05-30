@@ -1,41 +1,47 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { getOperationTypesForField, getAvailableOperationsByMetadata, buildColumn } from './index';
-import { AvgIndexPatternColumn } from './definitions/metrics';
-import { IndexPatternPrivateState } from '../types';
-import { documentField } from '../document_field';
+import { getOperationTypesForField, getAvailableOperationsByMetadata } from './index';
+import { getFieldByNameFactory } from '../pure_helpers';
 
 jest.mock('../loader');
+
+const fields = [
+  {
+    name: 'timestamp',
+    displayName: 'timestamp',
+    type: 'date',
+    aggregatable: true,
+    searchable: true,
+  },
+  {
+    name: 'bytes',
+    displayName: 'bytes',
+    type: 'number',
+    aggregatable: true,
+    searchable: true,
+  },
+  {
+    name: 'source',
+    displayName: 'source',
+    type: 'string',
+    aggregatable: true,
+    searchable: true,
+  },
+];
 
 const expectedIndexPatterns = {
   1: {
     id: '1',
     title: 'my-fake-index-pattern',
     timeFieldName: 'timestamp',
-    fields: [
-      {
-        name: 'timestamp',
-        type: 'date',
-        aggregatable: true,
-        searchable: true,
-      },
-      {
-        name: 'bytes',
-        type: 'number',
-        aggregatable: true,
-        searchable: true,
-      },
-      {
-        name: 'source',
-        type: 'string',
-        aggregatable: true,
-        searchable: true,
-      },
-    ],
+    hasRestrictions: false,
+    fields,
+    getFieldByName: getFieldByNameFactory(fields),
   },
 };
 
@@ -46,10 +52,26 @@ describe('getOperationTypesForField', () => {
         getOperationTypesForField({
           type: 'string',
           name: 'a',
+          displayName: 'aLabel',
           aggregatable: true,
           searchable: true,
         })
-      ).toEqual(expect.arrayContaining(['terms']));
+      ).toEqual(['terms', 'unique_count', 'last_value']);
+    });
+
+    it('should return only bucketed operations on strings when passed proper filterOperations function', () => {
+      expect(
+        getOperationTypesForField(
+          {
+            type: 'string',
+            name: 'a',
+            displayName: 'aLabel',
+            aggregatable: true,
+            searchable: true,
+          },
+          (op) => op.isBucketed
+        )
+      ).toEqual(['terms']);
     });
 
     it('should return operations on numbers', () => {
@@ -57,10 +79,46 @@ describe('getOperationTypesForField', () => {
         getOperationTypesForField({
           type: 'number',
           name: 'a',
+          displayName: 'aLabel',
           aggregatable: true,
           searchable: true,
         })
-      ).toEqual(expect.arrayContaining(['avg', 'sum', 'min', 'max']));
+      ).toEqual([
+        'range',
+        'terms',
+        'median',
+        'average',
+        'sum',
+        'min',
+        'max',
+        'unique_count',
+        'percentile',
+        'last_value',
+      ]);
+    });
+
+    it('should return only metric operations on numbers when passed proper filterOperations function', () => {
+      expect(
+        getOperationTypesForField(
+          {
+            type: 'number',
+            name: 'a',
+            displayName: 'aLabel',
+            aggregatable: true,
+            searchable: true,
+          },
+          (op) => !op.isBucketed
+        )
+      ).toEqual([
+        'median',
+        'average',
+        'sum',
+        'min',
+        'max',
+        'unique_count',
+        'percentile',
+        'last_value',
+      ]);
     });
 
     it('should return operations on dates', () => {
@@ -68,6 +126,7 @@ describe('getOperationTypesForField', () => {
         getOperationTypesForField({
           type: 'date',
           name: 'a',
+          displayName: 'aLabel',
           aggregatable: true,
           searchable: true,
         })
@@ -79,6 +138,7 @@ describe('getOperationTypesForField', () => {
         getOperationTypesForField({
           type: '_source',
           name: 'a',
+          displayName: 'aLabel',
           aggregatable: true,
           searchable: true,
         })
@@ -92,6 +152,7 @@ describe('getOperationTypesForField', () => {
         getOperationTypesForField({
           type: 'string',
           name: 'a',
+          displayName: 'aLabel',
           aggregatable: true,
           searchable: true,
           aggregationRestrictions: {
@@ -108,6 +169,7 @@ describe('getOperationTypesForField', () => {
         getOperationTypesForField({
           type: 'number',
           name: 'a',
+          displayName: 'aLabel',
           aggregatable: true,
           searchable: true,
           aggregationRestrictions: {
@@ -127,6 +189,7 @@ describe('getOperationTypesForField', () => {
         getOperationTypesForField({
           type: 'date',
           name: 'a',
+          displayName: 'aLabel',
           aggregatable: true,
           searchable: true,
           aggregationRestrictions: {
@@ -142,106 +205,22 @@ describe('getOperationTypesForField', () => {
     });
   });
 
-  describe('buildColumn', () => {
-    const state: IndexPatternPrivateState = {
-      indexPatternRefs: [],
-      existingFields: {},
-      currentIndexPatternId: '1',
-      isFirstExistenceFetch: false,
-      indexPatterns: expectedIndexPatterns,
-      layers: {
-        first: {
-          indexPatternId: '1',
-          columnOrder: ['col1'],
-          columns: {
-            col1: {
-              label: 'Date histogram of timestamp',
-              dataType: 'date',
-              isBucketed: true,
-
-              // Private
-              operationType: 'date_histogram',
-              params: {
-                interval: '1d',
-              },
-              sourceField: 'timestamp',
-            },
-          },
-        },
-      },
-    };
-
-    it('should build a column for the given operation type if it is passed in', () => {
-      const column = buildColumn({
-        layerId: 'first',
-        indexPattern: expectedIndexPatterns[1],
-        columns: state.layers.first.columns,
-        suggestedPriority: 0,
-        op: 'count',
-        field: documentField,
-      });
-      expect(column.operationType).toEqual('count');
-    });
-
-    it('should build a column for the given operation type and field if it is passed in', () => {
-      const field = expectedIndexPatterns[1].fields[1];
-      const column = buildColumn({
-        layerId: 'first',
-        indexPattern: expectedIndexPatterns[1],
-        columns: state.layers.first.columns,
-        suggestedPriority: 0,
-        op: 'avg',
-        field,
-      }) as AvgIndexPatternColumn;
-      expect(column.operationType).toEqual('avg');
-      expect(column.sourceField).toEqual(field.name);
-    });
-  });
-
   describe('getAvailableOperationsByMetaData', () => {
-    it('should put the average operation first', () => {
+    it('should put the median operation first', () => {
       const numberOperation = getAvailableOperationsByMetadata(expectedIndexPatterns[1]).find(
         ({ operationMetaData }) =>
           !operationMetaData.isBucketed && operationMetaData.dataType === 'number'
       )!;
       expect(numberOperation.operations[0]).toEqual(
         expect.objectContaining({
-          operationType: 'avg',
+          operationType: 'median',
         })
       );
     });
 
-    it('should list out all field-operation tuples for different operation meta data', () => {
+    it('should list out all operation tuples', () => {
       expect(getAvailableOperationsByMetadata(expectedIndexPatterns[1])).toMatchInlineSnapshot(`
         Array [
-          Object {
-            "operationMetaData": Object {
-              "dataType": "number",
-              "isBucketed": true,
-              "scale": "ordinal",
-            },
-            "operations": Array [
-              Object {
-                "field": "bytes",
-                "operationType": "terms",
-                "type": "field",
-              },
-            ],
-          },
-          Object {
-            "operationMetaData": Object {
-              "dataType": "string",
-              "isBucketed": true,
-              "scale": "ordinal",
-            },
-            "operations": Array [
-              Object {
-                "field": "source",
-                "operationType": "terms",
-                "type": "field",
-              },
-            ],
-          },
           Object {
             "operationMetaData": Object {
               "dataType": "date",
@@ -259,19 +238,86 @@ describe('getOperationTypesForField', () => {
           Object {
             "operationMetaData": Object {
               "dataType": "number",
+              "isBucketed": true,
+              "scale": "interval",
+            },
+            "operations": Array [
+              Object {
+                "field": "bytes",
+                "operationType": "range",
+                "type": "field",
+              },
+            ],
+          },
+          Object {
+            "operationMetaData": Object {
+              "dataType": "string",
+              "isBucketed": true,
+              "scale": "ordinal",
+            },
+            "operations": Array [
+              Object {
+                "operationType": "filters",
+                "type": "none",
+              },
+              Object {
+                "field": "source",
+                "operationType": "terms",
+                "type": "field",
+              },
+            ],
+          },
+          Object {
+            "operationMetaData": Object {
+              "dataType": "number",
+              "isBucketed": true,
+              "scale": "ordinal",
+            },
+            "operations": Array [
+              Object {
+                "field": "bytes",
+                "operationType": "terms",
+                "type": "field",
+              },
+            ],
+          },
+          Object {
+            "operationMetaData": Object {
+              "dataType": "number",
               "isBucketed": false,
               "scale": "ratio",
             },
             "operations": Array [
               Object {
                 "field": "bytes",
-                "operationType": "avg",
+                "operationType": "median",
+                "type": "field",
+              },
+              Object {
+                "field": "bytes",
+                "operationType": "average",
                 "type": "field",
               },
               Object {
                 "field": "bytes",
                 "operationType": "sum",
                 "type": "field",
+              },
+              Object {
+                "operationType": "cumulative_sum",
+                "type": "fullReference",
+              },
+              Object {
+                "operationType": "counter_rate",
+                "type": "fullReference",
+              },
+              Object {
+                "operationType": "differences",
+                "type": "fullReference",
+              },
+              Object {
+                "operationType": "moving_average",
+                "type": "fullReference",
               },
               Object {
                 "field": "bytes",
@@ -285,17 +331,49 @@ describe('getOperationTypesForField', () => {
               },
               Object {
                 "field": "timestamp",
-                "operationType": "cardinality",
+                "operationType": "unique_count",
                 "type": "field",
               },
               Object {
                 "field": "bytes",
-                "operationType": "cardinality",
+                "operationType": "unique_count",
                 "type": "field",
               },
               Object {
                 "field": "source",
-                "operationType": "cardinality",
+                "operationType": "unique_count",
+                "type": "field",
+              },
+              Object {
+                "field": "bytes",
+                "operationType": "percentile",
+                "type": "field",
+              },
+              Object {
+                "field": "bytes",
+                "operationType": "last_value",
+                "type": "field",
+              },
+              Object {
+                "operationType": "math",
+                "type": "managedReference",
+              },
+              Object {
+                "operationType": "formula",
+                "type": "managedReference",
+              },
+            ],
+          },
+          Object {
+            "operationMetaData": Object {
+              "dataType": "string",
+              "isBucketed": false,
+              "scale": "ordinal",
+            },
+            "operations": Array [
+              Object {
+                "field": "source",
+                "operationType": "last_value",
                 "type": "field",
               },
             ],

@@ -1,15 +1,22 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { CoreStart } from 'kibana/public';
+import { Subject } from 'rxjs';
+import { AppNavLinkStatus, AppUpdater, ApplicationStart } from '../../../../src/core/public';
 
-export function toggleOverviewLinkInNav(core: CoreStart) {
-  const { apm, logs, metrics, uptime } = core.application.capabilities.navLinks;
+export function toggleOverviewLinkInNav(
+  updater$: Subject<AppUpdater>,
+  { capabilities }: ApplicationStart
+) {
+  const { apm, logs, metrics, uptime } = capabilities.navLinks;
   const someVisible = Object.values({ apm, logs, metrics, uptime }).some((visible) => visible);
   if (!someVisible) {
-    core.chrome.navLinks.update('observability-overview', { hidden: true });
+    updater$.next(() => ({
+      navLinkStatus: AppNavLinkStatus.hidden,
+    }));
   }
 }

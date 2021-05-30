@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { parse } from 'query-string';
@@ -44,7 +45,11 @@ export const RepositoryAdd: React.FunctionComponent<RouteComponentProps> = ({
     } else {
       const { redirect } = parse(search.replace(/^\?/, ''), { sort: false });
 
-      history.push(redirect ? (redirect as string) : `${BASE_PATH}/${section}/${name}`);
+      history.push(
+        redirect
+          ? (redirect as string)
+          : encodeURI(`${BASE_PATH}/${encodeURIComponent(section)}/${encodeURIComponent(name)}`)
+      );
     }
   };
 

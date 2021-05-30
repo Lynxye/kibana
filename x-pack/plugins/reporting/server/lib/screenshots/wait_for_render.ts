@@ -1,10 +1,12 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
+import { durationToNumber } from '../../../common/schema_utils';
 import { HeadlessChromiumDriver } from '../../browsers';
 import { CaptureConfig } from '../../types';
 import { LevelLogger, startTrace } from '../';
@@ -35,7 +37,7 @@ export const waitForRenderComplete = async (
           const renderedTasks = [];
 
           function waitForRender(visualization: Element) {
-            return new Promise((resolve) => {
+            return new Promise<void>((resolve) => {
               visualization.addEventListener('renderComplete', () => resolve());
             });
           }
@@ -67,7 +69,7 @@ export const waitForRenderComplete = async (
 
           return Promise.all(renderedTasks).then(hackyWaitForVisualizations);
         },
-        args: [layout.selectors.renderComplete, captureConfig.loadDelay],
+        args: [layout.selectors.renderComplete, durationToNumber(captureConfig.loadDelay)],
       },
       { context: CONTEXT_WAITFORRENDER },
       logger

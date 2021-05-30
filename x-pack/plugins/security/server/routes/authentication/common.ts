@@ -1,26 +1,34 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
+import type { TypeOf } from '@kbn/config-schema';
 import { schema } from '@kbn/config-schema';
+
+import type { RouteDefinitionParams } from '../';
 import { parseNext } from '../../../common/parse_next';
-import { canRedirectRequest, OIDCLogin, SAMLLogin } from '../../authentication';
+import {
+  BasicAuthenticationProvider,
+  canRedirectRequest,
+  OIDCAuthenticationProvider,
+  OIDCLogin,
+  SAMLAuthenticationProvider,
+  SAMLLogin,
+  TokenAuthenticationProvider,
+} from '../../authentication';
 import { wrapIntoCustomErrorResponse } from '../../errors';
 import { createLicensedRouteHandler } from '../licensed_route_handler';
-import {
-  OIDCAuthenticationProvider,
-  SAMLAuthenticationProvider,
-} from '../../authentication/providers';
-import { RouteDefinitionParams } from '..';
+import { ROUTE_TAG_AUTH_FLOW, ROUTE_TAG_CAN_REDIRECT } from '../tags';
 
 /**
  * Defines routes that are common to various authentication mechanisms.
  */
 export function defineCommonRoutes({
   router,
-  authc,
+  getAuthenticationService,
   basePath,
   license,
   logger,
@@ -33,7 +41,7 @@ export function defineCommonRoutes({
         // Allow unknown query parameters as this endpoint can be hit by the 3rd-party with any
         // set of query string parameters (e.g. SAML/OIDC logout request/response parameters).
         validate: { query: schema.object({}, { unknowns: 'allow' }) },
-        options: { authRequired: false },
+        options: { authRequired: false, tags: [ROUTE_TAG_CAN_REDIRECT, ROUTE_TAG_AUTH_FLOW] },
       },
       async (context, request, response) => {
         const serverBasePath = basePath.serverBasePath;
@@ -51,7 +59,7 @@ export function defineCommonRoutes({
         }
 
         try {
-          const deauthenticationResult = await authc.logout(request);
+          const deauthenticationResult = await getAuthenticationService().logout(request);
           if (deauthenticationResult.failed()) {
             return response.customError(wrapIntoCustomErrorResponse(deauthenticationResult.error));
           }
@@ -78,24 +86,34 @@ export function defineCommonRoutes({
           );
         }
 
-        return response.ok({ body: authc.getCurrentUser(request)! });
+        return response.ok({ body: getAuthenticationService().getCurrentUser(request)! });
       })
     );
   }
 
-  function getLoginAttemptForProviderType(providerType: string, redirectURL: string) {
-    const [redirectURLPath] = redirectURL.split('#');
-    const redirectURLFragment =
-      redirectURL.length > redirectURLPath.length
-        ? redirectURL.substring(redirectURLPath.length)
-        : '';
+  const basicParamsSchema = schema.object({
+    username: schema.string({ minLength: 1 }),
+    password: schema.string({ minLength: 1 }),
+  });
 
+  function getLoginAttemptForProviderType<T extends string>(
+    providerType: T,
+    redirectURL: string,
+    params: T extends 'basic' | 'token' ? TypeOf<typeof basicParamsSchema> : {}
+  ) {
     if (providerType === SAMLAuthenticationProvider.type) {
-      return { type: SAMLLogin.LoginInitiatedByUser, redirectURLPath, redirectURLFragment };
+      return { type: SAMLLogin.LoginInitiatedByUser, redirectURL };
     }
 
     if (providerType === OIDCAuthenticationProvider.type) {
-      return { type: OIDCLogin.LoginInitiatedByUser, redirectURLPath };
+      return { type: OIDCLogin.LoginInitiatedByUser, redirectURL };
+    }
+
+    if (
+      providerType === BasicAuthenticationProvider.type ||
+      providerType === TokenAuthenticationProvider.type
+    ) {
+      return params;
     }
 
     return undefined;
@@ -103,42 +121,47 @@ export function defineCommonRoutes({
 
   router.post(
     {
-      path: '/internal/security/login_with',
+      path: '/internal/security/login',
       validate: {
         body: schema.object({
           providerType: schema.string(),
           providerName: schema.string(),
           currentURL: schema.string(),
+          params: schema.conditional(
+            schema.siblingRef('providerType'),
+            schema.oneOf([
+              schema.literal(BasicAuthenticationProvider.type),
+              schema.literal(TokenAuthenticationProvider.type),
+            ]),
+            basicParamsSchema,
+            schema.never()
+          ),
         }),
       },
       options: { authRequired: false },
     },
     createLicensedRouteHandler(async (context, request, response) => {
-      const { providerType, providerName, currentURL } = request.body;
+      const { providerType, providerName, currentURL, params } = request.body;
       logger.info(`Logging in with provider "${providerName}" (${providerType})`);
 
       const redirectURL = parseNext(currentURL, basePath.serverBasePath);
-      try {
-        const authenticationResult = await authc.login(request, {
-          provider: { name: providerName },
-          value: getLoginAttemptForProviderType(providerType, redirectURL),
-        });
+      const authenticationResult = await getAuthenticationService().login(request, {
+        provider: { name: providerName },
+        redirectURL,
+        value: getLoginAttemptForProviderType(providerType, redirectURL, params),
+      });
 
-        if (authenticationResult.redirected() || authenticationResult.succeeded()) {
-          return response.ok({
-            body: { location: authenticationResult.redirectURL || redirectURL },
-            headers: authenticationResult.authResponseHeaders,
-          });
-        }
-
-        return response.unauthorized({
-          body: authenticationResult.error,
+      if (authenticationResult.redirected() || authenticationResult.succeeded()) {
+        return response.ok({
+          body: { location: authenticationResult.redirectURL || redirectURL },
           headers: authenticationResult.authResponseHeaders,
         });
-      } catch (err) {
-        logger.error(err);
-        return response.internalError();
       }
+
+      return response.unauthorized({
+        body: authenticationResult.error,
+        headers: authenticationResult.authResponseHeaders,
+      });
     })
   );
 
@@ -153,12 +176,7 @@ export function defineCommonRoutes({
         });
       }
 
-      try {
-        await authc.acknowledgeAccessAgreement(request);
-      } catch (err) {
-        logger.error(err);
-        return response.internalError();
-      }
+      await getAuthenticationService().acknowledgeAccessAgreement(request);
 
       return response.noContent();
     })

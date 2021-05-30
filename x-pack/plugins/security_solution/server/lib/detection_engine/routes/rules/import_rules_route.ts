@@ -1,26 +1,28 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { chunk } from 'lodash/fp';
 import { extname } from 'path';
+import { schema } from '@kbn/config-schema';
+import { createPromiseFromStreams } from '@kbn/utils';
 
-import { validate } from '../../../../../common/validate';
+import { transformError, getIndexExists } from '@kbn/securitysolution-es-utils';
+import { validate } from '@kbn/securitysolution-io-ts-utils';
 import {
   importRulesQuerySchema,
   ImportRulesQuerySchemaDecoded,
-  importRulesPayloadSchema,
-  ImportRulesPayloadSchemaDecoded,
   ImportRulesSchemaDecoded,
 } from '../../../../../common/detection_engine/schemas/request/import_rules_schema';
 import {
   ImportRulesSchema as ImportRulesResponseSchema,
   importRulesSchema as importRulesResponseSchema,
 } from '../../../../../common/detection_engine/schemas/response/import_rules_schema';
-import { IRouter } from '../../../../../../../../src/core/server';
-import { createPromiseFromStreams } from '../../../../../../../../src/legacy/utils/streams';
+import { isMlRule } from '../../../../../common/machine_learning/helpers';
+import type { SecuritySolutionPluginRouter } from '../../../../types';
 import { DETECTION_ENGINE_RULES_URL } from '../../../../../common/constants';
 import { ConfigType } from '../../../../config';
 import { SetupPlugins } from '../../../../plugin';
@@ -28,16 +30,15 @@ import { buildMlAuthz } from '../../../machine_learning/authz';
 import { throwHttpError } from '../../../machine_learning/validation';
 import { createRules } from '../../rules/create_rules';
 import { readRules } from '../../rules/read_rules';
-import { getIndexExists } from '../../index/get_index_exists';
 import {
   createBulkErrorObject,
   ImportRuleResponse,
   BulkError,
   isBulkError,
   isImportRegular,
-  transformError,
   buildSiemResponse,
 } from '../utils';
+
 import { patchRules } from '../../rules/patch_rules';
 import { getTupleDuplicateErrorsAndUniqueRules } from './utils';
 import { createRulesStreamFromNdJson } from '../../rules/create_rules_stream_from_ndjson';
@@ -47,9 +48,13 @@ import { PartialFilter } from '../../types';
 
 type PromiseFromStreams = ImportRulesSchemaDecoded | Error;
 
-const CHUNK_PARSED_OBJECT_SIZE = 10;
+const CHUNK_PARSED_OBJECT_SIZE = 50;
 
-export const importRulesRoute = (router: IRouter, config: ConfigType, ml: SetupPlugins['ml']) => {
+export const importRulesRoute = (
+  router: SecuritySolutionPluginRouter,
+  config: ConfigType,
+  ml: SetupPlugins['ml']
+) => {
   router.post(
     {
       path: `${DETECTION_ENGINE_RULES_URL}/_import`,
@@ -57,10 +62,7 @@ export const importRulesRoute = (router: IRouter, config: ConfigType, ml: SetupP
         query: buildRouteValidation<typeof importRulesQuerySchema, ImportRulesQuerySchemaDecoded>(
           importRulesQuerySchema
         ),
-        body: buildRouteValidation<
-          typeof importRulesPayloadSchema,
-          ImportRulesPayloadSchemaDecoded
-        >(importRulesPayloadSchema),
+        body: schema.any(), // validation on file object is accomplished later in the handler.
       },
       options: {
         tags: ['access:securitySolution'],
@@ -75,7 +77,7 @@ export const importRulesRoute = (router: IRouter, config: ConfigType, ml: SetupP
 
       try {
         const alertsClient = context.alerting?.getAlertsClient();
-        const clusterClient = context.core.elasticsearch.legacy.client;
+        const esClient = context.core.elasticsearch.client;
         const savedObjectsClient = context.core.savedObjects.client;
         const siemClient = context.securitySolution?.getAppClient();
 
@@ -83,7 +85,12 @@ export const importRulesRoute = (router: IRouter, config: ConfigType, ml: SetupP
           return siemResponse.error({ statusCode: 404 });
         }
 
-        const mlAuthz = buildMlAuthz({ license: context.licensing.license, ml, request });
+        const mlAuthz = buildMlAuthz({
+          license: context.licensing.license,
+          ml,
+          request,
+          savedObjectsClient,
+        });
 
         const { filename } = (request.body.file as HapiReadableStream).hapi;
         const fileExtension = extname(filename).toLowerCase();
@@ -94,7 +101,7 @@ export const importRulesRoute = (router: IRouter, config: ConfigType, ml: SetupP
           });
         }
         const signalsIndex = siemClient.getSignalsIndex();
-        const indexExists = await getIndexExists(clusterClient.callAsCurrentUser, signalsIndex);
+        const indexExists = await getIndexExists(esClient.asCurrentUser, signalsIndex);
         if (!indexExists) {
           return siemResponse.error({
             statusCode: 400,
@@ -138,6 +145,7 @@ export const importRulesRoute = (router: IRouter, config: ConfigType, ml: SetupP
                   building_block_type: buildingBlockType,
                   description,
                   enabled,
+                  event_category_override: eventCategoryOverride,
                   false_positives: falsePositives,
                   from,
                   immutable,
@@ -161,6 +169,14 @@ export const importRulesRoute = (router: IRouter, config: ConfigType, ml: SetupP
                   severity_mapping: severityMapping,
                   tags,
                   threat,
+                  threat_filters: threatFilters,
+                  threat_index: threatIndex,
+                  threat_query: threatQuery,
+                  threat_mapping: threatMapping,
+                  threat_language: threatLanguage,
+                  threat_indicator_path: threatIndicatorPath,
+                  concurrent_searches: concurrentSearches,
+                  items_per_search: itemsPerSearch,
                   threshold,
                   timestamp_override: timestampOverride,
                   to,
@@ -174,13 +190,10 @@ export const importRulesRoute = (router: IRouter, config: ConfigType, ml: SetupP
                 } = parsedRule;
 
                 try {
-                  const query =
-                    type !== 'machine_learning' && queryOrUndefined == null ? '' : queryOrUndefined;
+                  const query = !isMlRule(type) && queryOrUndefined == null ? '' : queryOrUndefined;
 
                   const language =
-                    type !== 'machine_learning' && languageOrUndefined == null
-                      ? 'kuery'
-                      : languageOrUndefined;
+                    !isMlRule(type) && languageOrUndefined == null ? 'kuery' : languageOrUndefined;
 
                   // TODO: Fix these either with an is conversion or by better typing them within io-ts
                   const filters: PartialFilter[] | undefined = filtersRest as PartialFilter[];
@@ -196,6 +209,7 @@ export const importRulesRoute = (router: IRouter, config: ConfigType, ml: SetupP
                       buildingBlockType,
                       description,
                       enabled,
+                      eventCategoryOverride,
                       falsePositives,
                       from,
                       immutable,
@@ -224,6 +238,14 @@ export const importRulesRoute = (router: IRouter, config: ConfigType, ml: SetupP
                       type,
                       threat,
                       threshold,
+                      threatFilters,
+                      threatIndex,
+                      threatIndicatorPath,
+                      threatQuery,
+                      threatMapping,
+                      threatLanguage,
+                      concurrentSearches,
+                      itemsPerSearch,
                       timestampOverride,
                       references,
                       note,
@@ -240,6 +262,7 @@ export const importRulesRoute = (router: IRouter, config: ConfigType, ml: SetupP
                       savedObjectsClient,
                       description,
                       enabled,
+                      eventCategoryOverride,
                       falsePositives,
                       from,
                       query,
@@ -267,6 +290,13 @@ export const importRulesRoute = (router: IRouter, config: ConfigType, ml: SetupP
                       type,
                       threat,
                       threshold,
+                      threatFilters,
+                      threatIndex,
+                      threatQuery,
+                      threatMapping,
+                      threatLanguage,
+                      concurrentSearches,
+                      itemsPerSearch,
                       references,
                       note,
                       version,

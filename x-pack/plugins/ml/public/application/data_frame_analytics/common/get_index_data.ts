@@ -1,29 +1,34 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { getErrorMessage } from '../../../../common/util/errors';
+import type { estypes } from '@elastic/elasticsearch';
+import { extractErrorMessage } from '../../../../common/util/errors';
 
-import { EsSorting, SearchResponse7, UseDataGridReturnType } from '../../components/data_grid';
+import { EsSorting, UseDataGridReturnType, getProcessedFields } from '../../components/data_grid';
 import { ml } from '../../services/ml_api_service';
 
 import { isKeywordAndTextType } from '../common/fields';
 import { SavedSearchQuery } from '../../contexts/ml';
 
-import { DataFrameAnalyticsConfig, INDEX_STATUS } from './analytics';
+import { INDEX_STATUS } from './analytics';
+import { DataFrameAnalyticsConfig } from '../../../../common/types/data_frame_analytics';
 
 export const getIndexData = async (
   jobConfig: DataFrameAnalyticsConfig | undefined,
   dataGrid: UseDataGridReturnType,
-  searchQuery: SavedSearchQuery
+  searchQuery: SavedSearchQuery,
+  options: { didCancel: boolean }
 ) => {
   if (jobConfig !== undefined) {
     const {
       pagination,
       setErrorMessage,
       setRowCount,
+      setRowCountRelation,
       setStatus,
       setTableItems,
       sortingColumns,
@@ -45,9 +50,12 @@ export const getIndexData = async (
         }, {} as EsSorting);
 
       const { pageIndex, pageSize } = pagination;
-      const resp: SearchResponse7 = await ml.esSearch({
+      // TODO: remove results_field from `fields` when possible
+      const resp: estypes.SearchResponse = await ml.esSearch({
         index: jobConfig.dest.index,
         body: {
+          fields: ['*'],
+          _source: false,
           query: searchQuery,
           from: pageIndex * pageSize,
           size: pageSize,
@@ -55,13 +63,24 @@ export const getIndexData = async (
         },
       });
 
-      setRowCount(resp.hits.total.value);
-
-      const docs = resp.hits.hits.map((d) => d._source);
-      setTableItems(docs);
-      setStatus(INDEX_STATUS.LOADED);
+      if (!options.didCancel) {
+        setRowCount(typeof resp.hits.total === 'number' ? resp.hits.total : resp.hits.total.value);
+        setRowCountRelation(
+          typeof resp.hits.total === 'number'
+            ? ('eq' as estypes.TotalHitsRelation)
+            : resp.hits.total.relation
+        );
+        setTableItems(
+          resp.hits.hits.map((d) =>
+            getProcessedFields(d.fields ?? {}, (key: string) =>
+              key.startsWith(`${jobConfig.dest.results_field}.feature_importance`)
+            )
+          )
+        );
+        setStatus(INDEX_STATUS.LOADED);
+      }
     } catch (e) {
-      setErrorMessage(getErrorMessage(e));
+      setErrorMessage(extractErrorMessage(e));
       setStatus(INDEX_STATUS.ERROR);
     }
   }

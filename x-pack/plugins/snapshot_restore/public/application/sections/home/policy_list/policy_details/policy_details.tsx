@@ -1,8 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import React, { useState, useEffect } from 'react';
 import { FormattedMessage } from '@kbn/i18n/react';
 import {
@@ -24,6 +26,8 @@ import {
   EuiSpacer,
 } from '@elastic/eui';
 
+import { reactRouterNavigate } from '../../../../../../../../../src/plugins/kibana_react/public';
+
 import { SlmPolicy } from '../../../../../../common/types';
 import { useServices } from '../../../../app_context';
 import { SectionError, Error } from '../../../../../shared_imports';
@@ -40,8 +44,6 @@ import {
   PolicyDeleteProvider,
 } from '../../../../components';
 import { TabSummary, TabHistory } from './tabs';
-
-import { reactRouterNavigate } from '../../../../../../../../../src/plugins/kibana_react/public';
 
 interface Props {
   policyName: SlmPolicy['name'];
@@ -65,7 +67,7 @@ export const PolicyDetails: React.FunctionComponent<Props> = ({
   onPolicyExecuted,
 }) => {
   const { i18n, uiMetricService, history } = useServices();
-  const { error, data: policyDetails, sendRequest: reload } = useLoadPolicy(policyName);
+  const { error, data: policyDetails, resendRequest: reload } = useLoadPolicy(policyName);
   const [activeTab, setActiveTab] = useState<string>(TAB_SUMMARY);
   const [isPopoverOpen, setIsPopoverOpen] = useState<boolean>(false);
 
@@ -214,7 +216,6 @@ export const PolicyDetails: React.FunctionComponent<Props> = ({
                           isOpen={isPopoverOpen}
                           closePopover={() => setIsPopoverOpen(false)}
                           panelPaddingSize="none"
-                          withTitle
                           anchorPosition="rightUp"
                           repositionOnScroll
                         >

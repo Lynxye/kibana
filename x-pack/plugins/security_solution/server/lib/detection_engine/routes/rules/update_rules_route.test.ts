@@ -1,14 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { mlServicesMock, mlAuthzMock as mockMlAuthzFactory } from '../../../machine_learning/mocks';
 import { buildMlAuthz } from '../../../machine_learning/authz';
 import {
   getEmptyFindResult,
-  getResult,
+  getAlertMock,
   getUpdateRequest,
   getFindResultWithSingleHit,
   getFindResultStatusEmpty,
@@ -19,7 +20,8 @@ import { requestContextMock, serverMock, requestMock } from '../__mocks__';
 import { DETECTION_ENGINE_RULES_URL } from '../../../../../common/constants';
 import { updateRulesNotifications } from '../../rules/update_rules_notifications';
 import { updateRulesRoute } from './update_rules_route';
-import { getCreateRulesSchemaMock } from '../../../../../common/detection_engine/schemas/request/create_rules_schema.mock';
+import { getUpdateRulesSchemaMock } from '../../../../../common/detection_engine/schemas/request/rule_schemas.mock';
+import { getQueryRuleParams } from '../../schemas/rule_schemas.mock';
 
 jest.mock('../../../machine_learning/authz', () => mockMlAuthzFactory.create());
 jest.mock('../../rules/update_rules_notifications');
@@ -27,16 +29,16 @@ jest.mock('../../rules/update_rules_notifications');
 describe('update_rules', () => {
   let server: ReturnType<typeof serverMock.create>;
   let { clients, context } = requestContextMock.createTools();
-  let ml: ReturnType<typeof mlServicesMock.create>;
+  let ml: ReturnType<typeof mlServicesMock.createSetupContract>;
 
   beforeEach(() => {
     server = serverMock.create();
     ({ clients, context } = requestContextMock.createTools());
-    ml = mlServicesMock.create();
+    ml = mlServicesMock.createSetupContract();
 
-    clients.alertsClient.get.mockResolvedValue(getResult()); // existing rule
+    clients.alertsClient.get.mockResolvedValue(getAlertMock(getQueryRuleParams())); // existing rule
     clients.alertsClient.find.mockResolvedValue(getFindResultWithSingleHit()); // rule exists
-    clients.alertsClient.update.mockResolvedValue(getResult()); // successful update
+    clients.alertsClient.update.mockResolvedValue(getAlertMock(getQueryRuleParams())); // successful update
     clients.savedObjectsClient.find.mockResolvedValue(getFindResultStatusEmpty()); // successful transform
 
     updateRulesRoute(server.router, ml);
@@ -75,6 +77,7 @@ describe('update_rules', () => {
 
     it('returns 404 if siem client is unavailable', async () => {
       const { securitySolution, ...contextWithoutSecuritySolution } = context;
+      // @ts-expect-error
       const response = await server.inject(getUpdateRequest(), contextWithoutSecuritySolution);
       expect(response.status).toEqual(404);
       expect(response.body).toEqual({ message: 'Not Found', status_code: 404 });
@@ -130,8 +133,8 @@ describe('update_rules', () => {
         method: 'put',
         path: DETECTION_ENGINE_RULES_URL,
         body: {
-          ...getCreateRulesSchemaMock(),
-          rule_id: undefined,
+          ...getUpdateRulesSchemaMock(),
+          id: undefined,
         },
       });
       const response = await server.inject(noIdRequest, context);
@@ -145,7 +148,7 @@ describe('update_rules', () => {
       const request = requestMock.create({
         method: 'put',
         path: DETECTION_ENGINE_RULES_URL,
-        body: { ...getCreateRulesSchemaMock(), type: 'query' },
+        body: { ...getUpdateRulesSchemaMock(), type: 'query' },
       });
       const result = await server.validate(request);
 
@@ -156,13 +159,37 @@ describe('update_rules', () => {
       const request = requestMock.create({
         method: 'put',
         path: DETECTION_ENGINE_RULES_URL,
-        body: { ...getCreateRulesSchemaMock(), type: 'unknown type' },
+        body: { ...getUpdateRulesSchemaMock(), type: 'unknown type' },
       });
       const result = await server.validate(request);
 
-      expect(result.badRequest).toHaveBeenCalledWith(
-        'Invalid value "unknown type" supplied to "type"'
-      );
+      expect(result.badRequest).toHaveBeenCalled();
+    });
+
+    test('allows rule type of query and custom from and interval', async () => {
+      const request = requestMock.create({
+        method: 'put',
+        path: DETECTION_ENGINE_RULES_URL,
+        body: { from: 'now-7m', interval: '5m', ...getUpdateRulesSchemaMock(), type: 'query' },
+      });
+      const result = server.validate(request);
+
+      expect(result.ok).toHaveBeenCalled();
+    });
+
+    test('disallows invalid "from" param on rule', async () => {
+      const request = requestMock.create({
+        method: 'put',
+        path: DETECTION_ENGINE_RULES_URL,
+        body: {
+          from: 'now-3755555555555555.67s',
+          interval: '5m',
+          ...getUpdateRulesSchemaMock(),
+          type: 'query',
+        },
+      });
+      const result = server.validate(request);
+      expect(result.badRequest).toHaveBeenCalledWith('Failed to parse "from" on rule param');
     });
   });
 });

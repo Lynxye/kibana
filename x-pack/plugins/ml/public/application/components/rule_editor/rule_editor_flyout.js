@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 /*
@@ -10,6 +11,8 @@
 
 import PropTypes from 'prop-types';
 import React, { Component } from 'react';
+import { i18n } from '@kbn/i18n';
+import { FormattedMessage } from '@kbn/i18n/react';
 
 import {
   EuiButton,
@@ -51,8 +54,7 @@ import { getPartitioningFieldNames } from '../../../../common/util/job_utils';
 import { withKibana } from '../../../../../../../src/plugins/kibana_react/public';
 import { mlJobService } from '../../services/job_service';
 import { ml } from '../../services/ml_api_service';
-import { i18n } from '@kbn/i18n';
-import { FormattedMessage } from '@kbn/i18n/react';
+import { extractErrorMessage } from '../../../../common/util/errors';
 
 class RuleEditorFlyoutUI extends Component {
   static propTypes = {
@@ -103,7 +105,7 @@ class RuleEditorFlyoutUI extends Component {
           'xpack.ml.ruleEditor.ruleEditorFlyout.unableToConfigureRulesNotificationMesssage',
           {
             defaultMessage:
-              'Unable to configure rules as an error occurred obtaining details for job ID {jobId}',
+              'Unable to configure job rules as an error occurred obtaining details for job ID {jobId}',
             values: { jobId: anomaly.jobId },
           }
         )
@@ -157,7 +159,7 @@ class RuleEditorFlyoutUI extends Component {
             i18n.translate(
               'xpack.ml.ruleEditor.ruleEditorFlyout.errorWithLoadingFilterListsNotificationMesssage',
               {
-                defaultMessage: 'Error loading the filter lists used in the rule scope',
+                defaultMessage: 'Error loading the filter lists used in the job rule scope',
               }
             )
           );
@@ -431,8 +433,8 @@ class RuleEditorFlyoutUI extends Component {
             values: { jobId },
           }
         );
-        if (error.message) {
-          errorMessage += ` : ${error.message}`;
+        if (error.error) {
+          errorMessage += ` : ${extractErrorMessage(error.error)}`;
         }
         toasts.addDanger(errorMessage);
       });
@@ -478,8 +480,7 @@ class RuleEditorFlyoutUI extends Component {
   };
 
   render() {
-    const { ELASTIC_WEBSITE_URL, DOC_LINK_VERSION } = this.props.kibana.services.docLinks;
-    const docsUrl = `${ELASTIC_WEBSITE_URL}guide/en/machine-learning/${DOC_LINK_VERSION}/ml-rules.html`;
+    const docsUrl = this.props.kibana.services.docLinks.links.ml.customRules;
     const {
       isFlyoutVisible,
       job,
@@ -509,7 +510,7 @@ class RuleEditorFlyoutUI extends Component {
               <h1 id="flyoutTitle">
                 <FormattedMessage
                   id="xpack.ml.ruleEditor.ruleEditorFlyout.editRulesTitle"
-                  defaultMessage="Edit rules"
+                  defaultMessage="Edit job rules"
                 />
               </h1>
             </EuiTitle>
@@ -554,7 +555,7 @@ class RuleEditorFlyoutUI extends Component {
         'xpack.ml.ruleEditor.ruleEditorFlyout.conditionsDescription',
         {
           defaultMessage:
-            'Add numeric conditions for when the rule applies. Multiple conditions are combined using AND.',
+            'Add numeric conditions for when the job rule applies. Multiple conditions are combined using AND.',
         }
       );
 
@@ -570,12 +571,12 @@ class RuleEditorFlyoutUI extends Component {
                 {isCreate === true ? (
                   <FormattedMessage
                     id="xpack.ml.ruleEditor.ruleEditorFlyout.createRuleTitle"
-                    defaultMessage="Create rule"
+                    defaultMessage="Create job rule"
                   />
                 ) : (
                   <FormattedMessage
                     id="xpack.ml.ruleEditor.ruleEditorFlyout.editRuleTitle"
-                    defaultMessage="Edit rule"
+                    defaultMessage="Edit job rule"
                   />
                 )}
               </h1>
@@ -589,9 +590,9 @@ class RuleEditorFlyoutUI extends Component {
               <p>
                 <FormattedMessage
                   id="xpack.ml.ruleEditor.ruleEditorFlyout.rulesDescription"
-                  defaultMessage="Rules instruct anomaly detectors to change their behavior
+                  defaultMessage="Job rules instruct anomaly detectors to change their behavior
                     based on domain-specific knowledge that you provide.
-                    When you create a rule, you can specify conditions, scope, and actions. When the conditions of a rule are
+                    When you create a job rule, you can specify conditions, scope, and actions. When the conditions of a job rule are
                     satisfied, its actions are triggered. {learnMoreLink}"
                   values={{
                     learnMoreLink: (
@@ -688,7 +689,7 @@ class RuleEditorFlyoutUI extends Component {
               <p>
                 <FormattedMessage
                   id="xpack.ml.ruleEditor.ruleEditorFlyout.whenChangesTakeEffectDescription"
-                  defaultMessage="Changes to rules take effect for new results only."
+                  defaultMessage="Changes to job rules take effect for new results only."
                 />
               </p>
               <p>

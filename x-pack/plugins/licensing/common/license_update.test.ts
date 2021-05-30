@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { Subject } from 'rxjs';
@@ -66,6 +67,8 @@ describe('licensing update', () => {
     expect(first.type).toBe('basic');
 
     trigger$.next();
+    // waiting on a promise gives the exhaustMap time to complete and not de-dupe these calls
+    await Promise.resolve();
     trigger$.next();
 
     const [, second] = await license$.pipe(take(2), toArray()).toPromise();
@@ -89,18 +92,15 @@ describe('licensing update', () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
-  it('handles fetcher race condition', async () => {
+  it('ignores trigger if license fetching is delayed ', async () => {
     const delayMs = 100;
-    let firstCall = true;
-    const fetcher = jest.fn().mockImplementation(
+    const fetcher = jest.fn().mockImplementationOnce(
       () =>
         new Promise((resolve) => {
-          if (firstCall) {
-            firstCall = false;
-            setTimeout(() => resolve(licenseMock.createLicense()), delayMs);
-          } else {
-            resolve(licenseMock.createLicense({ license: { type: 'gold' } }));
-          }
+          setTimeout(
+            () => resolve(licenseMock.createLicense({ license: { type: 'gold' } })),
+            delayMs
+          );
         })
     );
     const trigger$ = new Subject();
@@ -113,7 +113,7 @@ describe('licensing update', () => {
 
     await delay(delayMs * 2);
 
-    await expect(fetcher).toHaveBeenCalledTimes(2);
+    await expect(fetcher).toHaveBeenCalledTimes(1);
     await expect(values).toHaveLength(1);
     await expect(values[0].type).toBe('gold');
   });
@@ -144,7 +144,7 @@ describe('licensing update', () => {
     expect(fetcher).toHaveBeenCalledTimes(0);
   });
 
-  it('refreshManually guarantees license fetching', async () => {
+  it(`refreshManually multiple times gets new license`, async () => {
     const trigger$ = new Subject();
     const firstLicense = licenseMock.createLicense({ license: { uid: 'first', type: 'basic' } });
     const secondLicense = licenseMock.createLicense({ license: { uid: 'second', type: 'gold' } });

@@ -1,27 +1,16 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import { Agent, IncomingMessage } from 'http';
 import * as url from 'url';
 import { pick, trimStart, trimEnd } from 'lodash';
 
-import { KibanaRequest, Logger, RequestHandler } from 'kibana/server';
+import { KibanaRequest, RequestHandler } from 'kibana/server';
 
 import { ESConfigForProxy } from '../../../../types';
 import {
@@ -31,19 +20,14 @@ import {
   setHeaders,
 } from '../../../../lib';
 
-import { Body, Query } from './validation_config';
-
 // TODO: find a better way to get information from the request like remoteAddress and remotePort
 // for forwarding.
 // eslint-disable-next-line @kbn/eslint/no-restricted-paths
 import { ensureRawRequest } from '../../../../../../../core/server/http/router';
 
-export interface CreateHandlerDependencies {
-  log: Logger;
-  readLegacyESConfig: () => ESConfigForProxy;
-  pathFilters: RegExp[];
-  proxyConfigCollection: ProxyConfigCollection;
-}
+import { RouteDependencies } from '../../../';
+
+import { Body, Query } from './validation_config';
 
 function toURL(base: string, path: string) {
   const urlResult = new url.URL(`${trimEnd(base, '/')}/${trimStart(path, '/')}`);
@@ -57,7 +41,7 @@ function toURL(base: string, path: string) {
 }
 
 function filterHeaders(originalHeaders: object, headersToKeep: string[]): object {
-  const normalizeHeader = function (header: any) {
+  const normalizeHeader = function (header: string) {
     if (!header) {
       return '';
     }
@@ -84,7 +68,7 @@ function getRequestConfig(
     return {
       ...proxyConfigCollection.configForUri(uri),
       headers: newHeaders,
-    } as any;
+    };
   }
 
   return {
@@ -97,7 +81,7 @@ function getProxyHeaders(req: KibanaRequest) {
   const headers = Object.create(null);
 
   // Scope this proto-unsafe functionality to where it is being used.
-  function extendCommaList(obj: Record<string, any>, property: string, value: any) {
+  function extendCommaList(obj: Record<string, any>, property: string, value: string) {
     obj[property] = (obj[property] ? obj[property] + ',' : '') + value;
   }
 
@@ -120,14 +104,8 @@ function getProxyHeaders(req: KibanaRequest) {
 
 export const createHandler = ({
   log,
-  readLegacyESConfig,
-  pathFilters,
-  proxyConfigCollection,
-}: CreateHandlerDependencies): RequestHandler<unknown, Query, Body> => async (
-  ctx,
-  request,
-  response
-) => {
+  proxy: { readLegacyESConfig, pathFilters, proxyConfigCollection },
+}: RouteDependencies): RequestHandler<unknown, Query, Body> => async (ctx, request, response) => {
   const { body, query } = request;
   const { path, method } = query;
 
@@ -140,7 +118,7 @@ export const createHandler = ({
     });
   }
 
-  const legacyConfig = readLegacyESConfig();
+  const legacyConfig = await readLegacyESConfig();
   const { hosts } = legacyConfig;
   let esIncomingMessage: IncomingMessage;
 
@@ -164,7 +142,7 @@ export const createHandler = ({
       };
 
       esIncomingMessage = await proxyRequest({
-        method: method.toLowerCase() as any,
+        method: method.toLowerCase() as 'get' | 'post' | 'put' | 'delete' | 'patch' | 'head',
         headers: requestHeaders,
         uri,
         timeout,

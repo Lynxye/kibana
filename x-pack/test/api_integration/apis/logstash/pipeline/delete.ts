@@ -1,8 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import { FtrProviderContext } from '../../../ftr_provider_context';
 
 export default function ({ getService }: FtrProviderContext) {
@@ -18,7 +20,6 @@ export default function ({ getService }: FtrProviderContext) {
         .put('/api/logstash/pipeline/fast_generator')
         .set('kbn-xsrf', 'xxx')
         .send({
-          id: 'fast_generator',
           description: 'foobar baz',
           pipeline: 'input { generator {} }\n\n output { stdout {} }',
         })

@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { getServiceMapServiceNodeInfo } from './get_service_map_service_node_info';
@@ -19,13 +20,14 @@ describe('getServiceMapServiceNodeInfo', () => {
             }),
         },
         indices: {},
+        uiFilters: {},
       } as unknown) as Setup & SetupTimeRange;
-      const environment = 'test environment';
       const serviceName = 'test service name';
       const result = await getServiceMapServiceNodeInfo({
-        uiFilters: { environment },
+        environment: 'test environment',
         setup,
         serviceName,
+        searchAggregatedTransactions: false,
       });
 
       expect(result).toEqual({
@@ -44,7 +46,7 @@ describe('getServiceMapServiceNodeInfo', () => {
     it('returns data', async () => {
       jest.spyOn(getErrorRateModule, 'getErrorRate').mockResolvedValueOnce({
         average: 0.5,
-        erroneousTransactionsRate: [],
+        transactionErrorRate: [],
         noHits: false,
       });
 
@@ -52,19 +54,29 @@ describe('getServiceMapServiceNodeInfo', () => {
         apmEventClient: {
           search: () =>
             Promise.resolve({
-              hits: { total: { value: 1 } },
+              hits: {
+                total: { value: 1 },
+              },
+              aggregations: {
+                duration: { value: null },
+                avgCpuUsage: { value: null },
+                avgMemoryUsage: { value: null },
+              },
             }),
         },
         indices: {},
         start: 1593460053026000,
         end: 1593497863217000,
+        config: {
+          'xpack.apm.metricsInterval': 30,
+        },
+        uiFilters: { environment: 'test environment' },
       } as unknown) as Setup & SetupTimeRange;
-      const environment = 'test environment';
       const serviceName = 'test service name';
       const result = await getServiceMapServiceNodeInfo({
-        uiFilters: { environment },
         setup,
         serviceName,
+        searchAggregatedTransactions: false,
       });
 
       expect(result).toEqual({

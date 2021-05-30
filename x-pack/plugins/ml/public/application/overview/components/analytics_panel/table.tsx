@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { FC, useState } from 'react';
@@ -23,8 +24,9 @@ import {
   getTaskStateBadge,
   progressColumn,
 } from '../../../data_frame_analytics/pages/analytics_management/components/analytics_list/use_columns';
-import { getViewAction } from '../../../data_frame_analytics/pages/analytics_management/components/action_view';
-import { formatHumanReadableDateTimeSeconds } from '../../../util/date_utils';
+import { formatHumanReadableDateTimeSeconds } from '../../../../../common/util/date_utils';
+
+import { ViewLink } from './actions';
 
 type DataFrameAnalyticsTableColumns = [
   EuiTableFieldDataColumnType<DataFrameAnalyticsListRow>,
@@ -89,7 +91,11 @@ export const AnalyticsTable: FC<Props> = ({ items }) => {
       name: i18n.translate('xpack.ml.overview.analyticsList.tableActionLabel', {
         defaultMessage: 'Actions',
       }),
-      actions: [getViewAction()],
+      actions: [
+        {
+          render: (item: DataFrameAnalyticsListRow) => <ViewLink item={item} />,
+        },
+      ],
       width: '100px',
     },
   ];

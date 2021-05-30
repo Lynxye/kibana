@@ -1,32 +1,30 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import apm from 'elastic-apm-node';
 import * as Rx from 'rxjs';
-import { catchError, map, mergeMap, takeUntil } from 'rxjs/operators';
+import { catchError, finalize, map, mergeMap, takeUntil } from 'rxjs/operators';
 import { PNG_JOB_TYPE } from '../../../../common/constants';
-import { ESQueueWorkerExecuteFn, RunTaskFnFactory, TaskRunResult } from '../../..//types';
+import { TaskRunResult } from '../../../lib/tasks';
+import { RunTaskFn, RunTaskFnFactory } from '../../../types';
 import {
   decryptJobHeaders,
   getConditionalHeaders,
   getFullUrls,
-  omitBlacklistedHeaders,
+  omitBlockedHeaders,
 } from '../../common';
 import { generatePngObservableFactory } from '../lib/generate_png';
-import { ScheduledTaskParamsPNG } from '../types';
+import { TaskPayloadPNG } from '../types';
 
-type QueuedPngExecutorFactory = RunTaskFnFactory<ESQueueWorkerExecuteFn<ScheduledTaskParamsPNG>>;
-
-export const runTaskFnFactory: QueuedPngExecutorFactory = function executeJobFactoryFn(
-  reporting,
-  parentLogger
-) {
+export const runTaskFnFactory: RunTaskFnFactory<
+  RunTaskFn<TaskPayloadPNG>
+> = function executeJobFactoryFn(reporting, parentLogger) {
   const config = reporting.getConfig();
   const encryptionKey = config.get('encryptionKey');
-  const logger = parentLogger.clone([PNG_JOB_TYPE, 'execute']);
 
   return async function runTask(jobId, job, cancellationToken) {
     const apmTrans = apm.startTransaction('reporting execute_job png', 'reporting');
@@ -34,13 +32,13 @@ export const runTaskFnFactory: QueuedPngExecutorFactory = function executeJobFac
     let apmGeneratePng: { end: () => void } | null | undefined;
 
     const generatePngObservable = await generatePngObservableFactory(reporting);
-    const jobLogger = logger.clone([jobId]);
+    const jobLogger = parentLogger.clone([PNG_JOB_TYPE, 'execute', jobId]);
     const process$: Rx.Observable<TaskRunResult> = Rx.of(1).pipe(
-      mergeMap(() => decryptJobHeaders({ encryptionKey, job, logger })),
-      map((decryptedHeaders) => omitBlacklistedHeaders({ job, decryptedHeaders })),
-      map((filteredHeaders) => getConditionalHeaders({ config, job, filteredHeaders })),
+      mergeMap(() => decryptJobHeaders(encryptionKey, job.headers, jobLogger)),
+      map((decryptedHeaders) => omitBlockedHeaders(decryptedHeaders)),
+      map((filteredHeaders) => getConditionalHeaders(config, filteredHeaders)),
       mergeMap((conditionalHeaders) => {
-        const urls = getFullUrls({ config, job });
+        const urls = getFullUrls(config, job);
         const hashUrl = urls[0];
         if (apmGetAssets) apmGetAssets.end();
 
@@ -53,21 +51,17 @@ export const runTaskFnFactory: QueuedPngExecutorFactory = function executeJobFac
           job.layout
         );
       }),
-      map(({ base64, warnings }) => {
-        if (apmGeneratePng) apmGeneratePng.end();
-
-        return {
-          content_type: 'image/png',
-          content: base64,
-          size: (base64 && base64.length) || 0,
-
-          warnings,
-        };
-      }),
+      map(({ base64, warnings }) => ({
+        content_type: 'image/png',
+        content: base64,
+        size: (base64 && base64.length) || 0,
+        warnings,
+      })),
       catchError((err) => {
         jobLogger.error(err);
         return Rx.throwError(err);
-      })
+      }),
+      finalize(() => apmGeneratePng?.end())
     );
 
     const stop$ = Rx.fromEventPattern(cancellationToken.on);

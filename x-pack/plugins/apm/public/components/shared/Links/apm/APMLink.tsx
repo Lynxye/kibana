@@ -1,25 +1,31 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { EuiLink, EuiLinkAnchorProps } from '@elastic/eui';
-import React from 'react';
-import url from 'url';
+import { IBasePath } from 'kibana/public';
 import { pick } from 'lodash';
-import { useLocation } from '../../../../hooks/useLocation';
-import { APMQueryParams, toQuery, fromQuery } from '../url_helpers';
+import React from 'react';
+import { useLocation } from 'react-router-dom';
+import url from 'url';
+import { pickKeys } from '../../../../../common/utils/pick_keys';
+import { useApmPluginContext } from '../../../../context/apm_plugin/use_apm_plugin_context';
+import { useUrlParams } from '../../../../context/url_params_context/use_url_params';
+import { APMQueryParams, fromQuery, toQuery } from '../url_helpers';
 
 interface Props extends EuiLinkAnchorProps {
   path?: string;
   query?: APMQueryParams;
+  mergeQuery?: (query: APMQueryParams) => APMQueryParams;
   children?: React.ReactNode;
 }
 
 export type APMLinkExtendProps = Omit<Props, 'path'>;
 
-export const PERSISTENT_APM_PARAMS = [
+export const PERSISTENT_APM_PARAMS: Array<keyof APMQueryParams> = [
   'kuery',
   'rangeFrom',
   'rangeTo',
@@ -28,12 +34,44 @@ export const PERSISTENT_APM_PARAMS = [
   'environment',
 ];
 
-export function getAPMHref(
-  path: string,
-  currentSearch: string,
-  query: APMQueryParams = {}
-) {
-  const currentQuery = toQuery(currentSearch);
+/**
+ * Hook to get a link for a path with persisted filters
+ */
+export function useAPMHref({
+  path,
+  persistedFilters,
+  query,
+}: {
+  path: string;
+  persistedFilters?: Array<keyof APMQueryParams>;
+  query?: APMQueryParams;
+}) {
+  const { urlParams } = useUrlParams();
+  const { basePath } = useApmPluginContext().core.http;
+  const { search } = useLocation();
+  const nextQuery = {
+    ...pickKeys(urlParams as APMQueryParams, ...(persistedFilters ?? [])),
+    ...query,
+  };
+
+  return getAPMHref({ basePath, path, query: nextQuery, search });
+}
+
+/**
+ * Get an APM link for a path.
+ */
+export function getAPMHref({
+  basePath,
+  path = '',
+  search,
+  query = {},
+}: {
+  basePath: IBasePath;
+  path?: string;
+  search?: string;
+  query?: APMQueryParams;
+}) {
+  const currentQuery = toQuery(search);
   const nextQuery = {
     ...pick(currentQuery, PERSISTENT_APM_PARAMS),
     ...query,
@@ -41,13 +79,19 @@ export function getAPMHref(
   const nextSearch = fromQuery(nextQuery);
 
   return url.format({
-    pathname: '',
-    hash: `${path}?${nextSearch}`,
+    pathname: basePath.prepend(`/app/apm${path}`),
+    search: nextSearch,
   });
 }
 
-export function APMLink({ path = '', query, ...rest }: Props) {
+export function APMLink({ path = '', query, mergeQuery, ...rest }: Props) {
+  const { core } = useApmPluginContext();
   const { search } = useLocation();
-  const href = getAPMHref(path, search, query);
+  const { basePath } = core.http;
+
+  const mergedQuery = mergeQuery ? mergeQuery(query ?? {}) : query;
+
+  const href = getAPMHref({ basePath, path, search, query: mergedQuery });
+
   return <EuiLink {...rest} href={href} />;
 }

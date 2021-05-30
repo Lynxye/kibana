@@ -1,46 +1,45 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import {
-  EuiButtonToggle,
-  EuiFlexGroup,
-  EuiFlexItem,
-  EuiLoadingContent,
-  EuiLoadingSpinner,
-  EuiHorizontalRule,
-} from '@elastic/eui';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import styled from 'styled-components';
+import React, { useCallback, useState } from 'react';
+import { useDispatch } from 'react-redux';
+import { useHistory } from 'react-router-dom';
+import { SearchResponse } from 'elasticsearch';
+import { isEmpty } from 'lodash';
 
-import * as i18n from './translations';
-import { Case } from '../../containers/types';
-import { getCaseUrl } from '../../../common/components/link_to';
-import { gutterTimeline } from '../../../common/lib/helpers';
-import { HeaderPage } from '../../../common/components/header_page';
-import { EditableTitle } from '../../../common/components/header_page/editable_title';
-import { TagList } from '../tag_list';
-import { useGetCase } from '../../containers/use_get_case';
-import { UserActionTree } from '../user_action_tree';
-import { UserList } from '../user_list';
-import { useUpdateCase } from '../../containers/use_update_case';
-import { useGetUrlSearch } from '../../../common/components/navigation/use_get_url_search';
-import { getTypedPayload } from '../../containers/utils';
-import { WhitePageWrapper, HeaderWrapper } from '../wrappers';
-import { useBasePath } from '../../../common/lib/kibana';
-import { CaseStatus } from '../case_status';
-import { navTabs } from '../../../app/home/home_navigations';
-import { SpyRoute } from '../../../common/utils/route/spy_routes';
-import { useGetCaseUserActions } from '../../containers/use_get_case_user_actions';
-import { usePushToService } from '../use_push_to_service';
-import { EditConnector } from '../edit_connector';
-import { useConnectors } from '../../containers/configure/use_connectors';
+import {
+  getCaseDetailsUrl,
+  getCaseDetailsUrlWithCommentId,
+  getCaseUrl,
+  getConfigureCasesUrl,
+  getRuleDetailsUrl,
+  useFormatUrl,
+} from '../../../common/components/link_to';
+import { Ecs } from '../../../../common/ecs';
+import { Case } from '../../../../../cases/common';
+import { TimelineNonEcsData } from '../../../../common/search_strategy';
+import { TimelineId } from '../../../../common/types/timeline';
 import { SecurityPageName } from '../../../app/types';
+import { KibanaServices, useKibana } from '../../../common/lib/kibana';
+import { APP_ID, DETECTION_ENGINE_QUERY_SIGNALS_URL } from '../../../../common/constants';
+import { timelineActions } from '../../../timelines/store/timeline';
+import { useSourcererScope } from '../../../common/containers/sourcerer';
+import { SourcererScopeName } from '../../../common/store/sourcerer/model';
+import { DetailsPanel } from '../../../timelines/components/side_panel';
+import { InvestigateInTimelineAction } from '../../../detections/components/alerts_table/timeline_actions/investigate_in_timeline_action';
+import { buildAlertsQuery, formatAlertToEcsSignal, useFetchAlertData } from './helpers';
+import { SEND_ALERT_TO_TIMELINE } from './translations';
+import { useInsertTimeline } from '../use_insert_timeline';
+import { SpyRoute } from '../../../common/utils/route/spy_routes';
+import * as timelineMarkdownPlugin from '../../../common/components/markdown_editor/plugins/timeline';
 
 interface Props {
   caseId: string;
+  subCaseId?: string;
   userCanCrud: boolean;
 }
 
@@ -51,374 +50,207 @@ export interface OnUpdateFields {
   onError?: () => void;
 }
 
-const MyWrapper = styled.div`
-  padding: ${({
-    theme,
-  }) => `${theme.eui.paddingSizes.l} ${gutterTimeline} ${theme.eui.paddingSizes.l}
-  ${theme.eui.paddingSizes.l}`};
-`;
-
-const MyEuiFlexGroup = styled(EuiFlexGroup)`
-  height: 100%;
-`;
-
-const MyEuiHorizontalRule = styled(EuiHorizontalRule)`
-  margin-left: 48px;
-  &.euiHorizontalRule--full {
-    width: calc(100% - 48px);
-  }
-`;
-
 export interface CaseProps extends Props {
   fetchCase: () => void;
   caseData: Case;
   updateCase: (newCase: Case) => void;
 }
 
-export const CaseComponent = React.memo<CaseProps>(
-  ({ caseId, caseData, fetchCase, updateCase, userCanCrud }) => {
-    const basePath = window.location.origin + useBasePath();
-    const caseLink = `${basePath}/app/security/cases/${caseId}`;
-    const search = useGetUrlSearch(navTabs.case);
-    const [initLoadingData, setInitLoadingData] = useState(true);
-    const {
-      caseUserActions,
-      fetchCaseUserActions,
-      caseServices,
-      hasDataToPush,
-      isLoading: isLoadingUserActions,
-      participants,
-    } = useGetCaseUserActions(caseId, caseData.connectorId);
-    const { isLoading, updateKey, updateCaseProperty } = useUpdateCase({
-      caseId,
-    });
-
-    // Update Fields
-    const onUpdateField = useCallback(
-      ({ key, value, onSuccess, onError }: OnUpdateFields) => {
-        const handleUpdateNewCase = (newCase: Case) =>
-          updateCase({ ...newCase, comments: caseData.comments });
-        switch (key) {
-          case 'title':
-            const titleUpdate = getTypedPayload<string>(value);
-            if (titleUpdate.length > 0) {
-              updateCaseProperty({
-                fetchCaseUserActions,
-                updateKey: 'title',
-                updateValue: titleUpdate,
-                updateCase: handleUpdateNewCase,
-                version: caseData.version,
-                onSuccess,
-                onError,
-              });
-            }
-            break;
-          case 'connectorId':
-            const connectorId = getTypedPayload<string>(value);
-            if (connectorId.length > 0) {
-              updateCaseProperty({
-                fetchCaseUserActions,
-                updateKey: 'connector_id',
-                updateValue: connectorId,
-                updateCase: handleUpdateNewCase,
-                version: caseData.version,
-                onSuccess,
-                onError,
-              });
-            }
-            break;
-          case 'description':
-            const descriptionUpdate = getTypedPayload<string>(value);
-            if (descriptionUpdate.length > 0) {
-              updateCaseProperty({
-                fetchCaseUserActions,
-                updateKey: 'description',
-                updateValue: descriptionUpdate,
-                updateCase: handleUpdateNewCase,
-                version: caseData.version,
-                onSuccess,
-                onError,
-              });
-            }
-            break;
-          case 'tags':
-            const tagsUpdate = getTypedPayload<string[]>(value);
-            updateCaseProperty({
-              fetchCaseUserActions,
-              updateKey: 'tags',
-              updateValue: tagsUpdate,
-              updateCase: handleUpdateNewCase,
-              version: caseData.version,
-              onSuccess,
-              onError,
-            });
-            break;
-          case 'status':
-            const statusUpdate = getTypedPayload<string>(value);
-            if (caseData.status !== value) {
-              updateCaseProperty({
-                fetchCaseUserActions,
-                updateKey: 'status',
-                updateValue: statusUpdate,
-                updateCase: handleUpdateNewCase,
-                version: caseData.version,
-                onSuccess,
-                onError,
-              });
-            }
-          default:
-            return null;
-        }
-      },
-      [fetchCaseUserActions, updateCaseProperty, updateCase, caseData]
-    );
-    const handleUpdateCase = useCallback(
-      (newCase: Case) => {
-        updateCase(newCase);
-        fetchCaseUserActions(newCase.id);
-      },
-      [updateCase, fetchCaseUserActions]
-    );
-
-    const { loading: isLoadingConnectors, connectors } = useConnectors();
-
-    const [caseConnectorName, isValidConnector] = useMemo(() => {
-      const connector = connectors.find((c) => c.id === caseData.connectorId);
-      return [connector?.name ?? 'none', !!connector];
-    }, [connectors, caseData.connectorId]);
-
-    const currentExternalIncident = useMemo(
-      () =>
-        caseServices != null && caseServices[caseData.connectorId] != null
-          ? caseServices[caseData.connectorId]
-          : null,
-      [caseServices, caseData.connectorId]
-    );
-
-    const { pushButton, pushCallouts } = usePushToService({
-      caseConnectorId: caseData.connectorId,
-      caseConnectorName,
-      caseServices,
-      caseId: caseData.id,
-      caseStatus: caseData.status,
-      connectors,
-      updateCase: handleUpdateCase,
-      userCanCrud,
-      isValidConnector,
-    });
-
-    const onSubmitConnector = useCallback(
-      (connectorId, onSuccess, onError) =>
-        onUpdateField({
-          key: 'connectorId',
-          value: connectorId,
-          onSuccess,
-          onError,
-        }),
-      [onUpdateField]
-    );
-    const onSubmitTags = useCallback((newTags) => onUpdateField({ key: 'tags', value: newTags }), [
-      onUpdateField,
-    ]);
-    const onSubmitTitle = useCallback(
-      (newTitle) => onUpdateField({ key: 'title', value: newTitle }),
-      [onUpdateField]
-    );
-    const toggleStatusCase = useCallback(
-      (e) =>
-        onUpdateField({
-          key: 'status',
-          value: e.target.checked ? 'closed' : 'open',
-        }),
-      [onUpdateField]
-    );
-    const handleRefresh = useCallback(() => {
-      fetchCaseUserActions(caseData.id);
-      fetchCase();
-    }, [caseData.id, fetchCase, fetchCaseUserActions]);
-
-    const spyState = useMemo(() => ({ caseTitle: caseData.title }), [caseData.title]);
-
-    const caseStatusData = useMemo(
-      () =>
-        caseData.status === 'open'
-          ? {
-              'data-test-subj': 'case-view-createdAt',
-              value: caseData.createdAt,
-              title: i18n.CASE_OPENED,
-              buttonLabel: i18n.CLOSE_CASE,
-              status: caseData.status,
-              icon: 'folderCheck',
-              badgeColor: 'secondary',
-              isSelected: false,
-            }
-          : {
-              'data-test-subj': 'case-view-closedAt',
-              value: caseData.closedAt ?? '',
-              title: i18n.CASE_CLOSED,
-              buttonLabel: i18n.REOPEN_CASE,
-              status: caseData.status,
-              icon: 'folderExclamation',
-              badgeColor: 'danger',
-              isSelected: true,
-            },
-      [caseData.closedAt, caseData.createdAt, caseData.status]
-    );
-    const emailContent = useMemo(
-      () => ({
-        subject: i18n.EMAIL_SUBJECT(caseData.title),
-        body: i18n.EMAIL_BODY(caseLink),
-      }),
-      [caseLink, caseData.title]
-    );
-
-    useEffect(() => {
-      if (initLoadingData && !isLoadingUserActions) {
-        setInitLoadingData(false);
-      }
-    }, [initLoadingData, isLoadingUserActions]);
-
-    const backOptions = useMemo(
-      () => ({
-        href: getCaseUrl(search),
-        text: i18n.BACK_TO_ALL,
-        dataTestSubj: 'backToCases',
-        pageId: SecurityPageName.case,
-      }),
-      [search]
-    );
-
-    return (
-      <>
-        <HeaderWrapper>
-          <HeaderPage
-            backOptions={backOptions}
-            data-test-subj="case-view-title"
-            titleNode={
-              <EditableTitle
-                disabled={!userCanCrud}
-                isLoading={isLoading && updateKey === 'title'}
-                title={caseData.title}
-                onSubmit={onSubmitTitle}
-              />
-            }
-            title={caseData.title}
-          >
-            <CaseStatus
-              currentExternalIncident={currentExternalIncident}
-              caseData={caseData}
-              disabled={!userCanCrud}
-              isLoading={isLoading && updateKey === 'status'}
-              onRefresh={handleRefresh}
-              toggleStatusCase={toggleStatusCase}
-              {...caseStatusData}
-            />
-          </HeaderPage>
-        </HeaderWrapper>
-        <WhitePageWrapper>
-          <MyWrapper>
-            {!initLoadingData && pushCallouts != null && pushCallouts}
-            <EuiFlexGroup>
-              <EuiFlexItem grow={6}>
-                {initLoadingData && <EuiLoadingContent lines={8} />}
-                {!initLoadingData && (
-                  <>
-                    <UserActionTree
-                      caseUserActions={caseUserActions}
-                      connectors={connectors}
-                      data={caseData}
-                      fetchUserActions={fetchCaseUserActions.bind(null, caseData.id)}
-                      caseServices={caseServices}
-                      isLoadingDescription={isLoading && updateKey === 'description'}
-                      isLoadingUserActions={isLoadingUserActions}
-                      onUpdateField={onUpdateField}
-                      updateCase={updateCase}
-                      userCanCrud={userCanCrud}
-                    />
-                    <MyEuiHorizontalRule margin="s" />
-                    <EuiFlexGroup alignItems="center" gutterSize="s" justifyContent="flexEnd">
-                      <EuiFlexItem grow={false}>
-                        <EuiButtonToggle
-                          data-test-subj={caseStatusData['data-test-subj']}
-                          iconType={caseStatusData.icon}
-                          isDisabled={!userCanCrud}
-                          isSelected={caseStatusData.isSelected}
-                          isLoading={isLoading && updateKey === 'status'}
-                          label={caseStatusData.buttonLabel}
-                          onChange={toggleStatusCase}
-                        />
-                      </EuiFlexItem>
-                      {hasDataToPush && (
-                        <EuiFlexItem data-test-subj="has-data-to-push-button" grow={false}>
-                          {pushButton}
-                        </EuiFlexItem>
-                      )}
-                    </EuiFlexGroup>
-                  </>
-                )}
-              </EuiFlexItem>
-              <EuiFlexItem grow={2}>
-                <UserList
-                  data-test-subj="case-view-user-list-reporter"
-                  email={emailContent}
-                  headline={i18n.REPORTER}
-                  users={[caseData.createdBy]}
-                />
-                <UserList
-                  data-test-subj="case-view-user-list-participants"
-                  email={emailContent}
-                  headline={i18n.PARTICIPANTS}
-                  loading={isLoadingUserActions}
-                  users={participants}
-                />
-                <TagList
-                  data-test-subj="case-view-tag-list"
-                  disabled={!userCanCrud}
-                  tags={caseData.tags}
-                  onSubmit={onSubmitTags}
-                  isLoading={isLoading && updateKey === 'tags'}
-                />
-                <EditConnector
-                  isLoading={isLoadingConnectors}
-                  onSubmit={onSubmitConnector}
-                  connectors={connectors}
-                  selectedConnector={caseData.connectorId}
-                />
-              </EuiFlexItem>
-            </EuiFlexGroup>
-          </MyWrapper>
-        </WhitePageWrapper>
-        <SpyRoute state={spyState} pageName={SecurityPageName.case} />
-      </>
-    );
-  }
-);
-
-export const CaseView = React.memo(({ caseId, userCanCrud }: Props) => {
-  const { data, isLoading, isError, fetchCase, updateCase } = useGetCase(caseId);
-  if (isError) {
-    return null;
-  }
-  if (isLoading) {
-    return (
-      <MyEuiFlexGroup justifyContent="center" alignItems="center">
-        <EuiFlexItem grow={false}>
-          <EuiLoadingSpinner data-test-subj="case-view-loading" size="xl" />
-        </EuiFlexItem>
-      </MyEuiFlexGroup>
-    );
-  }
+const TimelineDetailsPanel = () => {
+  const { browserFields, docValueFields } = useSourcererScope(SourcererScopeName.detections);
 
   return (
-    <CaseComponent
-      caseId={caseId}
-      fetchCase={fetchCase}
-      caseData={data}
-      updateCase={updateCase}
-      userCanCrud={userCanCrud}
+    <DetailsPanel
+      browserFields={browserFields}
+      docValueFields={docValueFields}
+      isFlyoutView
+      timelineId={TimelineId.casePage}
     />
+  );
+};
+
+const InvestigateInTimelineActionComponent = (alertIds: string[]) => {
+  const EMPTY_ARRAY: TimelineNonEcsData[] = [];
+  const fetchEcsAlertsData = async (fetchAlertIds?: string[]): Promise<Ecs[]> => {
+    if (isEmpty(fetchAlertIds)) {
+      return [];
+    }
+    const alertResponse = await KibanaServices.get().http.fetch<
+      SearchResponse<{ '@timestamp': string; [key: string]: unknown }>
+    >(DETECTION_ENGINE_QUERY_SIGNALS_URL, {
+      method: 'POST',
+      body: JSON.stringify(buildAlertsQuery(fetchAlertIds ?? [])),
+    });
+    return (
+      alertResponse?.hits.hits.reduce<Ecs[]>(
+        (acc, { _id, _index, _source }) => [
+          ...acc,
+          {
+            ...formatAlertToEcsSignal(_source as {}),
+            _id,
+            _index,
+            timestamp: _source['@timestamp'],
+          },
+        ],
+        []
+      ) ?? []
+    );
+  };
+
+  return (
+    <InvestigateInTimelineAction
+      ariaLabel={SEND_ALERT_TO_TIMELINE}
+      alertIds={alertIds}
+      key="investigate-in-timeline"
+      ecsRowData={null}
+      fetchEcsAlertsData={fetchEcsAlertsData}
+      nonEcsRowData={EMPTY_ARRAY}
+    />
+  );
+};
+
+export const CaseView = React.memo(({ caseId, subCaseId, userCanCrud }: Props) => {
+  const [spyState, setSpyState] = useState<{ caseTitle: string | undefined }>({
+    caseTitle: undefined,
+  });
+
+  const onCaseDataSuccess = useCallback(
+    (data: Case) => {
+      if (spyState.caseTitle === undefined) {
+        setSpyState({ caseTitle: data.title });
+      }
+    },
+    [spyState.caseTitle]
+  );
+
+  const {
+    cases: casesUi,
+    application: { navigateToApp },
+  } = useKibana().services;
+  const history = useHistory();
+  const dispatch = useDispatch();
+  const { formatUrl, search } = useFormatUrl(SecurityPageName.case);
+  const { formatUrl: detectionsFormatUrl, search: detectionsUrlSearch } = useFormatUrl(
+    SecurityPageName.detections
+  );
+
+  const allCasesLink = getCaseUrl(search);
+  const formattedAllCasesLink = formatUrl(allCasesLink);
+  const backToAllCasesOnClick = useCallback(
+    (ev) => {
+      ev.preventDefault();
+      history.push(allCasesLink);
+    },
+    [allCasesLink, history]
+  );
+  const caseDetailsLink = formatUrl(getCaseDetailsUrl({ id: caseId }), { absolute: true });
+  const getCaseDetailHrefWithCommentId = (commentId: string) => {
+    return formatUrl(getCaseDetailsUrlWithCommentId({ id: caseId, commentId, subCaseId }), {
+      absolute: true,
+    });
+  };
+
+  const configureCasesHref = formatUrl(getConfigureCasesUrl());
+  const onConfigureCasesNavClick = useCallback(
+    (ev) => {
+      ev.preventDefault();
+      history.push(getConfigureCasesUrl(search));
+    },
+    [history, search]
+  );
+
+  const onDetectionsRuleDetailsClick = useCallback(
+    (ruleId: string | null | undefined) => {
+      navigateToApp(`${APP_ID}:${SecurityPageName.detections}`, {
+        path: getRuleDetailsUrl(ruleId ?? ''),
+      });
+    },
+    [navigateToApp]
+  );
+
+  const getDetectionsRuleDetailsHref = useCallback(
+    (ruleId) => {
+      return detectionsFormatUrl(getRuleDetailsUrl(ruleId ?? '', detectionsUrlSearch));
+    },
+    [detectionsFormatUrl, detectionsUrlSearch]
+  );
+
+  const showAlertDetails = useCallback(
+    (alertId: string, index: string) => {
+      dispatch(
+        timelineActions.toggleDetailPanel({
+          panelView: 'eventDetail',
+          timelineId: TimelineId.casePage,
+          params: {
+            eventId: alertId,
+            indexName: index,
+          },
+        })
+      );
+    },
+    [dispatch]
+  );
+
+  const onComponentInitialized = useCallback(() => {
+    dispatch(
+      timelineActions.createTimeline({
+        id: TimelineId.casePage,
+        columns: [],
+        indexNames: [],
+        expandedDetail: {},
+        show: false,
+      })
+    );
+  }, [dispatch]);
+  return (
+    <>
+      {casesUi.getCaseView({
+        allCasesNavigation: {
+          href: formattedAllCasesLink,
+          onClick: backToAllCasesOnClick,
+        },
+        caseDetailsNavigation: {
+          href: caseDetailsLink,
+          onClick: () => {
+            navigateToApp(`${APP_ID}:${SecurityPageName.case}`, {
+              path: getCaseDetailsUrl({ id: caseId }),
+            });
+          },
+        },
+        caseId,
+        configureCasesNavigation: {
+          href: configureCasesHref,
+          onClick: onConfigureCasesNavClick,
+        },
+        getCaseDetailHrefWithCommentId,
+        onCaseDataSuccess,
+        onComponentInitialized,
+        ruleDetailsNavigation: {
+          href: getDetectionsRuleDetailsHref,
+          onClick: onDetectionsRuleDetailsClick,
+        },
+        showAlertDetails,
+        subCaseId,
+        timelineIntegration: {
+          editor_plugins: {
+            parsingPlugin: timelineMarkdownPlugin.parser,
+            processingPluginRenderer: timelineMarkdownPlugin.renderer,
+            uiPlugin: timelineMarkdownPlugin.plugin,
+          },
+          hooks: {
+            useInsertTimeline,
+          },
+          ui: {
+            renderInvestigateInTimelineActionComponent: InvestigateInTimelineActionComponent,
+            renderTimelineDetailsPanel: TimelineDetailsPanel,
+          },
+        },
+        useFetchAlertData,
+        userCanCrud,
+      })}
+      <SpyRoute state={spyState} pageName={SecurityPageName.case} />
+    </>
   );
 });
 
-CaseComponent.displayName = 'CaseComponent';
 CaseView.displayName = 'CaseView';

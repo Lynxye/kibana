@@ -1,12 +1,13 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { cloneDeep } from 'lodash/fp';
 
-import { TimelineNonEcsData } from '../../../../../graphql/types';
+import { TimelineNonEcsData } from '../../../../../../common/search_strategy/timeline';
 import { mockTimelineData } from '../../../../../common/mock';
 import {
   deleteItemIdx,
@@ -192,7 +193,19 @@ describe('helpers', () => {
     });
 
     describe('valid values', () => {
-      const validValues = ['file_create_event', 'created', 'file_delete_event', 'deleted'];
+      const validValues = [
+        'created',
+        'creation',
+        'deleted',
+        'deletion',
+        'file_create_event',
+        'file_delete_event',
+        'files-encrypted',
+        'load',
+        'modification',
+        'overwrite',
+        'rename',
+      ];
 
       validValues.forEach((eventAction) => {
         test(`${eventAction} returns true`, () => {

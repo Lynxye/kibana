@@ -1,8 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import { CoreSetup, Plugin } from 'src/core/server';
 import { PluginSetupContract as FeaturesPluginSetupContract } from '../../../../../../../plugins/features/server';
 
@@ -14,11 +16,10 @@ interface SetupDeps {
 
 class FooPlugin implements Plugin {
   setup(core: CoreSetup, plugins: SetupDeps) {
-    plugins.features.registerFeature({
+    plugins.features.registerKibanaFeature({
       id: 'foo',
       name: 'Foo',
-      icon: 'upArrow',
-      navLinkId: 'foo_plugin',
+      category: { id: 'foo', label: 'foo' },
       app: ['foo_plugin', 'kibana'],
       catalogue: ['foo'],
       privileges: {

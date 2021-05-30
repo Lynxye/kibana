@@ -1,17 +1,19 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { networkTraffic } from '../../../../../common/inventory_models/shared/metrics/snapshot/network_traffic';
 import { MetricExpressionParams, Aggregators } from '../types';
 import { getIntervalInSeconds } from '../../../../utils/get_interval_in_seconds';
 import { roundTimestamp } from '../../../../utils/round_timestamp';
-import { getDateHistogramOffset } from '../../../snapshot/query_helpers';
 import { createPercentileAggregation } from './create_percentile_aggregation';
+import { calculateDateHistogramOffset } from '../../../metrics/lib/calculate_date_histogram_offset';
 
 const MINIMUM_BUCKETS = 5;
+const COMPOSITE_RESULTS_PER_PAGE = 100;
 
 const getParsedFilterQuery: (filterQuery: string | undefined) => Record<string, any> | null = (
   filterQuery
@@ -35,18 +37,20 @@ export const getElasticsearchMetricQuery = (
   }
   const interval = `${timeSize}${timeUnit}`;
   const intervalAsSeconds = getIntervalInSeconds(interval);
+  const intervalAsMS = intervalAsSeconds * 1000;
 
   const to = roundTimestamp(timeframe ? timeframe.end : Date.now(), timeUnit);
   // We need enough data for 5 buckets worth of data. We also need
   // to convert the intervalAsSeconds to milliseconds.
-  const minimumFrom = to - intervalAsSeconds * 1000 * MINIMUM_BUCKETS;
+  const minimumFrom = to - intervalAsMS * MINIMUM_BUCKETS;
 
   const from = roundTimestamp(
     timeframe && timeframe.start <= minimumFrom ? timeframe.start : minimumFrom,
     timeUnit
   );
 
-  const offset = getDateHistogramOffset(from, interval);
+  const offset = calculateDateHistogramOffset({ from, to, interval, field: timefield });
+  const offsetInMS = parseInt(offset, 10) * 1000;
 
   const aggregations =
     aggType === Aggregators.COUNT
@@ -63,26 +67,40 @@ export const getElasticsearchMetricQuery = (
           },
         };
 
-  const baseAggs = {
-    aggregatedIntervals: {
-      date_histogram: {
-        field: timefield,
-        fixed_interval: interval,
-        offset,
-        extended_bounds: {
-          min: from,
-          max: to,
-        },
-      },
-      aggregations,
-    },
-  };
+  const baseAggs =
+    aggType === Aggregators.RATE
+      ? {
+          aggregatedIntervals: {
+            date_histogram: {
+              field: timefield,
+              fixed_interval: interval,
+              offset,
+              extended_bounds: {
+                min: from,
+                max: to,
+              },
+            },
+            aggregations,
+          },
+        }
+      : {
+          aggregatedIntervals: {
+            date_range: {
+              field: timefield,
+              ranges: Array.from(Array(Math.floor((to - from) / intervalAsMS)), (_, i) => ({
+                from: from + intervalAsMS * i + offsetInMS,
+                to: from + intervalAsMS * (i + 1) + offsetInMS,
+              })),
+            },
+            aggregations,
+          },
+        };
 
   const aggs = groupBy
     ? {
         groupings: {
           composite: {
-            size: 10,
+            size: COMPOSITE_RESULTS_PER_PAGE,
             sources: Array.isArray(groupBy)
               ? groupBy.map((field, index) => ({
                   [`groupBy${index}`]: {

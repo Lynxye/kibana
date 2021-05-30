@@ -6,7 +6,6 @@ Object {
     "events": Array [
       "error",
       "metric",
-      "sourcemap",
       "transaction",
     ],
   },
@@ -32,6 +31,15 @@ Object {
             "range": Object {
               "observer.version_major": Object {
                 "lt": 7,
+              },
+            },
+          },
+          Object {
+            "range": Object {
+              "@timestamp": Object {
+                "format": "epoch_millis",
+                "gte": 1528113600000,
+                "lte": 1528977600000,
               },
             },
           },
@@ -100,9 +108,69 @@ Array [
       "aggs": Object {
         "services": Object {
           "aggs": Object {
-            "average": Object {
-              "avg": Object {
-                "field": "transaction.duration.us",
+            "transactionType": Object {
+              "aggs": Object {
+                "avg_duration": Object {
+                  "avg": Object {
+                    "field": "transaction.duration.us",
+                  },
+                },
+                "environments": Object {
+                  "terms": Object {
+                    "field": "service.environment",
+                  },
+                },
+                "outcomes": Object {
+                  "terms": Object {
+                    "field": "event.outcome",
+                    "include": Array [
+                      "failure",
+                      "success",
+                    ],
+                  },
+                },
+                "sample": Object {
+                  "top_metrics": Object {
+                    "metrics": Array [
+                      Object {
+                        "field": "agent.name",
+                      },
+                    ],
+                    "sort": Object {
+                      "@timestamp": "desc",
+                    },
+                  },
+                },
+                "timeseries": Object {
+                  "aggs": Object {
+                    "avg_duration": Object {
+                      "avg": Object {
+                        "field": "transaction.duration.us",
+                      },
+                    },
+                    "outcomes": Object {
+                      "terms": Object {
+                        "field": "event.outcome",
+                        "include": Array [
+                          "failure",
+                          "success",
+                        ],
+                      },
+                    },
+                  },
+                  "date_histogram": Object {
+                    "extended_bounds": Object {
+                      "max": 1528977600000,
+                      "min": 1528113600000,
+                    },
+                    "field": "@timestamp",
+                    "fixed_interval": "43200s",
+                    "min_doc_count": 0,
+                  },
+                },
+              },
+              "terms": Object {
+                "field": "transaction.type",
               },
             },
           },
@@ -122,11 +190,6 @@ Array [
                   "gte": 1528113600000,
                   "lte": 1528977600000,
                 },
-              },
-            },
-            Object {
-              "term": Object {
-                "my.custom.ui.filter": "foo-bar",
               },
             },
           ],
@@ -139,134 +202,6 @@ Array [
     "apm": Object {
       "events": Array [
         "metric",
-        "error",
-        "transaction",
-      ],
-    },
-    "body": Object {
-      "aggs": Object {
-        "services": Object {
-          "aggs": Object {
-            "agent_name": Object {
-              "top_hits": Object {
-                "_source": Array [
-                  "agent.name",
-                ],
-                "size": 1,
-              },
-            },
-          },
-          "terms": Object {
-            "field": "service.name",
-            "size": 500,
-          },
-        },
-      },
-      "query": Object {
-        "bool": Object {
-          "filter": Array [
-            Object {
-              "range": Object {
-                "@timestamp": Object {
-                  "format": "epoch_millis",
-                  "gte": 1528113600000,
-                  "lte": 1528977600000,
-                },
-              },
-            },
-            Object {
-              "term": Object {
-                "my.custom.ui.filter": "foo-bar",
-              },
-            },
-          ],
-        },
-      },
-      "size": 0,
-    },
-  },
-  Object {
-    "apm": Object {
-      "events": Array [
-        "transaction",
-      ],
-    },
-    "body": Object {
-      "aggs": Object {
-        "services": Object {
-          "terms": Object {
-            "field": "service.name",
-            "size": 500,
-          },
-        },
-      },
-      "query": Object {
-        "bool": Object {
-          "filter": Array [
-            Object {
-              "range": Object {
-                "@timestamp": Object {
-                  "format": "epoch_millis",
-                  "gte": 1528113600000,
-                  "lte": 1528977600000,
-                },
-              },
-            },
-            Object {
-              "term": Object {
-                "my.custom.ui.filter": "foo-bar",
-              },
-            },
-          ],
-        },
-      },
-      "size": 0,
-    },
-  },
-  Object {
-    "apm": Object {
-      "events": Array [
-        "error",
-      ],
-    },
-    "body": Object {
-      "aggs": Object {
-        "services": Object {
-          "terms": Object {
-            "field": "service.name",
-            "size": 500,
-          },
-        },
-      },
-      "query": Object {
-        "bool": Object {
-          "filter": Array [
-            Object {
-              "range": Object {
-                "@timestamp": Object {
-                  "format": "epoch_millis",
-                  "gte": 1528113600000,
-                  "lte": 1528977600000,
-                },
-              },
-            },
-            Object {
-              "term": Object {
-                "my.custom.ui.filter": "foo-bar",
-              },
-            },
-          ],
-        },
-      },
-      "size": 0,
-    },
-  },
-  Object {
-    "apm": Object {
-      "events": Array [
-        "metric",
-        "transaction",
-        "error",
       ],
     },
     "body": Object {
@@ -278,6 +213,18 @@ Array [
                 "field": "service.environment",
               },
             },
+            "latest": Object {
+              "top_metrics": Object {
+                "metrics": Array [
+                  Object {
+                    "field": "agent.name",
+                  },
+                ],
+                "sort": Object {
+                  "@timestamp": "desc",
+                },
+              },
+            },
           },
           "terms": Object {
             "field": "service.name",
@@ -295,11 +242,6 @@ Array [
                   "gte": 1528113600000,
                   "lte": 1528977600000,
                 },
-              },
-            },
-            Object {
-              "term": Object {
-                "my.custom.ui.filter": "foo-bar",
               },
             },
           ],

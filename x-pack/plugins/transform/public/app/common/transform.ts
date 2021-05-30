@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { useEffect } from 'react';
@@ -9,53 +10,14 @@ import { BehaviorSubject } from 'rxjs';
 import { filter, distinctUntilChanged } from 'rxjs/operators';
 import { Subscription } from 'rxjs';
 
-import { TransformId } from '../../../common';
+import { TransformId } from '../../../common/types/transform';
 
-import { PivotAggDict } from './pivot_aggs';
-import { PivotGroupByDict } from './pivot_group_by';
-
-export type IndexName = string;
-export type IndexPattern = string;
-
-// Transform name must contain lowercase alphanumeric (a-z and 0-9), hyphens or underscores;
-// It must also start and end with an alphanumeric character.
+// Via https://github.com/elastic/elasticsearch/blob/master/x-pack/plugin/core/src/main/java/org/elasticsearch/xpack/core/transform/utils/TransformStrings.java#L24
+// Matches a string that contains lowercase characters, digits, hyphens, underscores or dots.
+// The string may start and end only in characters or digits.
+// Note that '.' is allowed but not documented.
 export function isTransformIdValid(transformId: TransformId) {
-  return /^[a-z0-9\-\_]+$/g.test(transformId) && !/^([_-].*)?(.*[_-])?$/g.test(transformId);
-}
-
-export interface PreviewRequestBody {
-  pivot: {
-    group_by: PivotGroupByDict;
-    aggregations: PivotAggDict;
-  };
-  source: {
-    index: IndexPattern | IndexPattern[];
-    query?: any;
-  };
-}
-
-export interface CreateRequestBody extends PreviewRequestBody {
-  description?: string;
-  dest: {
-    index: IndexName;
-  };
-  frequency?: string;
-  settings?: {
-    max_page_search_size?: number;
-    docs_per_second?: number;
-  };
-  sync?: {
-    time: {
-      field: string;
-      delay: string;
-    };
-  };
-}
-
-export interface TransformPivotConfig extends CreateRequestBody {
-  id: TransformId;
-  create_time?: number;
-  version?: string;
+  return /^[a-z0-9](?:[a-z0-9_\-\.]*[a-z0-9])?$/g.test(transformId);
 }
 
 export enum REFRESH_TRANSFORM_LIST_STATE {

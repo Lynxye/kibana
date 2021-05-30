@@ -1,24 +1,26 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
+import { ILicense } from '../../../../../licensing/common/types';
 import {
   AppLocation,
   Immutable,
-  MalwareFields,
+  ProtectionFields,
   PolicyData,
   UIPolicyConfig,
 } from '../../../../common/endpoint/types';
 import { ServerApiError } from '../../../common/types';
 import {
   GetAgentStatusResponse,
-  GetOnePackageConfigResponse,
-  GetPackageConfigsResponse,
+  GetOnePackagePolicyResponse,
+  GetPackagePoliciesResponse,
   GetPackagesResponse,
-  UpdatePackageConfigResponse,
-} from '../../../../../ingest_manager/common';
+  UpdatePackagePolicyResponse,
+} from '../../../../../fleet/common';
 
 /**
  * Policy list store state
@@ -44,7 +46,7 @@ export interface PolicyListState {
   isDeleting: boolean;
   /** Deletion status */
   deleteStatus?: boolean;
-  /** A summary of stats for the agents associated with a given Fleet Agent Configuration */
+  /** A summary of stats for the agents associated with a given Fleet Agent Policy */
   agentStatusSummary?: GetAgentStatusResponse['results'];
 }
 
@@ -59,13 +61,15 @@ export interface PolicyDetailsState {
   isLoading: boolean;
   /** current location of the application */
   location?: Immutable<AppLocation>;
-  /** A summary of stats for the agents associated with a given Fleet Agent Configuration */
-  agentStatusSummary?: GetAgentStatusResponse['results'];
+  /** A summary of stats for the agents associated with a given Fleet Agent Policy */
+  agentStatusSummary?: Omit<GetAgentStatusResponse['results'], 'updating'>;
   /** Status of an update to the policy  */
   updateStatus?: {
     success: boolean;
     error?: ServerApiError;
   };
+  /** current license */
+  license?: ILicense;
 }
 
 /**
@@ -74,68 +78,6 @@ export interface PolicyDetailsState {
 export interface PolicyListUrlSearchParams {
   page_index: number;
   page_size: number;
-}
-
-/**
- * Endpoint Policy configuration
- */
-export interface PolicyConfig {
-  windows: {
-    events: {
-      dll_and_driver_load: boolean;
-      dns: boolean;
-      file: boolean;
-      network: boolean;
-      process: boolean;
-      registry: boolean;
-      security: boolean;
-    };
-    malware: MalwareFields;
-    logging: {
-      stdout: string;
-      file: string;
-    };
-    advanced: PolicyConfigAdvancedOptions;
-  };
-  mac: {
-    events: {
-      file: boolean;
-      process: boolean;
-      network: boolean;
-    };
-    malware: MalwareFields;
-    logging: {
-      stdout: string;
-      file: string;
-    };
-    advanced: PolicyConfigAdvancedOptions;
-  };
-  linux: {
-    events: {
-      file: boolean;
-      process: boolean;
-      network: boolean;
-    };
-    logging: {
-      stdout: string;
-      file: string;
-    };
-    advanced: PolicyConfigAdvancedOptions;
-  };
-}
-
-interface PolicyConfigAdvancedOptions {
-  elasticsearch: {
-    indices: {
-      control: string;
-      event: string;
-      logging: string;
-    };
-    kernel: {
-      connect: boolean;
-      process: boolean;
-    };
-  };
 }
 
 export enum OS {
@@ -167,16 +109,34 @@ export type KeysByValueCriteria<O, Criteria> = {
 }[keyof O];
 
 /** Returns an array of the policy OSes that have a malware protection field */
-export type MalwareProtectionOSes = KeysByValueCriteria<UIPolicyConfig, { malware: MalwareFields }>;
+export type MalwareProtectionOSes = KeysByValueCriteria<
+  UIPolicyConfig,
+  { malware: ProtectionFields }
+>;
 
-export interface GetPolicyListResponse extends GetPackageConfigsResponse {
+/** Returns an array of the policy OSes that have a ransomware protection field */
+export type RansomwareProtectionOSes = KeysByValueCriteria<
+  UIPolicyConfig,
+  { ransomware: ProtectionFields }
+>;
+
+export type PolicyProtection =
+  | keyof Pick<UIPolicyConfig['windows'], 'malware' | 'ransomware'>
+  | keyof Pick<UIPolicyConfig['mac'], 'malware'>
+  | keyof Pick<UIPolicyConfig['linux'], 'malware'>;
+
+export type MacPolicyProtection = keyof Pick<UIPolicyConfig['mac'], 'malware'>;
+
+export type LinuxPolicyProtection = keyof Pick<UIPolicyConfig['linux'], 'malware'>;
+
+export interface GetPolicyListResponse extends GetPackagePoliciesResponse {
   items: PolicyData[];
 }
 
-export interface GetPolicyResponse extends GetOnePackageConfigResponse {
+export interface GetPolicyResponse extends GetOnePackagePolicyResponse {
   item: PolicyData;
 }
 
-export interface UpdatePolicyResponse extends UpdatePackageConfigResponse {
+export interface UpdatePolicyResponse extends UpdatePackagePolicyResponse {
   item: PolicyData;
 }

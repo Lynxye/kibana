@@ -1,21 +1,30 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
+import { transformError } from '@kbn/securitysolution-es-utils';
 import { buildRouteValidation } from '../../../../utils/build_validation/route_validation';
-import { IRouter } from '../../../../../../../../src/core/server';
+import type { SecuritySolutionPluginRouter } from '../../../../types';
 import { DETECTION_ENGINE_RULES_URL } from '../../../../../common/constants';
-import { RuleStatusResponse, IRuleStatusAttributes } from '../../rules/types';
-import { transformError, convertToSnakeCase, buildSiemResponse } from '../utils';
+import { buildSiemResponse, mergeStatuses, getFailingRules } from '../utils';
 import { ruleStatusSavedObjectsClientFactory } from '../../signals/rule_status_saved_objects_client';
 import {
   findRulesStatusesSchema,
   FindRulesStatusesSchemaDecoded,
 } from '../../../../../common/detection_engine/schemas/request/find_rule_statuses_schema';
+import { mergeAlertWithSidecarStatus } from '../../schemas/rule_converters';
 
-export const findRulesStatusesRoute = (router: IRouter) => {
+/**
+ * Given a list of rule ids, return the current status and
+ * last five errors for each associated rule.
+ *
+ * @param router
+ * @returns RuleStatusResponse
+ */
+export const findRulesStatusesRoute = (router: SecuritySolutionPluginRouter) => {
   router.post(
     {
       path: `${DETECTION_ENGINE_RULES_URL}/_find_statuses`,
@@ -38,45 +47,30 @@ export const findRulesStatusesRoute = (router: IRouter) => {
         return siemResponse.error({ statusCode: 404 });
       }
 
-      // build return object with ids as keys and errors as values.
-      /* looks like this
-        {
-            "someAlertId": [{"myerrorobject": "some error value"}, etc..],
-            "anotherAlertId": ...
-        }
-    */
+      const ids = body.ids;
       try {
         const ruleStatusClient = ruleStatusSavedObjectsClientFactory(savedObjectsClient);
-        const statuses = await body.ids.reduce<Promise<RuleStatusResponse | {}>>(
-          async (acc, id) => {
-            const lastFiveErrorsForId = await ruleStatusClient.find({
-              perPage: 6,
-              sortField: 'statusDate',
-              sortOrder: 'desc',
-              search: id,
-              searchFields: ['alertId'],
-            });
-            const accumulated = await acc;
+        const [statusesById, failingRules] = await Promise.all([
+          ruleStatusClient.findBulk(ids, 6),
+          getFailingRules(ids, alertsClient),
+        ]);
 
-            // Array accessors can result in undefined but
-            // this is not represented in typescript for some reason,
-            // https://github.com/Microsoft/TypeScript/issues/11122
-            const currentStatus = convertToSnakeCase<IRuleStatusAttributes>(
-              lastFiveErrorsForId.saved_objects[0]?.attributes
-            );
-            const failures = lastFiveErrorsForId.saved_objects
-              .slice(1)
-              .map((errorItem) => convertToSnakeCase<IRuleStatusAttributes>(errorItem.attributes));
-            return {
-              ...accumulated,
-              [id]: {
-                current_status: currentStatus,
-                failures,
-              },
-            };
-          },
-          Promise.resolve<RuleStatusResponse>({})
-        );
+        const statuses = ids.reduce((acc, id) => {
+          const lastFiveErrorsForId = statusesById[id];
+
+          if (lastFiveErrorsForId == null || lastFiveErrorsForId.length === 0) {
+            return acc;
+          }
+
+          const failingRule = failingRules[id];
+
+          if (failingRule != null) {
+            const currentStatus = mergeAlertWithSidecarStatus(failingRule, lastFiveErrorsForId[0]);
+            const updatedLastFiveErrorsSO = [currentStatus, ...lastFiveErrorsForId.slice(1)];
+            return mergeStatuses(id, updatedLastFiveErrorsSO, acc);
+          }
+          return mergeStatuses(id, [...lastFiveErrorsForId], acc);
+        }, {});
         return response.ok({ body: statuses });
       } catch (err) {
         const error = transformError(err);

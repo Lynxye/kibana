@@ -1,13 +1,14 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import expect from '@kbn/expect';
+import type { KibanaClient } from '@elastic/elasticsearch/api/kibana';
 import { SavedObjectsErrorHelpers } from '../../../../../src/core/server';
-import { SAVED_OBJECT_TEST_CASES as CASES } from './saved_object_test_cases';
-import { SPACES } from './spaces';
+import { SPACES, ALL_SPACES_ID } from './spaces';
 import { AUTHENTICATION } from './authentication';
 import { TestCase, TestUser, ExpectResponseBody } from './types';
 
@@ -73,6 +74,31 @@ export const getTestTitle = (
   return `${list.join(' and ')}`;
 };
 
+export const isUserAuthorizedAtSpace = (user: TestUser | undefined, namespace: string) =>
+  !user ||
+  (user.authorizedAtSpaces.length > 0 && namespace === ALL_SPACES_ID) ||
+  user.authorizedAtSpaces.includes('*') ||
+  user.authorizedAtSpaces.includes(namespace);
+
+export const getRedactedNamespaces = (
+  user: TestUser | undefined,
+  namespaces: string[] | undefined
+) => namespaces?.map((x) => (isUserAuthorizedAtSpace(user, x) ? x : '?')).sort(namespaceComparator);
+function namespaceComparator(a: string, b: string) {
+  // namespaces get sorted so that they're all in alphabetical order, and unknown ones appear at the end
+  // this is to prevent information disclosure
+  if (a === '?' && b !== '?') {
+    return 1;
+  } else if (b === '?' && a !== '?') {
+    return -1;
+  } else if (a > b) {
+    return 1;
+  } else if (a < b) {
+    return -1;
+  }
+  return 0;
+}
+
 export const testCaseFailures = {
   // test suites need explicit return types for number primitives
   fail400: (condition?: boolean): { failure?: 400 } =>
@@ -90,7 +116,7 @@ export const createRequest = ({ type, id }: TestCase) => ({ type, id });
 
 const uniq = <T>(arr: T[]): T[] => Array.from(new Set<T>(arr));
 const isNamespaceAgnostic = (type: string) => type === 'globaltype';
-const isMultiNamespace = (type: string) => type === 'sharedtype';
+const isMultiNamespace = (type: string) => type === 'sharedtype' || type === 'sharecapabletype';
 export const expectResponses = {
   forbiddenTypes: (action: string) => (
     typeOrTypes: string | string[]
@@ -150,35 +176,17 @@ export const expectResponses = {
     }
   },
   /**
-   * Additional assertions that we use in `bulk_create` and `create` to ensure that
+   * Additional assertions that we use in `import` and `resolve_import_errors` to ensure that
    * newly-created (or overwritten) objects don't have unexpected properties
    */
-  successCreated: async (es: any, spaceId: string, type: string, id: string) => {
+  successCreated: async (es: KibanaClient, spaceId: string, type: string, id: string) => {
     const isNamespaceUndefined =
       spaceId === SPACES.DEFAULT.spaceId || isNamespaceAgnostic(type) || isMultiNamespace(type);
     const expectedSpacePrefix = isNamespaceUndefined ? '' : `${spaceId}:`;
-    const savedObject = await es.get({
+    const { body: savedObject } = await es.get<Record<string, any>>({
       id: `${expectedSpacePrefix}${type}:${id}`,
       index: '.kibana',
     });
-    const { namespace: actualNamespace, namespaces: actualNamespaces } = savedObject._source;
-    if (isNamespaceUndefined) {
-      expect(actualNamespace).to.eql(undefined);
-    } else {
-      expect(actualNamespace).to.eql(spaceId);
-    }
-    if (isMultiNamespace(type)) {
-      if (id === CASES.MULTI_NAMESPACE_DEFAULT_AND_SPACE_1.id) {
-        expect(actualNamespaces).to.eql([DEFAULT_SPACE_ID, SPACE_1_ID]);
-      } else if (id === CASES.MULTI_NAMESPACE_ONLY_SPACE_1.id) {
-        expect(actualNamespaces).to.eql([SPACE_1_ID]);
-      } else if (id === CASES.MULTI_NAMESPACE_ONLY_SPACE_2.id) {
-        expect(actualNamespaces).to.eql([SPACE_2_ID]);
-      } else {
-        // newly created in this space
-        expect(actualNamespaces).to.eql([spaceId]);
-      }
-    }
     return savedObject;
   },
 };
@@ -326,7 +334,7 @@ export const getTestScenarios = <T>(modifiers?: T[]) => {
     },
   ];
   if (modifiers) {
-    const addModifier = <T>(list: T[]) =>
+    const addModifier = <U>(list: U[]) =>
       list.map((x) => modifiers.map((modifier) => ({ ...x, modifier }))).flat();
     spaces = addModifier(spaces);
     security = addModifier(security);

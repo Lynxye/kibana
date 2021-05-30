@@ -1,60 +1,62 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import React, { useMemo } from 'react';
+import React from 'react';
 import ReactDOM from 'react-dom';
+import { cloneDeep } from 'lodash';
 import { i18n } from '@kbn/i18n';
 import { I18nProvider } from '@kbn/i18n/react';
-import { EuiBasicTable, EuiFlexGroup, EuiButtonIcon, EuiFlexItem, EuiToolTip } from '@elastic/eui';
-import { IAggType } from 'src/plugins/data/public';
+
+import type { IAggType } from 'src/plugins/data/public';
 import {
-  FormatFactory,
-  ILensInterpreterRenderHandlers,
-  LensFilterEvent,
-  LensMultiTable,
-} from '../types';
-import {
+  DatatableColumnMeta,
   ExpressionFunctionDefinition,
   ExpressionRenderDefinition,
-} from '../../../../../src/plugins/expressions/public';
-import { VisualizationContainer } from '../visualization_container';
-import { EmptyPlaceholder } from '../shared_components';
-import { desanitizeFilterContext } from '../utils';
-export interface DatatableColumns {
-  columnIds: string[];
-}
+} from 'src/plugins/expressions';
+import { CustomPaletteState, PaletteOutput } from 'src/plugins/charts/common';
+import { PaletteRegistry } from 'src/plugins/charts/public';
+import { IUiSettingsClient } from 'kibana/public';
+import { getSortingCriteria } from './sorting';
 
-interface Args {
+import { DatatableComponent } from './components/table_basic';
+import { ColumnState } from './visualization';
+
+import type { FormatFactory, ILensInterpreterRenderHandlers, LensMultiTable } from '../types';
+import type { DatatableRender } from './components/types';
+import { transposeTable } from './transpose_helpers';
+
+export type ColumnConfigArg = Omit<ColumnState, 'palette'> & {
+  type: 'lens_datatable_column';
+  palette?: PaletteOutput<CustomPaletteState>;
+};
+
+export interface Args {
   title: string;
-  columns: DatatableColumns & { type: 'lens_datatable_columns' };
+  description?: string;
+  columns: ColumnConfigArg[];
+  sortingColumnId: string | undefined;
+  sortingDirection: 'asc' | 'desc' | 'none';
 }
 
 export interface DatatableProps {
   data: LensMultiTable;
+  untransposedData?: LensMultiTable;
   args: Args;
 }
 
-type DatatableRenderProps = DatatableProps & {
-  formatFactory: FormatFactory;
-  onClickValue: (data: LensFilterEvent['data']) => void;
-  getType: (name: string) => IAggType;
-};
-
-export interface DatatableRender {
-  type: 'render';
-  as: 'lens_datatable_renderer';
-  value: DatatableProps;
+function isRange(meta: { params?: { id?: string } } | undefined) {
+  return meta?.params?.id === 'range';
 }
 
-export const datatable: ExpressionFunctionDefinition<
-  'lens_datatable',
-  LensMultiTable,
-  Args,
-  DatatableRender
-> = {
+export const getDatatable = ({
+  formatFactory,
+}: {
+  formatFactory: FormatFactory;
+}): ExpressionFunctionDefinition<'lens_datatable', LensMultiTable, Args, DatatableRender> => ({
   name: 'lens_datatable',
   type: 'render',
   inputTypes: ['lens_multitable'],
@@ -68,54 +70,123 @@ export const datatable: ExpressionFunctionDefinition<
         defaultMessage: 'Title',
       }),
     },
+    description: {
+      types: ['string'],
+      help: '',
+    },
     columns: {
-      types: ['lens_datatable_columns'],
+      types: ['lens_datatable_column'],
+      help: '',
+      multi: true,
+    },
+    sortingColumnId: {
+      types: ['string'],
+      help: '',
+    },
+    sortingDirection: {
+      types: ['string'],
       help: '',
     },
   },
-  fn(data, args) {
+  fn(data, args, context) {
+    let untransposedData: LensMultiTable | undefined;
+    // do the sorting at this level to propagate it also at CSV download
+    const [firstTable] = Object.values(data.tables);
+    const [layerId] = Object.keys(context.inspectorAdapters.tables || {});
+    const formatters: Record<string, ReturnType<FormatFactory>> = {};
+
+    firstTable.columns.forEach((column) => {
+      formatters[column.id] = formatFactory(column.meta?.params);
+    });
+
+    const hasTransposedColumns = args.columns.some((c) => c.isTransposed);
+    if (hasTransposedColumns) {
+      // store original shape of data separately
+      untransposedData = cloneDeep(data);
+      // transposes table and args inplace
+      transposeTable(args, firstTable, formatters);
+    }
+
+    const { sortingColumnId: sortBy, sortingDirection: sortDirection } = args;
+
+    const columnsReverseLookup = firstTable.columns.reduce<
+      Record<string, { name: string; index: number; meta?: DatatableColumnMeta }>
+    >((memo, { id, name, meta }, i) => {
+      memo[id] = { name, index: i, meta };
+      return memo;
+    }, {});
+
+    if (sortBy && columnsReverseLookup[sortBy] && sortDirection !== 'none') {
+      // Sort on raw values for these types, while use the formatted value for the rest
+      const sortingCriteria = getSortingCriteria(
+        isRange(columnsReverseLookup[sortBy]?.meta)
+          ? 'range'
+          : columnsReverseLookup[sortBy]?.meta?.type,
+        sortBy,
+        formatters[sortBy],
+        sortDirection
+      );
+      // replace the table here
+      context.inspectorAdapters.tables[layerId].rows = (firstTable.rows || [])
+        .slice()
+        .sort(sortingCriteria);
+      // replace also the local copy
+      firstTable.rows = context.inspectorAdapters.tables[layerId].rows;
+    } else {
+      args.sortingColumnId = undefined;
+      args.sortingDirection = 'none';
+    }
     return {
       type: 'render',
       as: 'lens_datatable_renderer',
       value: {
         data,
+        untransposedData,
         args,
       },
     };
   },
-};
+});
 
-type DatatableColumnsResult = DatatableColumns & { type: 'lens_datatable_columns' };
+type DatatableColumnResult = ColumnState & { type: 'lens_datatable_column' };
 
-export const datatableColumns: ExpressionFunctionDefinition<
-  'lens_datatable_columns',
+export const datatableColumn: ExpressionFunctionDefinition<
+  'lens_datatable_column',
   null,
-  DatatableColumns,
-  DatatableColumnsResult
+  ColumnState,
+  DatatableColumnResult
 > = {
-  name: 'lens_datatable_columns',
+  name: 'lens_datatable_column',
   aliases: [],
-  type: 'lens_datatable_columns',
+  type: 'lens_datatable_column',
   help: '',
   inputTypes: ['null'],
   args: {
-    columnIds: {
-      types: ['string'],
-      multi: true,
+    columnId: { types: ['string'], help: '' },
+    alignment: { types: ['string'], help: '' },
+    hidden: { types: ['boolean'], help: '' },
+    width: { types: ['number'], help: '' },
+    isTransposed: { types: ['boolean'], help: '' },
+    transposable: { types: ['boolean'], help: '' },
+    colorMode: { types: ['string'], help: '' },
+    palette: {
+      types: ['palette'],
       help: '',
     },
   },
-  fn: function fn(input: unknown, args: DatatableColumns) {
+  fn: function fn(input: unknown, args: ColumnState) {
     return {
-      type: 'lens_datatable_columns',
+      type: 'lens_datatable_column',
       ...args,
     };
   },
 };
 
 export const getDatatableRenderer = (dependencies: {
-  formatFactory: Promise<FormatFactory>;
+  formatFactory: FormatFactory;
   getType: Promise<(name: string) => IAggType>;
+  paletteService: PaletteRegistry;
+  uiSettings: IUiSettingsClient;
 }): ExpressionRenderDefinition<DatatableProps> => ({
   name: 'lens_datatable_renderer',
   displayName: i18n.translate('xpack.lens.datatable.visualizationName', {
@@ -129,18 +200,47 @@ export const getDatatableRenderer = (dependencies: {
     config: DatatableProps,
     handlers: ILensInterpreterRenderHandlers
   ) => {
-    const resolvedFormatFactory = await dependencies.formatFactory;
     const resolvedGetType = await dependencies.getType;
-    const onClickValue = (data: LensFilterEvent['data']) => {
-      handlers.event({ name: 'filter', data });
-    };
+    const { hasCompatibleActions } = handlers;
+
+    // An entry for each table row, whether it has any actions attached to
+    // ROW_CLICK_TRIGGER trigger.
+    let rowHasRowClickTriggerActions: boolean[] = [];
+    if (hasCompatibleActions) {
+      const table = Object.values(config.data.tables)[0];
+      if (!!table) {
+        rowHasRowClickTriggerActions = await Promise.all(
+          table.rows.map(async (row, rowIndex) => {
+            try {
+              const hasActions = await hasCompatibleActions({
+                name: 'tableRowContextMenuClick',
+                data: {
+                  rowIndex,
+                  table,
+                  columns: config.args.columns.map((column) => column.columnId),
+                },
+              });
+
+              return hasActions;
+            } catch {
+              return false;
+            }
+          })
+        );
+      }
+    }
+
     ReactDOM.render(
       <I18nProvider>
         <DatatableComponent
           {...config}
-          formatFactory={resolvedFormatFactory}
-          onClickValue={onClickValue}
+          formatFactory={dependencies.formatFactory}
+          dispatchEvent={handlers.event}
+          renderMode={handlers.getRenderMode()}
+          paletteService={dependencies.paletteService}
           getType={resolvedGetType}
+          rowHasRowClickTriggerActions={rowHasRowClickTriggerActions}
+          uiSettings={dependencies.uiSettings}
         />
       </I18nProvider>,
       domNode,
@@ -151,148 +251,3 @@ export const getDatatableRenderer = (dependencies: {
     handlers.onDestroy(() => ReactDOM.unmountComponentAtNode(domNode));
   },
 });
-
-export function DatatableComponent(props: DatatableRenderProps) {
-  const [firstTable] = Object.values(props.data.tables);
-  const formatters: Record<string, ReturnType<FormatFactory>> = {};
-
-  firstTable.columns.forEach((column) => {
-    formatters[column.id] = props.formatFactory(column.formatHint);
-  });
-
-  const { onClickValue } = props;
-  const handleFilterClick = useMemo(
-    () => (field: string, value: unknown, colIndex: number, negate: boolean = false) => {
-      const col = firstTable.columns[colIndex];
-      const isDateHistogram = col.meta?.type === 'date_histogram';
-      const timeFieldName =
-        negate && isDateHistogram ? undefined : col?.meta?.aggConfigParams?.field;
-      const rowIndex = firstTable.rows.findIndex((row) => row[field] === value);
-
-      const data: LensFilterEvent['data'] = {
-        negate,
-        data: [
-          {
-            row: rowIndex,
-            column: colIndex,
-            value,
-            table: firstTable,
-          },
-        ],
-        timeFieldName,
-      };
-      onClickValue(desanitizeFilterContext(data));
-    },
-    [firstTable, onClickValue]
-  );
-
-  const bucketColumns = firstTable.columns
-    .filter((col) => {
-      return col?.meta?.type && props.getType(col.meta.type)?.type === 'buckets';
-    })
-    .map((col) => col.id);
-
-  const isEmpty =
-    firstTable.rows.length === 0 ||
-    (bucketColumns.length &&
-      firstTable.rows.every((row) =>
-        bucketColumns.every((col) => typeof row[col] === 'undefined')
-      ));
-
-  if (isEmpty) {
-    return <EmptyPlaceholder icon="visTable" />;
-  }
-
-  return (
-    <VisualizationContainer>
-      <EuiBasicTable
-        className="lnsDataTable"
-        data-test-subj="lnsDataTable"
-        tableLayout="auto"
-        columns={props.args.columns.columnIds
-          .map((field) => {
-            const col = firstTable.columns.find((c) => c.id === field);
-            const filterable = bucketColumns.includes(field);
-            const colIndex = firstTable.columns.findIndex((c) => c.id === field);
-            return {
-              field,
-              name: (col && col.name) || '',
-              render: (value: unknown) => {
-                const formattedValue = formatters[field]?.convert(value);
-                const fieldName = col?.meta?.aggConfigParams?.field;
-
-                if (filterable) {
-                  return (
-                    <EuiFlexGroup
-                      className="lnsDataTable__cell"
-                      data-test-subj="lnsDataTableCellValueFilterable"
-                      gutterSize="xs"
-                    >
-                      <EuiFlexItem grow={false}>{formattedValue}</EuiFlexItem>
-                      <EuiFlexItem grow={false}>
-                        <EuiFlexGroup
-                          responsive={false}
-                          gutterSize="none"
-                          alignItems="center"
-                          className="lnsDataTable__filter"
-                        >
-                          <EuiToolTip
-                            position="bottom"
-                            content={i18n.translate('xpack.lens.includeValueButtonTooltip', {
-                              defaultMessage: 'Include value',
-                            })}
-                          >
-                            <EuiButtonIcon
-                              iconType="plusInCircle"
-                              color="text"
-                              aria-label={i18n.translate('xpack.lens.includeValueButtonAriaLabel', {
-                                defaultMessage: `Include {value}`,
-                                values: {
-                                  value: `${fieldName ? `${fieldName}: ` : ''}${formattedValue}`,
-                                },
-                              })}
-                              data-test-subj="lensDatatableFilterFor"
-                              onClick={() => handleFilterClick(field, value, colIndex)}
-                            />
-                          </EuiToolTip>
-                          <EuiFlexItem grow={false}>
-                            <EuiToolTip
-                              position="bottom"
-                              content={i18n.translate('xpack.lens.excludeValueButtonTooltip', {
-                                defaultMessage: 'Exclude value',
-                              })}
-                            >
-                              <EuiButtonIcon
-                                iconType="minusInCircle"
-                                color="text"
-                                aria-label={i18n.translate(
-                                  'xpack.lens.excludeValueButtonAriaLabel',
-                                  {
-                                    defaultMessage: `Exclude {value}`,
-                                    values: {
-                                      value: `${
-                                        fieldName ? `${fieldName}: ` : ''
-                                      }${formattedValue}`,
-                                    },
-                                  }
-                                )}
-                                data-test-subj="lensDatatableFilterOut"
-                                onClick={() => handleFilterClick(field, value, colIndex, true)}
-                              />
-                            </EuiToolTip>
-                          </EuiFlexItem>
-                        </EuiFlexGroup>
-                      </EuiFlexItem>
-                    </EuiFlexGroup>
-                  );
-                }
-                return <span data-test-subj="lnsDataTableCellValue">{formattedValue}</span>;
-              },
-            };
-          })
-          .filter(({ field }) => !!field)}
-        items={firstTable ? firstTable.rows : []}
-      />
-    </VisualizationContainer>
-  );
-}

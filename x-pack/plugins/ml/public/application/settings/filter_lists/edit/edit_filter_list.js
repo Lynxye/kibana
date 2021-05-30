@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 /*
@@ -34,6 +35,9 @@ import { ItemsGrid } from '../../../components/items_grid';
 import { NavigationMenu } from '../../../components/navigation_menu';
 import { isValidFilterListId, saveFilterList } from './utils';
 import { ml } from '../../../services/ml_api_service';
+import { ML_PAGES } from '../../../../../common/constants/ml_url_generator';
+import { getDocLinks } from '../../../util/dependency_cache';
+import { HelpMenu } from '../../../components/help_menu';
 
 const DEFAULT_ITEMS_PER_PAGE = 50;
 
@@ -65,10 +69,6 @@ function getActivePage(activePageState, itemsPerPage, numMatchingItems) {
     activePage = Math.max(Math.ceil(numMatchingItems / itemsPerPage) - 1, 0); // Sets to 0 for 0 matches.
   }
   return activePage;
-}
-
-function returnToFiltersList() {
-  window.location.href = `#/settings/filter_lists`;
 }
 
 export class EditFilterListUI extends Component {
@@ -104,6 +104,16 @@ export class EditFilterListUI extends Component {
       this.setState({ newFilterId: '' });
     }
   }
+
+  returnToFiltersList = async () => {
+    const {
+      services: {
+        http: { basePath },
+        application: { navigateToUrl },
+      },
+    } = this.props.kibana;
+    await navigateToUrl(`${basePath.get()}/app/ml/${ML_PAGES.FILTER_LISTS_MANAGE}`, true);
+  };
 
   loadFilterList = (filterId) => {
     ml.filters
@@ -279,7 +289,7 @@ export class EditFilterListUI extends Component {
     saveFilterList(filterId, description, items, loadedFilter)
       .then((savedFilter) => {
         this.setLoadedFilterState(savedFilter);
-        returnToFiltersList();
+        this.returnToFiltersList();
       })
       .catch((resp) => {
         console.log(`Error saving filter ${filterId}:`, resp);
@@ -313,10 +323,12 @@ export class EditFilterListUI extends Component {
 
     const totalItemCount = items !== undefined ? items.length : 0;
 
+    const helpLink = getDocLinks().links.ml.customRules;
+
     return (
       <Fragment>
         <NavigationMenu tabId="settings" />
-        <EuiPage className="ml-edit-filter-lists">
+        <EuiPage className="ml-edit-filter-lists" data-test-subj="mlPageFilterListEdit">
           <EuiPageBody>
             <EuiPageContent
               className="ml-edit-filter-lists-content"
@@ -355,7 +367,10 @@ export class EditFilterListUI extends Component {
               />
               <EuiFlexGroup justifyContent="flexEnd">
                 <EuiFlexItem grow={false}>
-                  <EuiButtonEmpty onClick={returnToFiltersList}>
+                  <EuiButtonEmpty
+                    data-test-subj={'mlFilterListCancelButton'}
+                    onClick={() => this.returnToFiltersList()}
+                  >
                     <FormattedMessage
                       id="xpack.ml.settings.filterLists.editFilterList.cancelButtonLabel"
                       defaultMessage="Cancel"
@@ -371,6 +386,7 @@ export class EditFilterListUI extends Component {
                       canCreateFilter === false
                     }
                     fill
+                    data-test-subj={'mlFilterListSaveButton'}
                   >
                     <FormattedMessage
                       id="xpack.ml.settings.filterLists.editFilterList.saveButtonLabel"
@@ -382,6 +398,7 @@ export class EditFilterListUI extends Component {
             </EuiPageContent>
           </EuiPageBody>
         </EuiPage>
+        <HelpMenu docLink={helpLink} />
       </Fragment>
     );
   }

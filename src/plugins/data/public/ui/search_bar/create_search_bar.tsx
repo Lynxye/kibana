@@ -1,20 +1,9 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import _ from 'lodash';
@@ -23,18 +12,20 @@ import { CoreStart } from 'src/core/public';
 import { IStorageWrapper } from 'src/plugins/kibana_utils/public';
 import { KibanaContextProvider } from '../../../../kibana_react/public';
 import { QueryStart, SavedQuery } from '../../query';
-import { SearchBarOwnProps, SearchBar } from './search_bar';
+import { SearchBar, SearchBarOwnProps } from './';
 import { useFilterManager } from './lib/use_filter_manager';
 import { useTimefilter } from './lib/use_timefilter';
 import { useSavedQuery } from './lib/use_saved_query';
 import { DataPublicPluginStart } from '../../types';
 import { Filter, Query, TimeRange } from '../../../common';
 import { useQueryStringManager } from './lib/use_query_string_manager';
+import { UsageCollectionSetup } from '../../../../usage_collection/public';
 
 interface StatefulSearchBarDeps {
   core: CoreStart;
   data: Omit<DataPublicPluginStart, 'ui'>;
   storage: IStorageWrapper;
+  usageCollection?: UsageCollectionSetup;
 }
 
 export type StatefulSearchBarProps = SearchBarOwnProps & {
@@ -119,7 +110,7 @@ const overrideDefaultBehaviors = (props: StatefulSearchBarProps) => {
   return props.useDefaultBehaviors ? {} : props;
 };
 
-export function createSearchBar({ core, storage, data }: StatefulSearchBarDeps) {
+export function createSearchBar({ core, storage, data, usageCollection }: StatefulSearchBarDeps) {
   // App name should come from the core application service.
   // Until it's available, we'll ask the user to provide it for the pre-wired component.
   return (props: StatefulSearchBarProps) => {
@@ -170,6 +161,7 @@ export function createSearchBar({ core, storage, data }: StatefulSearchBarDeps) 
           appName: props.appName,
           data,
           storage,
+          usageCollection,
           ...core,
         }}
       >
@@ -197,6 +189,12 @@ export function createSearchBar({ core, storage, data }: StatefulSearchBarDeps) 
           onClearSavedQuery={defaultOnClearSavedQuery(props, clearSavedQuery)}
           onSavedQueryUpdated={defaultOnSavedQueryUpdated(props, setSavedQuery)}
           onSaved={defaultOnSavedQueryUpdated(props, setSavedQuery)}
+          iconType={props.iconType}
+          nonKqlMode={props.nonKqlMode}
+          nonKqlModeHelpText={props.nonKqlModeHelpText}
+          customSubmitButton={props.customSubmitButton}
+          isClearable={props.isClearable}
+          placeholder={props.placeholder}
           {...overrideDefaultBehaviors(props)}
         />
       </KibanaContextProvider>

@@ -1,14 +1,14 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { mount, shallow } from 'enzyme';
 import React from 'react';
-
+import { waitFor } from '@testing-library/react';
 import {
-  apolloClientObservable,
   mockGlobalState,
   TestProviders,
   SUB_PLUGINS_REDUCER,
@@ -36,23 +36,11 @@ jest.mock('../../lib/kibana', () => ({
 describe('AddFilterToGlobalSearchBar Component', () => {
   const state: State = mockGlobalState;
   const { storage } = createSecuritySolutionStorageMock();
-  let store = createStore(
-    state,
-    SUB_PLUGINS_REDUCER,
-    apolloClientObservable,
-    kibanaObservable,
-    storage
-  );
+  let store = createStore(state, SUB_PLUGINS_REDUCER, kibanaObservable, storage);
 
   beforeEach(() => {
     jest.useFakeTimers();
-    store = createStore(
-      state,
-      SUB_PLUGINS_REDUCER,
-      apolloClientObservable,
-      kibanaObservable,
-      storage
-    );
+    store = createStore(state, SUB_PLUGINS_REDUCER, kibanaObservable, storage);
     mockAddFilters.mockClear();
   });
 
@@ -157,39 +145,40 @@ describe('AddFilterToGlobalSearchBar Component', () => {
         </AddFilterToGlobalSearchBar>
       </TestProviders>
     );
+    await waitFor(() => {
+      wrapper.find('[data-test-subj="withHoverActionsButton"]').simulate('mouseenter');
+      wrapper.update();
+      jest.runAllTimers();
+      wrapper.update();
 
-    wrapper.find('[data-test-subj="withHoverActionsButton"]').simulate('mouseenter');
-    wrapper.update();
-    jest.runAllTimers();
-    wrapper.update();
+      wrapper
+        .find('[data-test-subj="hover-actions-container"] [data-euiicon-type]')
+        .first()
+        .simulate('click');
+      wrapper.update();
 
-    wrapper
-      .find('[data-test-subj="hover-actions-container"] [data-euiicon-type]')
-      .first()
-      .simulate('click');
-    wrapper.update();
-
-    expect(mockAddFilters.mock.calls[0][0]).toEqual({
-      meta: {
-        alias: null,
-        disabled: false,
-        key: 'host.name',
-        negate: false,
-        params: {
-          query: 'siem-kibana',
-        },
-        type: 'phrase',
-        value: 'siem-kibana',
-      },
-      query: {
-        match: {
-          'host.name': {
+      expect(mockAddFilters.mock.calls[0][0]).toEqual({
+        meta: {
+          alias: null,
+          disabled: false,
+          key: 'host.name',
+          negate: false,
+          params: {
             query: 'siem-kibana',
-            type: 'phrase',
+          },
+          type: 'phrase',
+          value: 'siem-kibana',
+        },
+        query: {
+          match: {
+            'host.name': {
+              query: 'siem-kibana',
+              type: 'phrase',
+            },
           },
         },
-      },
+      });
+      expect(onFilterAdded).toHaveBeenCalledTimes(1);
     });
-    expect(onFilterAdded).toHaveBeenCalledTimes(1);
   });
 });

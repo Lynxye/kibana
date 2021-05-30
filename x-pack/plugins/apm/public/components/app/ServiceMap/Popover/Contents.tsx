@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import {
@@ -15,7 +16,7 @@ import React, { MouseEvent } from 'react';
 import { Buttons } from './Buttons';
 import { Info } from './Info';
 import { ServiceStatsFetcher } from './ServiceStatsFetcher';
-import { popoverWidth } from '../cytoscapeOptions';
+import { popoverWidth } from '../cytoscape_options';
 
 interface ContentsProps {
   isService: boolean;
@@ -31,7 +32,7 @@ interface ContentsProps {
 // This method of detecting IE is from a Stack Overflow answer:
 // https://stackoverflow.com/a/21825207
 //
-// @ts-ignore `documentMode` is not recognized as a valid property of `document`.
+// @ts-expect-error `documentMode` is not recognized as a valid property of `document`.
 const isIE11 = !!window.MSInputMethodContext && !!document.documentMode;
 
 function FlexColumnGroup(props: {

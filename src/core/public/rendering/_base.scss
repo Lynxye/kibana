@@ -1,99 +1,73 @@
-@import '@elastic/eui/src/global_styling/variables/header';
-@import '@elastic/eui/src/components/nav_drawer/variables';
+@import '../mixins';
 
 /**
- * stretch the root element of the Kibana application to set the base-size that
+ * Stretch the root element of the Kibana application to set the base-size that
  * flexed children should keep. Only works when paired with root styles applied
  * by core service from new platform
  */
-// SASSTODO: Naming here is too embedded and high up that changing them could cause major breaks
+
 #kibana-body {
-  overflow-x: hidden;
+  // DO NOT ADD ANY OVERFLOW BEHAVIORS HERE
+  // It will break the sticky navigation
   min-height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
-// TODO #64541
-// Delete this block
-.chrHeaderWrapper:not(.headerWrapper) ~ .app-wrapper {
-  display: flex;
-  flex-flow: column nowrap;
-  position: absolute;
-  left: 0;
+// Affixes a div to restrict the position of charts tooltip to the visible viewport minus the header
+#app-fixed-viewport {
+  pointer-events: none;
+  visibility: hidden;
+  position: fixed;
   top: 0;
   right: 0;
   bottom: 0;
-  z-index: 5;
-  margin: 0 auto;
-
-  &:not(.hidden-chrome) {
-    top: $euiHeaderChildSize;
-    left: $euiHeaderChildSize;
-
-    // HOTFIX: Temporary fix for flyouts not inside portals
-    // SASSTODO: Find an actual solution
-    .euiFlyout {
-      top: $euiHeaderChildSize;
-      height: calc(100% - #{$euiHeaderChildSize});
-    }
-
-    @include euiBreakpoint('xs', 's') {
-      left: 0;
-    }
-  }
-
-  /**
-   * 1. Dirty, but we need to override the .kbnGlobalNav-isOpen state
-   *    when we're looking at the log-in screen.
-   */
-  &.hidden-chrome {
-    left: 0 !important; /* 1 */
-  }
-
-  .navbar-right {
-    margin-right: 0;
-  }
+  left: 0;
 }
 
-// TODO #64541
-// Delete this block
-@include euiBreakpoint('xl') {
-  .chrHeaderWrapper--navIsLocked:not(.headerWrapper) {
-    ~ .app-wrapper:not(.hidden-chrome) {
-      // Shrink the content from the left so it's no longer overlapped by the nav drawer (ALWAYS)
-      left: $euiNavDrawerWidthExpanded !important; // sass-lint:disable-line no-important
-      transition: left $euiAnimSpeedFast $euiAnimSlightResistance;
-    }
-  }
-}
-
-// TODO #64541
-// Remove .headerWrapper and header conditionals
-.headerWrapper ~ .app-wrapper,
-:not(header) ~ .app-wrapper {
+.kbnAppWrapper {
+  // DO NOT ADD ANY OTHER STYLES TO THIS SELECTOR
+  // This a very nested dependency happnening in "all" apps
   display: flex;
   flex-flow: column nowrap;
-  margin: 0 auto;
-  min-height: calc(100vh - #{$euiHeaderHeightCompensation});
+  flex-grow: 1;
+  z-index: 0; // This effectively puts every high z-index inside the scope of this wrapper to it doesn't interfere with the header and/or overlay mask
+  position: relative; // This is temporary for apps that relied on this being present on `.application`
+}
 
-  @include internetExplorerOnly {
-    // IE specific bug with min-height in flex container, described in the next link
-    // https://github.com/philipwalton/flexbugs#3-min-height-on-a-flex-container-wont-apply-to-its-flex-items
-    height: calc(100vh - #{$euiHeaderHeightCompensation});
+// TODO: This is problematic because it doesn't stay in line with EUI:
+// adapted from euiHeaderAffordForFixed as we need to handle the top banner
+@mixin kbnAffordForHeader($headerHeight) {
+  padding-top: $headerHeight;
+
+  #app-fixed-viewport {
+    top: $headerHeight;
   }
 
-  &.hidden-chrome {
-    min-height: 100vh;
+  .euiFlyout,
+  .euiCollapsibleNav {
+    top: $headerHeight;
+    height: calc(100% - #{$headerHeight});
+  }
+
+  @include euiBreakpoint('m', 'l', 'xl') {
+    .euiPageSideBar--sticky {
+      max-height: calc(100vh - #{$headerHeight});
+      top: #{$headerHeight};
+    }
   }
 }
 
-.app-wrapper-panel {
-  display: flex;
-  flex-grow: 1;
-  flex-shrink: 0;
-  flex-basis: auto;
-  flex-direction: column;
+.kbnBody {
+  @include kbnAffordForHeader($kbnHeaderOffset);
 
-  > * {
-    flex-shrink: 0;
+  &.kbnBody--hasHeaderBanner {
+    @include kbnAffordForHeader($kbnHeaderOffsetWithBanner);
+  }
+  &.kbnBody--chromeHidden {
+    @include kbnAffordForHeader(0);
+  }
+  &.kbnBody--chromeHidden.kbnBody--hasHeaderBanner {
+    @include kbnAffordForHeader($kbnHeaderBannerHeight);
   }
 }

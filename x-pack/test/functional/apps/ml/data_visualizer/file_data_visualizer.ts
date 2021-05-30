@@ -1,12 +1,14 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import path from 'path';
 
 import { FtrProviderContext } from '../../../ftr_provider_context';
+import { ML_JOB_FIELD_TYPES } from '../../../../../plugins/ml/common/constants/field_types';
 
 export default function ({ getService }: FtrProviderContext) {
   const ml = getService('ml');
@@ -17,10 +19,139 @@ export default function ({ getService }: FtrProviderContext) {
       filePath: path.join(__dirname, 'files_to_import', 'artificial_server_log'),
       indexName: 'user-import_1',
       createIndexPattern: false,
+      fieldTypeFilters: [ML_JOB_FIELD_TYPES.NUMBER, ML_JOB_FIELD_TYPES.DATE],
+      fieldNameFilters: ['clientip'],
       expected: {
         results: {
           title: 'artificial_server_log',
+          numberOfFields: 4,
         },
+        metricFields: [
+          {
+            fieldName: 'bytes',
+            type: ML_JOB_FIELD_TYPES.NUMBER,
+            docCountFormatted: '19 (100%)',
+            statsMaxDecimalPlaces: 3,
+            topValuesCount: 8,
+          },
+          {
+            fieldName: 'httpversion',
+            type: ML_JOB_FIELD_TYPES.NUMBER,
+            docCountFormatted: '19 (100%)',
+            statsMaxDecimalPlaces: 3,
+            topValuesCount: 1,
+          },
+          {
+            fieldName: 'response',
+            type: ML_JOB_FIELD_TYPES.NUMBER,
+            docCountFormatted: '19 (100%)',
+            statsMaxDecimalPlaces: 3,
+            topValuesCount: 3,
+          },
+        ],
+        nonMetricFields: [
+          {
+            fieldName: 'timestamp',
+            type: ML_JOB_FIELD_TYPES.DATE,
+            docCountFormatted: '19 (100%)',
+            exampleCount: 10,
+          },
+          {
+            fieldName: 'agent',
+            type: ML_JOB_FIELD_TYPES.KEYWORD,
+            exampleCount: 8,
+            docCountFormatted: '19 (100%)',
+          },
+          {
+            fieldName: 'auth',
+            type: ML_JOB_FIELD_TYPES.KEYWORD,
+            exampleCount: 1,
+            docCountFormatted: '19 (100%)',
+          },
+          {
+            fieldName: 'ident',
+            type: ML_JOB_FIELD_TYPES.KEYWORD,
+            exampleCount: 1,
+            docCountFormatted: '19 (100%)',
+          },
+          {
+            fieldName: 'verb',
+            type: ML_JOB_FIELD_TYPES.KEYWORD,
+            exampleCount: 1,
+            docCountFormatted: '19 (100%)',
+          },
+          {
+            fieldName: 'request',
+            type: ML_JOB_FIELD_TYPES.KEYWORD,
+            exampleCount: 2,
+            docCountFormatted: '19 (100%)',
+          },
+          {
+            fieldName: 'referrer',
+            type: ML_JOB_FIELD_TYPES.KEYWORD,
+            exampleCount: 1,
+            docCountFormatted: '19 (100%)',
+          },
+          {
+            fieldName: 'clientip',
+            type: ML_JOB_FIELD_TYPES.IP,
+            exampleCount: 7,
+            docCountFormatted: '19 (100%)',
+          },
+          {
+            fieldName: 'message',
+            type: ML_JOB_FIELD_TYPES.TEXT,
+            exampleCount: 10,
+            docCountFormatted: '19 (100%)',
+          },
+        ],
+        visibleMetricFieldsCount: 3,
+        totalMetricFieldsCount: 3,
+        populatedFieldsCount: 12,
+        totalFieldsCount: 12,
+        fieldTypeFiltersResultCount: 4,
+        fieldNameFiltersResultCount: 1,
+      },
+    },
+    {
+      suiteSuffix: 'with a file containing geo field',
+      filePath: path.join(__dirname, 'files_to_import', 'geo_file.csv'),
+      indexName: 'user-import_2',
+      createIndexPattern: false,
+      fieldTypeFilters: [ML_JOB_FIELD_TYPES.GEO_POINT],
+      fieldNameFilters: ['Coordinates'],
+      expected: {
+        results: {
+          title: 'geo_file.csv',
+          numberOfFields: 3,
+        },
+        metricFields: [],
+        nonMetricFields: [
+          {
+            fieldName: 'Context',
+            type: ML_JOB_FIELD_TYPES.UNKNOWN,
+            docCountFormatted: '0 (0%)',
+            exampleCount: 0,
+          },
+          {
+            fieldName: 'Coordinates',
+            type: ML_JOB_FIELD_TYPES.GEO_POINT,
+            docCountFormatted: '13 (100%)',
+            exampleCount: 7,
+          },
+          {
+            fieldName: 'Location',
+            type: ML_JOB_FIELD_TYPES.KEYWORD,
+            docCountFormatted: '13 (100%)',
+            exampleCount: 7,
+          },
+        ],
+        visibleMetricFieldsCount: 0,
+        totalMetricFieldsCount: 0,
+        populatedFieldsCount: 3,
+        totalFieldsCount: 3,
+        fieldTypeFiltersResultCount: 1,
+        fieldNameFiltersResultCount: 1,
       },
     },
   ];
@@ -47,56 +178,114 @@ export default function ({ getService }: FtrProviderContext) {
           await ml.api.deleteIndices(testData.indexName);
         });
 
-        it('loads the data visualizer selector page', async () => {
+        it('displays and imports a file', async () => {
+          await ml.testExecution.logTestStep('loads the data visualizer selector page');
           await ml.navigation.navigateToDataVisualizer();
-        });
 
-        it('loads the file upload page', async () => {
+          await ml.testExecution.logTestStep('loads the file upload page');
           await ml.dataVisualizer.navigateToFileUpload();
-        });
 
-        it('selects a file and loads visualizer results', async () => {
+          await ml.testExecution.logTestStep('selects a file and loads visualizer results');
           await ml.dataVisualizerFileBased.selectFile(testData.filePath);
-        });
 
-        it('displays the components of the file details page', async () => {
+          await ml.testExecution.logTestStep('displays the components of the file details page');
           await ml.dataVisualizerFileBased.assertFileTitle(testData.expected.results.title);
           await ml.dataVisualizerFileBased.assertFileContentPanelExists();
           await ml.dataVisualizerFileBased.assertSummaryPanelExists();
           await ml.dataVisualizerFileBased.assertFileStatsPanelExists();
-        });
 
-        it('loads the import settings page', async () => {
+          await ml.testExecution.logTestStep(
+            `displays elements in the data visualizer table correctly`
+          );
+          await ml.dataVisualizerIndexBased.assertDataVisualizerTableExist();
+
+          await ml.dataVisualizerIndexBased.assertVisibleMetricFieldsCount(
+            testData.expected.visibleMetricFieldsCount
+          );
+          await ml.dataVisualizerIndexBased.assertTotalMetricFieldsCount(
+            testData.expected.totalMetricFieldsCount
+          );
+          await ml.dataVisualizerIndexBased.assertVisibleFieldsCount(
+            testData.expected.totalFieldsCount
+          );
+          await ml.dataVisualizerIndexBased.assertTotalFieldsCount(
+            testData.expected.totalFieldsCount
+          );
+
+          await ml.testExecution.logTestStep(
+            'displays details for metric fields and non-metric fields correctly'
+          );
+          await ml.dataVisualizerTable.ensureNumRowsPerPage(25);
+
+          for (const fieldRow of testData.expected.metricFields) {
+            await ml.dataVisualizerTable.assertNumberFieldContents(
+              fieldRow.fieldName,
+              fieldRow.docCountFormatted,
+              fieldRow.topValuesCount,
+              false,
+              false
+            );
+          }
+          for (const fieldRow of testData.expected.nonMetricFields!) {
+            await ml.dataVisualizerTable.assertNonMetricFieldContents(
+              fieldRow.type,
+              fieldRow.fieldName!,
+              fieldRow.docCountFormatted,
+              fieldRow.exampleCount,
+              false
+            );
+          }
+
+          await ml.testExecution.logTestStep('sets and resets field type filter correctly');
+          await ml.dataVisualizerTable.setFieldTypeFilter(
+            testData.fieldTypeFilters,
+            testData.expected.fieldTypeFiltersResultCount
+          );
+          await ml.dataVisualizerTable.removeFieldTypeFilter(
+            testData.fieldTypeFilters,
+            testData.expected.totalFieldsCount
+          );
+
+          await ml.testExecution.logTestStep('sets and resets field name filter correctly');
+          await ml.dataVisualizerTable.setFieldNameFilter(
+            testData.fieldNameFilters,
+            testData.expected.fieldNameFiltersResultCount
+          );
+          await ml.dataVisualizerTable.removeFieldNameFilter(
+            testData.fieldNameFilters,
+            testData.expected.totalFieldsCount
+          );
+
+          await ml.testExecution.logTestStep('loads the import settings page');
           await ml.dataVisualizerFileBased.navigateToFileImport();
-        });
 
-        it('sets the index name', async () => {
+          await ml.testExecution.logTestStep('sets the index name');
           await ml.dataVisualizerFileBased.setIndexName(testData.indexName);
-        });
 
-        it('sets the create index pattern checkbox', async () => {
+          await ml.testExecution.logTestStep('sets the create index pattern checkbox');
           await ml.dataVisualizerFileBased.setCreateIndexPatternCheckboxState(
             testData.createIndexPattern
           );
-        });
 
-        it('imports the file', async () => {
+          await ml.testExecution.logTestStep('imports the file');
           await ml.dataVisualizerFileBased.startImportAndWaitForProcessing();
+
+          await ml.testExecution.logTestStep('creates filebeat config');
+          await ml.dataVisualizerFileBased.selectCreateFilebeatConfig();
         });
       });
     }
 
     for (const testData of testDataListNegative) {
       describe(testData.suiteSuffix, function () {
-        it('loads the data visualizer selector page', async () => {
+        it('does not import an invalid file', async () => {
+          await ml.testExecution.logTestStep('loads the data visualizer selector page');
           await ml.navigation.navigateToDataVisualizer();
-        });
 
-        it('loads the file upload page', async () => {
+          await ml.testExecution.logTestStep('loads the file upload page');
           await ml.dataVisualizer.navigateToFileUpload();
-        });
 
-        it('selects a file and displays an error', async () => {
+          await ml.testExecution.logTestStep('selects a file and displays an error');
           await ml.dataVisualizerFileBased.selectFile(testData.filePath, true);
         });
       });

@@ -12,9 +12,16 @@ Array [
       "aggs": Object {
         "transaction_groups": Object {
           "aggs": Object {
-            "sample": Object {
-              "top_hits": Object {
-                "size": 1,
+            "transaction_type": Object {
+              "top_metrics": Object {
+                "metrics": Array [
+                  Object {
+                    "field": "transaction.type",
+                  },
+                ],
+                "sort": Object {
+                  "@timestamp": "desc",
+                },
               },
             },
           },
@@ -51,11 +58,6 @@ Array [
                 },
               },
             },
-            Object {
-              "term": Object {
-                "my.custom.ui.filter": "foo-bar",
-              },
-            },
           ],
           "must_not": Array [
             Object {
@@ -64,27 +66,10 @@ Array [
               },
             },
           ],
-          "should": Array [
-            Object {
-              "term": Object {
-                "transaction.sampled": true,
-              },
-            },
-          ],
         },
       },
-      "sort": Array [
-        Object {
-          "_score": "desc",
-        },
-        Object {
-          "@timestamp": Object {
-            "order": "desc",
-          },
-        },
-      ],
+      "size": 0,
     },
-    "size": 0,
   },
   Object {
     "apm": Object {
@@ -135,11 +120,6 @@ Array [
                 },
               },
             },
-            Object {
-              "term": Object {
-                "my.custom.ui.filter": "foo-bar",
-              },
-            },
           ],
           "must_not": Array [
             Object {
@@ -150,8 +130,8 @@ Array [
           ],
         },
       },
+      "size": 0,
     },
-    "size": 0,
   },
   Object {
     "apm": Object {
@@ -202,11 +182,6 @@ Array [
                 },
               },
             },
-            Object {
-              "term": Object {
-                "my.custom.ui.filter": "foo-bar",
-              },
-            },
           ],
           "must_not": Array [
             Object {
@@ -217,8 +192,8 @@ Array [
           ],
         },
       },
+      "size": 0,
     },
-    "size": 0,
   },
 ]
 `;
@@ -235,9 +210,16 @@ Array [
       "aggs": Object {
         "transaction_groups": Object {
           "aggs": Object {
-            "sample": Object {
-              "top_hits": Object {
-                "size": 1,
+            "transaction_type": Object {
+              "top_metrics": Object {
+                "metrics": Array [
+                  Object {
+                    "field": "transaction.type",
+                  },
+                ],
+                "sort": Object {
+                  "@timestamp": "desc",
+                },
               },
             },
           },
@@ -251,12 +233,8 @@ Array [
         "bool": Object {
           "filter": Array [
             Object {
-              "range": Object {
-                "@timestamp": Object {
-                  "format": "epoch_millis",
-                  "gte": 1528113600000,
-                  "lte": 1528977600000,
-                },
+              "term": Object {
+                "service.name": "foo",
               },
             },
             Object {
@@ -265,37 +243,19 @@ Array [
               },
             },
             Object {
-              "term": Object {
-                "service.name": "foo",
-              },
-            },
-            Object {
-              "term": Object {
-                "my.custom.ui.filter": "foo-bar",
-              },
-            },
-          ],
-          "should": Array [
-            Object {
-              "term": Object {
-                "transaction.sampled": true,
+              "range": Object {
+                "@timestamp": Object {
+                  "format": "epoch_millis",
+                  "gte": 1528113600000,
+                  "lte": 1528977600000,
+                },
               },
             },
           ],
         },
       },
-      "sort": Array [
-        Object {
-          "_score": "desc",
-        },
-        Object {
-          "@timestamp": Object {
-            "order": "desc",
-          },
-        },
-      ],
+      "size": 0,
     },
-    "size": 0,
   },
   Object {
     "apm": Object {
@@ -323,12 +283,8 @@ Array [
         "bool": Object {
           "filter": Array [
             Object {
-              "range": Object {
-                "@timestamp": Object {
-                  "format": "epoch_millis",
-                  "gte": 1528113600000,
-                  "lte": 1528977600000,
-                },
+              "term": Object {
+                "service.name": "foo",
               },
             },
             Object {
@@ -337,20 +293,19 @@ Array [
               },
             },
             Object {
-              "term": Object {
-                "service.name": "foo",
-              },
-            },
-            Object {
-              "term": Object {
-                "my.custom.ui.filter": "foo-bar",
+              "range": Object {
+                "@timestamp": Object {
+                  "format": "epoch_millis",
+                  "gte": 1528113600000,
+                  "lte": 1528977600000,
+                },
               },
             },
           ],
         },
       },
+      "size": 0,
     },
-    "size": 0,
   },
   Object {
     "apm": Object {
@@ -378,12 +333,8 @@ Array [
         "bool": Object {
           "filter": Array [
             Object {
-              "range": Object {
-                "@timestamp": Object {
-                  "format": "epoch_millis",
-                  "gte": 1528113600000,
-                  "lte": 1528977600000,
-                },
+              "term": Object {
+                "service.name": "foo",
               },
             },
             Object {
@@ -392,20 +343,19 @@ Array [
               },
             },
             Object {
-              "term": Object {
-                "service.name": "foo",
-              },
-            },
-            Object {
-              "term": Object {
-                "my.custom.ui.filter": "foo-bar",
+              "range": Object {
+                "@timestamp": Object {
+                  "format": "epoch_millis",
+                  "gte": 1528113600000,
+                  "lte": 1528977600000,
+                },
               },
             },
           ],
         },
       },
+      "size": 0,
     },
-    "size": 0,
   },
   Object {
     "apm": Object {
@@ -439,12 +389,8 @@ Array [
         "bool": Object {
           "filter": Array [
             Object {
-              "range": Object {
-                "@timestamp": Object {
-                  "format": "epoch_millis",
-                  "gte": 1528113600000,
-                  "lte": 1528977600000,
-                },
+              "term": Object {
+                "service.name": "foo",
               },
             },
             Object {
@@ -453,20 +399,19 @@ Array [
               },
             },
             Object {
-              "term": Object {
-                "service.name": "foo",
-              },
-            },
-            Object {
-              "term": Object {
-                "my.custom.ui.filter": "foo-bar",
+              "range": Object {
+                "@timestamp": Object {
+                  "format": "epoch_millis",
+                  "gte": 1528113600000,
+                  "lte": 1528977600000,
+                },
               },
             },
           ],
         },
       },
+      "size": 0,
     },
-    "size": 0,
   },
 ]
 `;

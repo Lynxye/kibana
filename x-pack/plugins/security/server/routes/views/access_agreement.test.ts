@@ -1,41 +1,45 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import {
-  RequestHandler,
-  RouteConfig,
-  kibanaResponseFactory,
-  IRouter,
+import type { PublicMethodsOf } from '@kbn/utility-types';
+import type {
   HttpResources,
   HttpResourcesRequestHandler,
-  RequestHandlerContext,
-} from '../../../../../../src/core/server';
-import { SecurityLicense, SecurityLicenseFeatures } from '../../../common/licensing';
-import { AuthenticationProvider } from '../../../common/types';
-import { ConfigType } from '../../config';
-import { defineAccessAgreementRoutes } from './access_agreement';
+  RequestHandler,
+  RouteConfig,
+} from 'src/core/server';
+import { kibanaResponseFactory } from 'src/core/server';
+import { httpResourcesMock, httpServerMock } from 'src/core/server/mocks';
 
-import { httpResourcesMock, httpServerMock } from '../../../../../../src/core/server/mocks';
+import type { SecurityLicense, SecurityLicenseFeatures } from '../../../common/licensing';
+import type { AuthenticationProvider } from '../../../common/model';
+import type { ConfigType } from '../../config';
+import type { Session } from '../../session_management';
+import { sessionMock } from '../../session_management/session.mock';
+import type { SecurityRequestHandlerContext, SecurityRouter } from '../../types';
 import { routeDefinitionParamsMock } from '../index.mock';
-import { Authentication } from '../../authentication';
+import { defineAccessAgreementRoutes } from './access_agreement';
 
 describe('Access agreement view routes', () => {
   let httpResources: jest.Mocked<HttpResources>;
-  let router: jest.Mocked<IRouter>;
+  let router: jest.Mocked<SecurityRouter>;
   let config: ConfigType;
-  let authc: jest.Mocked<Authentication>;
+  let session: jest.Mocked<PublicMethodsOf<Session>>;
   let license: jest.Mocked<SecurityLicense>;
-  let mockContext: RequestHandlerContext;
+  let mockContext: SecurityRequestHandlerContext;
   beforeEach(() => {
     const routeParamsMock = routeDefinitionParamsMock.create();
     router = routeParamsMock.router;
     httpResources = routeParamsMock.httpResources;
-    authc = routeParamsMock.authc;
     config = routeParamsMock.config;
     license = routeParamsMock.license;
+
+    session = sessionMock.create();
+    routeParamsMock.getSession.mockReturnValue(session);
 
     license.getFeatures.mockReturnValue({
       allowAccessAgreement: true,
@@ -45,7 +49,7 @@ describe('Access agreement view routes', () => {
       licensing: {
         license: { check: jest.fn().mockReturnValue({ check: 'valid' }) },
       },
-    } as unknown) as RequestHandlerContext;
+    } as unknown) as SecurityRequestHandlerContext;
 
     defineAccessAgreementRoutes(routeParamsMock);
   });
@@ -92,7 +96,7 @@ describe('Access agreement view routes', () => {
   });
 
   describe('Access agreement state route', () => {
-    let routeHandler: RequestHandler<any, any, any, 'get'>;
+    let routeHandler: RequestHandler<any, any, any, SecurityRequestHandlerContext, 'get'>;
     let routeConfig: RouteConfig<any, any, any, 'get'>;
     beforeEach(() => {
       const [loginStateRouteConfig, loginStateRouteHandler] = router.get.mock.calls.find(
@@ -125,7 +129,7 @@ describe('Access agreement view routes', () => {
     it('returns empty `accessAgreement` if session info is not available.', async () => {
       const request = httpServerMock.createKibanaRequest();
 
-      authc.getSessionInfo.mockResolvedValue(null);
+      session.get.mockResolvedValue(null);
 
       await expect(routeHandler(mockContext, request, kibanaResponseFactory)).resolves.toEqual({
         options: { body: { accessAgreement: '' } },
@@ -159,12 +163,7 @@ describe('Access agreement view routes', () => {
       ];
 
       for (const [sessionProvider, expectedAccessAgreement] of cases) {
-        authc.getSessionInfo.mockResolvedValue({
-          now: Date.now(),
-          idleTimeoutExpiration: null,
-          lifespanExpiration: null,
-          provider: sessionProvider,
-        });
+        session.get.mockResolvedValue(sessionMock.createValue({ provider: sessionProvider }));
 
         await expect(routeHandler(mockContext, request, kibanaResponseFactory)).resolves.toEqual({
           options: { body: { accessAgreement: expectedAccessAgreement } },

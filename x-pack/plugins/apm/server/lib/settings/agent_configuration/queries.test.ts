@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { getExistingEnvironmentsForService } from './get_environments/get_existing_environments_for_service';
@@ -11,14 +12,29 @@ import { searchConfigurations } from './search_configurations';
 import {
   SearchParamsMock,
   inspectSearchParams,
-} from '../../../../public/utils/testHelpers';
+} from '../../../utils/test_helpers';
 import { findExactConfiguration } from './find_exact_configuration';
+import { getAllEnvironments } from '../../environments/get_all_environments';
 
 describe('agent configuration queries', () => {
   let mock: SearchParamsMock;
 
   afterEach(() => {
     mock.teardown();
+  });
+
+  describe('getAllEnvironments', () => {
+    it('fetches all environments', async () => {
+      mock = await inspectSearchParams((setup) =>
+        getAllEnvironments({
+          serviceName: 'foo',
+          setup,
+          searchAggregatedTransactions: false,
+        })
+      );
+
+      expect(mock.params).toMatchSnapshot();
+    });
   });
 
   describe('getExistingEnvironmentsForService', () => {
@@ -39,6 +55,7 @@ describe('agent configuration queries', () => {
       mock = await inspectSearchParams((setup) =>
         getServiceNames({
           setup,
+          searchAggregatedTransactions: false,
         })
       );
 

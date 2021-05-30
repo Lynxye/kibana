@@ -1,11 +1,11 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React from 'react';
-import uuid from 'uuid/v4';
 import turfBbox from '@turf/bbox';
 import { multiPoint } from '@turf/helpers';
 
@@ -14,9 +14,9 @@ import { i18n } from '@kbn/i18n';
 import { SOURCE_TYPES, VECTOR_SHAPE_TYPE } from '../../../../common/constants';
 import { getDataSourceLabel } from '../../../../common/i18n_getters';
 import { convertToLines } from './convert_to_lines';
-import { AbstractESAggSource, DEFAULT_METRIC } from '../es_agg_source';
+import { AbstractESAggSource } from '../es_agg_source';
 import { registerSource } from '../source_registry';
-import { turfBboxToBounds } from '../../../elasticsearch_geo_utils';
+import { turfBboxToBounds } from '../../../../common/elasticsearch_util';
 import { DataRequestAbortError } from '../../util/data_request';
 
 const MAX_GEOTILE_LEVEL = 29;
@@ -28,14 +28,14 @@ export const sourceTitle = i18n.translate('xpack.maps.source.pewPewTitle', {
 export class ESPewPewSource extends AbstractESAggSource {
   static type = SOURCE_TYPES.ES_PEW_PEW;
 
-  static createDescriptor({ indexPatternId, sourceGeoField, destGeoField, metrics }) {
+  static createDescriptor(descriptor) {
+    const normalizedDescriptor = AbstractESAggSource.createDescriptor(descriptor);
     return {
+      ...normalizedDescriptor,
       type: ESPewPewSource.type,
-      id: uuid(),
-      indexPatternId: indexPatternId,
-      sourceGeoField,
-      destGeoField,
-      metrics: metrics ? metrics : [DEFAULT_METRIC],
+      indexPatternId: descriptor.indexPatternId,
+      sourceGeoField: descriptor.sourceGeoField,
+      destGeoField: descriptor.destGeoField,
     };
   }
 
@@ -109,6 +109,7 @@ export class ESPewPewSource extends AbstractESAggSource {
   async getGeoJsonWithMeta(layerName, searchFilters, registerCancelCallback) {
     const indexPattern = await this.getIndexPattern();
     const searchSource = await this.makeSearchSource(searchFilters, 0);
+    searchSource.setField('trackTotalHits', false);
     searchSource.setField('aggs', {
       destSplit: {
         terms: {
@@ -149,6 +150,7 @@ export class ESPewPewSource extends AbstractESAggSource {
       requestDescription: i18n.translate('xpack.maps.source.pewPew.inspectorDescription', {
         defaultMessage: 'Source-destination connections request',
       }),
+      searchSessionId: searchFilters.searchSessionId,
     });
 
     const { featureCollection } = convertToLines(esResponse);
@@ -167,6 +169,7 @@ export class ESPewPewSource extends AbstractESAggSource {
 
   async getBoundsForFilters(boundsFilters, registerCancelCallback) {
     const searchSource = await this.makeSearchSource(boundsFilters, 0);
+    searchSource.setField('trackTotalHits', false);
     searchSource.setField('aggs', {
       destFitToBounds: {
         geo_bounds: {
@@ -184,7 +187,10 @@ export class ESPewPewSource extends AbstractESAggSource {
     try {
       const abortController = new AbortController();
       registerCancelCallback(() => abortController.abort());
-      const esResp = await searchSource.fetch({ abortSignal: abortController.signal });
+      const esResp = await searchSource.fetch({
+        abortSignal: abortController.signal,
+        legacyHitsTotal: false,
+      });
       if (esResp.aggregations.destFitToBounds.bounds) {
         corners.push([
           esResp.aggregations.destFitToBounds.bounds.top_left.lon,
@@ -220,12 +226,8 @@ export class ESPewPewSource extends AbstractESAggSource {
     return turfBboxToBounds(turfBbox(multiPoint(corners)));
   }
 
-  canFormatFeatureProperties() {
+  hasTooltipProperties() {
     return true;
-  }
-
-  async filterAndFormatPropertiesToHtml(properties) {
-    return await this.filterAndFormatPropertiesToHtmlForMetricFields(properties);
   }
 }
 

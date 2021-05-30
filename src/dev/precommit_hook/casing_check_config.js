@@ -1,20 +1,9 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 /**
@@ -30,6 +19,7 @@ export const IGNORE_FILE_GLOBS = [
   'docs/**/*',
   '**/bin/**/*',
   '**/+([A-Z_]).md',
+  '**/+([A-Z_]).mdx',
   '**/+([A-Z_]).asciidoc',
   '**/LICENSE',
   '**/*.txt',
@@ -40,7 +30,7 @@ export const IGNORE_FILE_GLOBS = [
   'x-pack/plugins/canvas/canvas_plugin_src/**/*',
   'x-pack/plugins/monitoring/public/lib/jquery_flot/**/*',
   '**/.*',
-  '**/{webpackShims,__mocks__}/**/*',
+  '**/__mocks__/**/*',
   'x-pack/docs/**/*',
   'src/core/server/core_app/assets/fonts/**/*',
   'src/dev/code_coverage/ingest_coverage/integration_tests/mocks/**/*',
@@ -49,15 +39,15 @@ export const IGNORE_FILE_GLOBS = [
   'Dockerfile*',
   'vars/*',
   '.ci/pipeline-library/**/*',
-
-  // Files in this directory must match a pre-determined name in some cases.
-  'x-pack/plugins/canvas/storybook/*',
+  'packages/kbn-test/jest-preset.js',
+  'test/package/Vagrantfile',
 
   // filename must match language code which requires capital letters
   '**/translations/*.json',
 
-  // filename is required by storybook
-  'packages/kbn-storybook/storybook_config/preview-head.html',
+  // Storybook has predetermined filesnames
+  '**/preview-body.html',
+  '**/preview-head.html',
 
   // filename required by api-extractor
   'api-documenter.json',
@@ -71,6 +61,12 @@ export const IGNORE_FILE_GLOBS = [
   'x-pack/plugins/apm/e2e/**/*',
 
   'x-pack/plugins/maps/server/fonts/**/*',
+  // packages for the ingest manager's api integration tests could be valid semver which has dashes
+  'x-pack/test/fleet_api_integration/apis/fixtures/test_packages/**/*',
+
+  // Bazel default files
+  '**/WORKSPACE.bazel',
+  '**/BUILD.bazel',
 ];
 
 /**
@@ -97,16 +93,21 @@ export const KEBAB_CASE_DIRECTORY_GLOBS = ['packages/*', 'x-pack'];
  */
 export const IGNORE_DIRECTORY_GLOBS = [
   ...KEBAB_CASE_DIRECTORY_GLOBS,
-  '**/webpackShims',
   'src/babel-*',
   'packages/*',
-  'packages/kbn-ui-framework/generator-kui',
-  'src/legacy/ui/public/flot-charts',
   'test/functional/fixtures/es_archiver/visualize_source-filters',
   'packages/kbn-pm/src/utils/__fixtures__/*',
   'x-pack/dev-tools',
   'packages/kbn-optimizer/src/__fixtures__/mock_repo/x-pack',
 ];
+
+/**
+ * These patterns identify files which should have the extension stripped
+ * to reveal the actual name that should be checked.
+ *
+ * @type {Array}
+ */
+export const REMOVE_EXTENSION = ['packages/kbn-plugin-generator/template/**/*.ejs'];
 
 /**
  * DO NOT ADD FILES TO THIS LIST!!
@@ -123,12 +124,6 @@ export const IGNORE_DIRECTORY_GLOBS = [
  * @type {Array}
  */
 export const TEMPORARILY_IGNORED_PATHS = [
-  'src/legacy/core_plugins/console/public/src/directives/helpExample.txt',
-  'src/legacy/core_plugins/console/public/src/sense_editor/theme-sense-dark.js',
-  'src/legacy/core_plugins/tile_map/public/__tests__/scaledCircleMarkers.png',
-  'src/legacy/core_plugins/tile_map/public/__tests__/shadedCircleMarkers.png',
-  'src/legacy/core_plugins/tile_map/public/__tests__/shadedGeohashGrid.png',
-  'src/fixtures/config_upgrade_from_4.0.0_to_4.0.1-snapshot.json',
   'src/core/server/core_app/assets/favicons/android-chrome-192x192.png',
   'src/core/server/core_app/assets/favicons/android-chrome-256x256.png',
   'src/core/server/core_app/assets/favicons/android-chrome-512x512.png',
@@ -141,38 +136,9 @@ export const TEMPORARILY_IGNORED_PATHS = [
   'src/core/server/core_app/assets/favicons/mstile-310x150.png',
   'src/core/server/core_app/assets/favicons/mstile-310x310.png',
   'src/core/server/core_app/assets/favicons/safari-pinned-tab.svg',
-  'src/legacy/ui/public/styles/bootstrap/component-animations.less',
-  'src/legacy/ui/public/styles/bootstrap/input-groups.less',
-  'src/legacy/ui/public/styles/bootstrap/list-group.less',
-  'src/legacy/ui/public/styles/bootstrap/mixins/background-variant.less',
-  'src/legacy/ui/public/styles/bootstrap/mixins/border-radius.less',
-  'src/legacy/ui/public/styles/bootstrap/mixins/center-block.less',
-  'src/legacy/ui/public/styles/bootstrap/mixins/grid-framework.less',
-  'src/legacy/ui/public/styles/bootstrap/mixins/hide-text.less',
-  'src/legacy/ui/public/styles/bootstrap/mixins/list-group.less',
-  'src/legacy/ui/public/styles/bootstrap/mixins/nav-divider.less',
-  'src/legacy/ui/public/styles/bootstrap/mixins/nav-vertical-align.less',
-  'src/legacy/ui/public/styles/bootstrap/mixins/progress-bar.less',
-  'src/legacy/ui/public/styles/bootstrap/mixins/reset-filter.less',
-  'src/legacy/ui/public/styles/bootstrap/mixins/reset-text.less',
-  'src/legacy/ui/public/styles/bootstrap/mixins/responsive-visibility.less',
-  'src/legacy/ui/public/styles/bootstrap/mixins/tab-focus.less',
-  'src/legacy/ui/public/styles/bootstrap/mixins/table-row.less',
-  'src/legacy/ui/public/styles/bootstrap/mixins/text-emphasis.less',
-  'src/legacy/ui/public/styles/bootstrap/mixins/text-overflow.less',
-  'src/legacy/ui/public/styles/bootstrap/mixins/vendor-prefixes.less',
-  'src/legacy/ui/public/styles/bootstrap/progress-bars.less',
-  'src/legacy/ui/public/styles/bootstrap/responsive-utilities.less',
   'test/functional/apps/management/exports/_import_objects-conflicts.json',
-  'packages/kbn-ui-framework/doc_site/src/images/elastic-logo.svg',
-  'packages/kbn-ui-framework/doc_site/src/images/hint-arrow.svg',
-  'packages/kbn-ui-framework/doc_site/src/images/react-logo.svg',
-  'webpackShims/elasticsearch-browser.js',
-  'webpackShims/moment-timezone.js',
-  'webpackShims/ui-bootstrap.js',
   'x-pack/legacy/plugins/index_management/public/lib/editSettings.js',
   'x-pack/legacy/plugins/license_management/public/store/reducers/licenseManagement.js',
-  'x-pack/plugins/monitoring/public/components/sparkline/__mocks__/plugins/xpack_main/jquery_flot.js',
   'x-pack/plugins/monitoring/public/icons/health-gray.svg',
   'x-pack/plugins/monitoring/public/icons/health-green.svg',
   'x-pack/plugins/monitoring/public/icons/health-red.svg',
@@ -183,28 +149,4 @@ export const TEMPORARILY_IGNORED_PATHS = [
   'x-pack/plugins/reporting/server/export_types/common/assets/fonts/roboto/Roboto-Medium.ttf',
   'x-pack/plugins/reporting/server/export_types/common/assets/fonts/roboto/Roboto-Regular.ttf',
   'x-pack/plugins/reporting/server/export_types/common/assets/img/logo-grey.png',
-  'x-pack/test/functional/es_archives/monitoring/beats-with-restarted-instance/data.json.gz',
-  'x-pack/test/functional/es_archives/monitoring/beats-with-restarted-instance/mappings.json',
-  'x-pack/test/functional/es_archives/monitoring/logstash-pipelines/data.json.gz',
-  'x-pack/test/functional/es_archives/monitoring/logstash-pipelines/mappings.json',
-  'x-pack/test/functional/es_archives/monitoring/multi-basic/data.json.gz',
-  'x-pack/test/functional/es_archives/monitoring/multi-basic/mappings.json',
-  'x-pack/test/functional/es_archives/monitoring/singlecluster-basic-beats/data.json.gz',
-  'x-pack/test/functional/es_archives/monitoring/singlecluster-basic-beats/mappings.json',
-  'x-pack/test/functional/es_archives/monitoring/singlecluster-green-gold/data.json.gz',
-  'x-pack/test/functional/es_archives/monitoring/singlecluster-green-gold/mappings.json',
-  'x-pack/test/functional/es_archives/monitoring/singlecluster-green-platinum/data.json.gz',
-  'x-pack/test/functional/es_archives/monitoring/singlecluster-green-platinum/mappings.json',
-  'x-pack/test/functional/es_archives/monitoring/singlecluster-green-trial-two-nodes-one-cgrouped/data.json.gz',
-  'x-pack/test/functional/es_archives/monitoring/singlecluster-green-trial-two-nodes-one-cgrouped/mappings.json',
-  'x-pack/test/functional/es_archives/monitoring/singlecluster-red-platinum/data.json.gz',
-  'x-pack/test/functional/es_archives/monitoring/singlecluster-red-platinum/mappings.json',
-  'x-pack/test/functional/es_archives/monitoring/singlecluster-three-nodes-shard-relocation/data.json.gz',
-  'x-pack/test/functional/es_archives/monitoring/singlecluster-three-nodes-shard-relocation/mappings.json',
-  'x-pack/test/functional/es_archives/monitoring/singlecluster-yellow-basic/data.json.gz',
-  'x-pack/test/functional/es_archives/monitoring/singlecluster-yellow-basic/mappings.json',
-  'x-pack/test/functional/es_archives/monitoring/singlecluster-yellow-platinum--with-10-alerts/data.json.gz',
-  'x-pack/test/functional/es_archives/monitoring/singlecluster-yellow-platinum--with-10-alerts/mappings.json',
-  'x-pack/test/functional/es_archives/monitoring/singlecluster-yellow-platinum/data.json.gz',
-  'x-pack/test/functional/es_archives/monitoring/singlecluster-yellow-platinum/mappings.json',
 ];

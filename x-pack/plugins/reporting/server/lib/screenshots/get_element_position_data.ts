@@ -1,14 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
-import { HeadlessChromiumDriver } from '../../browsers';
-import { AttributesMap, ElementsPositionAndAttribute } from '../../types';
 import { LevelLogger, startTrace } from '../';
+import { HeadlessChromiumDriver } from '../../browsers';
 import { LayoutInstance } from '../layouts';
+import { AttributesMap, ElementsPositionAndAttribute } from './';
 import { CONTEXT_ELEMENTATTRIBUTES } from './constants';
 
 export const getElementPositionAndAttributes = async (

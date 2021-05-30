@@ -1,8 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import { Field, NormalizedFields, NormalizedField, State, Action } from './types';
 import {
   getFieldMeta,
@@ -175,10 +177,18 @@ export const reducer = (state: State, action: Action): State => {
         fields: action.value.fields,
         configuration: {
           ...state.configuration,
+          data: {
+            internal: action.value.configuration,
+            format: () => action.value.configuration,
+          },
           defaultValue: action.value.configuration,
         },
         templates: {
           ...state.templates,
+          data: {
+            internal: action.value.templates,
+            format: () => action.value.templates,
+          },
           defaultValue: action.value.templates,
         },
         documentFields: {
@@ -186,6 +196,10 @@ export const reducer = (state: State, action: Action): State => {
           ...action.value.documentFields,
           fieldToAddFieldTo: undefined,
           fieldToEdit: undefined,
+        },
+        runtimeFields: action.value.runtimeFields,
+        runtimeFieldsList: {
+          status: 'idle',
         },
         search: {
           term: '',
@@ -209,7 +223,7 @@ export const reducer = (state: State, action: Action): State => {
           isValid: true,
           defaultValue: action.value,
           data: {
-            raw: action.value,
+            internal: action.value,
             format: () => action.value,
           },
           validate: async () => true,
@@ -233,7 +247,7 @@ export const reducer = (state: State, action: Action): State => {
           isValid: true,
           defaultValue: action.value,
           data: {
-            raw: action.value,
+            internal: action.value,
             format: () => action.value,
           },
           validate: async () => true,
@@ -335,6 +349,11 @@ export const reducer = (state: State, action: Action): State => {
       return {
         ...state,
         fields: updatedFields,
+        documentFields: {
+          ...state.documentFields,
+          // If we removed the last field, show the "Create field" form
+          status: updatedFields.rootLevelFields.length === 0 ? 'creatingField' : 'idle',
+        },
         // If we have a search in progress, we reexecute the search to update our result array
         search: Boolean(state.search.term)
           ? {
@@ -469,6 +488,80 @@ export const reducer = (state: State, action: Action): State => {
         },
       };
     }
+    case 'runtimeFieldsList.createField': {
+      return {
+        ...state,
+        runtimeFieldsList: {
+          ...state.runtimeFieldsList,
+          status: 'creatingField',
+        },
+      };
+    }
+    case 'runtimeFieldsList.editField': {
+      return {
+        ...state,
+        runtimeFieldsList: {
+          ...state.runtimeFieldsList,
+          status: 'editingField',
+          fieldToEdit: action.value,
+        },
+      };
+    }
+    case 'runtimeField.add': {
+      const id = getUniqueId();
+      const normalizedField = {
+        id,
+        source: action.value,
+      };
+
+      return {
+        ...state,
+        runtimeFields: {
+          ...state.runtimeFields,
+          [id]: normalizedField,
+        },
+        runtimeFieldsList: {
+          ...state.runtimeFieldsList,
+          status: 'idle',
+        },
+      };
+    }
+    case 'runtimeField.edit': {
+      const fieldToEdit = state.runtimeFieldsList.fieldToEdit!;
+
+      return {
+        ...state,
+        runtimeFields: {
+          ...state.runtimeFields,
+          [fieldToEdit]: action.value,
+        },
+        runtimeFieldsList: {
+          ...state.runtimeFieldsList,
+          status: 'idle',
+        },
+      };
+    }
+    case 'runtimeField.remove': {
+      const field = state.runtimeFields[action.value];
+      const { id } = field;
+
+      const updatedFields = { ...state.runtimeFields };
+      delete updatedFields[id];
+
+      return {
+        ...state,
+        runtimeFields: updatedFields,
+      };
+    }
+    case 'runtimeFieldsList.closeRuntimeFieldEditor':
+      return {
+        ...state,
+        runtimeFieldsList: {
+          ...state.runtimeFieldsList,
+          status: 'idle',
+          fieldToEdit: undefined,
+        },
+      };
     case 'fieldsJsonEditor.update': {
       const nextState = {
         ...state,

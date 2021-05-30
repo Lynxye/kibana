@@ -1,20 +1,9 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import React, { ReactElement, Component } from 'react';
@@ -33,7 +22,6 @@ import { StepIndexPattern } from './components/step_index_pattern';
 import { StepTimeField } from './components/step_time_field';
 import { Header } from './components/header';
 import { LoadingState } from './components/loading_state';
-import { EmptyState } from './components/empty_state';
 
 import { context as contextType } from '../../../../kibana_react/public';
 import { getCreateBreadcrumbs } from '../breadcrumbs';
@@ -41,6 +29,7 @@ import { ensureMinimumTime, getIndices } from './lib';
 import { IndexPatternCreationConfig } from '../..';
 import { IndexPatternManagmentContextValue } from '../../types';
 import { MatchedItem } from './types';
+import { DuplicateIndexPatternError, IndexPattern } from '../../../../data/public';
 
 interface CreateIndexPatternWizardState {
   step: number;
@@ -68,10 +57,11 @@ export class CreateIndexPatternWizard extends Component<
     context.services.setBreadcrumbs(getCreateBreadcrumbs());
 
     const type = new URLSearchParams(props.location.search).get('type') || undefined;
+    const indexPattern = new URLSearchParams(props.location.search).get('name') || '';
 
     this.state = {
       step: 1,
-      indexPattern: '',
+      indexPattern,
       allIndices: [],
       remoteClustersExist: false,
       isInitiallyLoadingIndices: true,
@@ -125,7 +115,13 @@ export class CreateIndexPatternWizard extends Component<
     // query local and remote indices, updating state independently
     ensureMinimumTime(
       this.catchAndWarn(
-        getIndices(this.context.services.http, this.state.indexPatternCreationType, `*`, false),
+        getIndices(
+          this.context.services.http,
+          (indexName: string) => this.state.indexPatternCreationType.getIndexTags(indexName),
+          `*`,
+          false
+        ),
+
         [],
         indicesFailMsg
       )
@@ -136,7 +132,13 @@ export class CreateIndexPatternWizard extends Component<
     this.catchAndWarn(
       // if we get an error from remote cluster query, supply fallback value that allows user entry.
       // ['a'] is fallback value
-      getIndices(this.context.services.http, this.state.indexPatternCreationType, `*:*`, false),
+      getIndices(
+        this.context.services.http,
+        (indexName: string) => this.state.indexPatternCreationType.getIndexTags(indexName),
+        `*:*`,
+        false
+      ),
+
       ['a'],
       clustersFailMsg
     ).then((remoteIndices: string[] | MatchedItem[]) =>
@@ -145,50 +147,50 @@ export class CreateIndexPatternWizard extends Component<
   };
 
   createIndexPattern = async (timeFieldName: string | undefined, indexPatternId: string) => {
+    let emptyPattern: IndexPattern;
     const { history } = this.props;
     const { indexPattern } = this.state;
 
-    const emptyPattern = await this.context.services.data.indexPatterns.make();
-
-    Object.assign(emptyPattern, {
-      id: indexPatternId,
-      title: indexPattern,
-      timeFieldName,
-      ...this.state.indexPatternCreationType.getIndexPatternMappings(),
-    });
-
-    const createdId = await emptyPattern.create();
-    if (!createdId) {
-      const confirmMessage = i18n.translate(
-        'indexPatternManagement.indexPattern.titleExistsLabel',
-        {
-          values: { title: emptyPattern.title },
-          defaultMessage: "An index pattern with the title '{title}' already exists.",
-        }
-      );
-
-      const isConfirmed = await this.context.services.overlays.openConfirm(confirmMessage, {
-        confirmButtonText: i18n.translate(
-          'indexPatternManagement.indexPattern.goToPatternButtonLabel',
-          {
-            defaultMessage: 'Go to existing pattern',
-          }
-        ),
+    try {
+      emptyPattern = await this.context.services.data.indexPatterns.createAndSave({
+        id: indexPatternId,
+        title: indexPattern,
+        timeFieldName,
+        ...this.state.indexPatternCreationType.getIndexPatternMappings(),
       });
+    } catch (err) {
+      if (err instanceof DuplicateIndexPatternError) {
+        const confirmMessage = i18n.translate(
+          'indexPatternManagement.indexPattern.titleExistsLabel',
+          {
+            values: { title: emptyPattern!.title },
+            defaultMessage: "An index pattern with the title '{title}' already exists.",
+          }
+        );
 
-      if (isConfirmed) {
-        return history.push(`/patterns/${indexPatternId}`);
+        const isConfirmed = await this.context.services.overlays.openConfirm(confirmMessage, {
+          confirmButtonText: i18n.translate(
+            'indexPatternManagement.indexPattern.goToPatternButtonLabel',
+            {
+              defaultMessage: 'Go to existing pattern',
+            }
+          ),
+        });
+
+        if (isConfirmed) {
+          return history.push(`/patterns/${indexPatternId}`);
+        } else {
+          return;
+        }
       } else {
-        return;
+        throw err;
       }
     }
 
-    if (!this.context.services.uiSettings.get('defaultIndex')) {
-      await this.context.services.uiSettings.set('defaultIndex', createdId);
-    }
+    await this.context.services.data.indexPatterns.setDefault(emptyPattern.id as string);
 
-    this.context.services.data.indexPatterns.clearCache(createdId);
-    history.push(`/patterns/${createdId}`);
+    this.context.services.data.indexPatterns.clearCache(emptyPattern.id as string);
+    history.push(`/patterns/${emptyPattern.id}`);
   };
 
   goToTimeFieldStep = (indexPattern: string, selectedTimeField?: string) => {
@@ -200,37 +202,22 @@ export class CreateIndexPatternWizard extends Component<
   };
 
   renderHeader() {
+    const { docLinks, indexPatternCreationType } = this.state;
     return (
       <Header
-        prompt={this.state.indexPatternCreationType.renderPrompt()}
-        indexPatternName={this.state.indexPatternCreationType.getIndexPatternName()}
-        isBeta={this.state.indexPatternCreationType.getIsBeta()}
-        docLinks={this.state.docLinks}
+        prompt={indexPatternCreationType.renderPrompt()}
+        indexPatternName={indexPatternCreationType.getIndexPatternName()}
+        isBeta={indexPatternCreationType.getIsBeta()}
+        docLinks={docLinks}
       />
     );
   }
 
   renderContent() {
-    const {
-      allIndices,
-      isInitiallyLoadingIndices,
-      step,
-      indexPattern,
-      remoteClustersExist,
-    } = this.state;
+    const { allIndices, isInitiallyLoadingIndices, step, indexPattern } = this.state;
 
     if (isInitiallyLoadingIndices) {
       return <LoadingState />;
-    }
-
-    const hasDataIndices = allIndices.some(({ name }: MatchedItem) => !name.startsWith('.'));
-    if (!hasDataIndices && !remoteClustersExist) {
-      return (
-        <EmptyState
-          onRefresh={this.fetchData}
-          prependBasePath={this.context.services.http.basePath.prepend}
-        />
-      );
     }
 
     const header = this.renderHeader();

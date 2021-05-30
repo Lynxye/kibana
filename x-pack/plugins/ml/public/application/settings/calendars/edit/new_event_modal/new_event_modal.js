@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { Component, Fragment } from 'react';
@@ -257,7 +258,12 @@ export class NewEventModal extends Component {
 
     return (
       <Fragment>
-        <EuiModal onClose={closeModal} initialFocus="[name=eventDescription]" maxWidth={false}>
+        <EuiModal
+          onClose={closeModal}
+          initialFocus="[name=eventDescription]"
+          maxWidth={false}
+          data-test-subj={'mlCalendarEventForm'}
+        >
           <EuiModalHeader>
             <EuiModalHeaderTitle>
               <FormattedMessage
@@ -283,6 +289,7 @@ export class NewEventModal extends Component {
                   onChange={this.onDescriptionChange}
                   isInvalid={!description}
                   fullWidth
+                  data-test-subj={'mlCalendarEventDescriptionInput'}
                 />
               </EuiFormRow>
 
@@ -293,13 +300,18 @@ export class NewEventModal extends Component {
           </EuiModalBody>
 
           <EuiModalFooter>
-            <EuiButtonEmpty onClick={closeModal}>
+            <EuiButtonEmpty onClick={closeModal} data-test-subj={'mlCalendarCancelEventButton'}>
               <FormattedMessage
                 id="xpack.ml.calendarsEdit.newEventModal.cancelButtonLabel"
                 defaultMessage="Cancel"
               />
             </EuiButtonEmpty>
-            <EuiButton onClick={this.handleAddEvent} fill disabled={!description}>
+            <EuiButton
+              onClick={this.handleAddEvent}
+              fill
+              disabled={!description}
+              data-test-subj={'mlCalendarAddEventButton'}
+            >
               <FormattedMessage
                 id="xpack.ml.calendarsEdit.newEventModal.addButtonLabel"
                 defaultMessage="Add"

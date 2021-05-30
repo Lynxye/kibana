@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React from 'react';
@@ -13,8 +14,8 @@ import { ADD_DATA_PATH } from '../../../common/constants';
 import { useKibana } from '../../common/lib/kibana';
 
 export const Summary = React.memo(() => {
-  const docLinks = useKibana().services.docLinks;
-
+  const { docLinks, http } = useKibana().services;
+  const basePath = http.basePath.get();
   return (
     <EuiFlexItem>
       <EuiText>
@@ -39,7 +40,7 @@ export const Summary = React.memo(() => {
                 </EuiLink>
               ),
               data: (
-                <EuiLink href={ADD_DATA_PATH}>
+                <EuiLink href={`${basePath}${ADD_DATA_PATH}`}>
                   <FormattedMessage
                     id="xpack.securitySolution.overview.startedText.dataLinkText"
                     defaultMessage="ingesting data"

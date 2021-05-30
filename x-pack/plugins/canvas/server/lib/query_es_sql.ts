@@ -1,12 +1,14 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import { map, zipObject } from 'lodash';
-import { buildBoolArray } from './build_bool_array';
-import { sanitizeName } from './sanitize_name';
-import { normalizeType } from './normalize_type';
+import { buildBoolArray } from '../../common/lib/request/build_bool_array';
+import { sanitizeName } from '../../common/lib/request/sanitize_name';
+import { normalizeType } from '../../common/lib/request/normalize_type';
 import { LegacyAPICaller } from '../../../../../src/core/server';
 import { ExpressionValueFilter } from '../../types';
 
@@ -53,7 +55,11 @@ export const queryEsSQL = async (
     });
 
     const columns = response.columns.map(({ name, type }) => {
-      return { name: sanitizeName(name), type: normalizeType(type) };
+      return {
+        id: sanitizeName(name),
+        name: sanitizeName(name),
+        meta: { type: normalizeType(type) },
+      };
     });
     const columnNames = map(columns, 'name');
     let rows = response.rows.map((row) => zipObject(columnNames, row));
@@ -82,6 +88,9 @@ export const queryEsSQL = async (
 
     return {
       type: 'datatable',
+      meta: {
+        type: 'essql',
+      },
       columns,
       rows,
     };

@@ -1,31 +1,44 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import * as t from 'io-ts';
 
-import { RuleTypeSchema } from '../../../../../common/detection_engine/types';
+import { listArray } from '@kbn/securitysolution-io-ts-list-types';
 import {
+  risk_score_mapping,
+  threat_query,
+  threat_index,
+  threat_indicator_path,
+  threat_mapping,
+  threat_language,
+  threat_filters,
+  threats,
+  type,
+  severity_mapping,
+} from '@kbn/securitysolution-io-ts-alerting-types';
+import {
+  SortOrder,
   author,
   building_block_type,
   license,
-  risk_score_mapping,
   rule_name_override,
-  severity_mapping,
   timestamp_override,
   threshold,
 } from '../../../../../common/detection_engine/schemas/common/schemas';
 import {
-  listArray,
-  listArrayOrUndefined,
-} from '../../../../../common/detection_engine/schemas/types';
-import { PatchRulesSchema } from '../../../../../common/detection_engine/schemas/request/patch_rules_schema';
+  CreateRulesSchema,
+  PatchRulesSchema,
+  UpdateRulesSchema,
+} from '../../../../../common/detection_engine/schemas/request';
 
 /**
  * Params is an "record", since it is a type of AlertActionParams which is action templates.
- * @see x-pack/plugins/alerts/common/alert.ts
+ * @see x-pack/plugins/alerting/common/alert.ts
+ * @deprecated Use the one from @kbn/security-io-ts-alerting-types
  */
 export const action = t.exact(
   t.type({
@@ -36,48 +49,13 @@ export const action = t.exact(
   })
 );
 
-export const NewRuleSchema = t.intersection([
-  t.type({
-    description: t.string,
-    enabled: t.boolean,
-    interval: t.string,
-    name: t.string,
-    risk_score: t.number,
-    severity: t.string,
-    type: RuleTypeSchema,
-  }),
-  t.partial({
-    actions: t.array(action),
-    anomaly_threshold: t.number,
-    created_by: t.string,
-    false_positives: t.array(t.string),
-    filters: t.array(t.unknown),
-    from: t.string,
-    id: t.string,
-    index: t.array(t.string),
-    language: t.string,
-    machine_learning_job_id: t.string,
-    max_signals: t.number,
-    query: t.string,
-    references: t.array(t.string),
-    rule_id: t.string,
-    saved_id: t.string,
-    tags: t.array(t.string),
-    threat: t.array(t.unknown),
-    threshold,
-    throttle: t.union([t.string, t.null]),
-    to: t.string,
-    updated_by: t.string,
-    note: t.string,
-    exceptions_list: listArrayOrUndefined,
-  }),
-]);
+export interface CreateRulesProps {
+  rule: CreateRulesSchema;
+  signal: AbortSignal;
+}
 
-export const NewRulesSchema = t.array(NewRuleSchema);
-export type NewRule = t.TypeOf<typeof NewRuleSchema>;
-
-export interface AddRulesProps {
-  rule: NewRule;
+export interface UpdateRulesProps {
+  rule: UpdateRulesSchema;
   signal: AbortSignal;
 }
 
@@ -96,6 +74,15 @@ const MetaRule = t.intersection([
   }),
 ]);
 
+const StatusTypes = t.union([
+  t.literal('succeeded'),
+  t.literal('failed'),
+  t.literal('going to run'),
+  t.literal('partial failure'),
+  t.literal('warning'),
+]);
+
+// TODO: make a ticket
 export const RuleSchema = t.intersection([
   t.type({
     author,
@@ -117,9 +104,9 @@ export const RuleSchema = t.intersection([
     severity: t.string,
     severity_mapping,
     tags: t.array(t.string),
-    type: RuleTypeSchema,
+    type,
     to: t.string,
-    threat: t.array(t.unknown),
+    threat: threats,
     updated_at: t.string,
     updated_by: t.string,
     actions: t.array(action),
@@ -134,15 +121,23 @@ export const RuleSchema = t.intersection([
     license,
     last_failure_at: t.string,
     last_failure_message: t.string,
+    last_success_message: t.string,
+    last_success_at: t.string,
     meta: MetaRule,
-    machine_learning_job_id: t.string,
+    machine_learning_job_id: t.array(t.string),
     output_index: t.string,
     query: t.string,
     rule_name_override,
     saved_id: t.string,
-    status: t.string,
+    status: StatusTypes,
     status_date: t.string,
     threshold,
+    threat_query,
+    threat_filters,
+    threat_index,
+    threat_indicator_path,
+    threat_mapping,
+    threat_language,
     timeline_id: t.string,
     timeline_title: t.string,
     timestamp_override,
@@ -182,13 +177,14 @@ export interface FetchRulesProps {
   signal: AbortSignal;
 }
 
+export type RulesSortingFields = 'enabled' | 'updated_at' | 'name' | 'created_at';
 export interface FilterOptions {
   filter: string;
-  sortField: string;
-  sortOrder: 'asc' | 'desc';
-  showCustomRules?: boolean;
-  showElasticRules?: boolean;
-  tags?: string[];
+  sortField: RulesSortingFields;
+  sortOrder: SortOrder;
+  showCustomRules: boolean;
+  showElasticRules: boolean;
+  tags: string[];
 }
 
 export interface FetchRulesResponse {
@@ -234,10 +230,18 @@ export interface ImportRulesResponseError {
   };
 }
 
+export interface ImportResponseError {
+  id: string;
+  error: {
+    status_code: number;
+    message: string;
+  };
+}
+
 export interface ImportDataResponse {
   success: boolean;
   success_count: number;
-  errors: ImportRulesResponseError[];
+  errors: Array<ImportRulesResponseError | ImportResponseError>;
 }
 
 export interface ExportDocumentsProps {
@@ -252,7 +256,12 @@ export interface RuleStatus {
   failures: RuleInfoStatus[];
 }
 
-export type RuleStatusType = 'executing' | 'failed' | 'going to run' | 'succeeded';
+export type RuleStatusType =
+  | 'failed'
+  | 'going to run'
+  | 'succeeded'
+  | 'partial failure'
+  | 'warning';
 export interface RuleInfoStatus {
   alert_id: string;
   status_date: string;
@@ -261,7 +270,7 @@ export interface RuleInfoStatus {
   last_success_at: string | null;
   last_failure_message: string | null;
   last_success_message: string | null;
-  last_look_back_date: string | null | undefined;
+  last_look_back_date: string | null | undefined; // NOTE: This is no longer used on the UI, but left here in case users are using it within the API
   gap: string | null | undefined;
   bulk_create_time_durations: string[] | null | undefined;
   search_after_time_durations: string[] | null | undefined;

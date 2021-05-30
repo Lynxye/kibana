@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { sortNodes } from './sort_nodes';
@@ -9,6 +10,7 @@ import { SnapshotNode } from '../../../../../common/http_api/snapshot_api';
 
 const nodes: SnapshotNode[] = [
   {
+    name: 'host-01',
     path: [{ value: 'host-01', label: 'host-01' }],
     metrics: [
       {
@@ -20,6 +22,7 @@ const nodes: SnapshotNode[] = [
     ],
   },
   {
+    name: 'host-02',
     path: [{ value: 'host-02', label: 'host-02' }],
     metrics: [
       {

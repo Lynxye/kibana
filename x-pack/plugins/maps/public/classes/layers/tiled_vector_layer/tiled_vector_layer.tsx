@@ -1,22 +1,32 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React from 'react';
+import type {
+  Map as MbMap,
+  GeoJSONSource as MbGeoJSONSource,
+  VectorSource as MbVectorSource,
+} from '@kbn/mapbox-gl';
 import { EuiIcon } from '@elastic/eui';
 import { Feature } from 'geojson';
-import { VectorStyle } from '../../styles/vector/vector_style';
+import uuid from 'uuid/v4';
+import { parse as parseUrl } from 'url';
+import { IVectorStyle, VectorStyle } from '../../styles/vector/vector_style';
 import { SOURCE_DATA_REQUEST_ID, LAYER_TYPE } from '../../../../common/constants';
-import { VectorLayer, VectorLayerArguments } from '../vector_layer/vector_layer';
-import { ITiledSingleLayerVectorSource } from '../../sources/vector_source';
+import { VectorLayer, VectorLayerArguments } from '../vector_layer';
+import { ITiledSingleLayerVectorSource } from '../../sources/tiled_single_layer_vector_source';
 import { DataRequestContext } from '../../../actions';
 import {
   VectorLayerDescriptor,
   VectorSourceRequestMeta,
 } from '../../../../common/descriptor_types';
 import { MVTSingleLayerVectorSourceConfig } from '../../sources/mvt_single_layer_vector_source/types';
+import { canSkipSourceUpdate } from '../../util/can_skip_fetch';
+import { isRefreshOnlyQuery } from '../../util/is_refresh_only_query';
 
 export class TiledVectorLayer extends VectorLayer {
   static type = LAYER_TYPE.TILED_VECTOR;
@@ -59,39 +69,69 @@ export class TiledVectorLayer extends VectorLayer {
     const searchFilters: VectorSourceRequestMeta = this._getSearchFilters(
       dataFilters,
       this.getSource(),
-      this._style
+      this._style as IVectorStyle
     );
     const prevDataRequest = this.getSourceDataRequest();
-
     if (prevDataRequest) {
       const data: MVTSingleLayerVectorSourceConfig = prevDataRequest.getData() as MVTSingleLayerVectorSourceConfig;
-      const canSkipBecauseNoChanges =
-        data.layerName === this._source.getLayerName() &&
-        data.minSourceZoom === this._source.getMinZoom() &&
-        data.maxSourceZoom === this._source.getMaxZoom();
-
-      if (canSkipBecauseNoChanges) {
-        return null;
+      if (data) {
+        const noChangesInSourceState: boolean =
+          data.layerName === this._source.getLayerName() &&
+          data.minSourceZoom === this._source.getMinZoom() &&
+          data.maxSourceZoom === this._source.getMaxZoom();
+        const noChangesInSearchState: boolean = await canSkipSourceUpdate({
+          extentAware: false, // spatial extent knowledge is already fully automated by tile-loading based on pan-zooming
+          source: this.getSource(),
+          prevDataRequest,
+          nextMeta: searchFilters,
+        });
+        const canSkip = noChangesInSourceState && noChangesInSearchState;
+        if (canSkip) {
+          return null;
+        }
       }
     }
 
     startLoading(SOURCE_DATA_REQUEST_ID, requestToken, searchFilters);
     try {
-      const templateWithMeta = await this._source.getUrlTemplateWithMeta();
-      stopLoading(SOURCE_DATA_REQUEST_ID, requestToken, templateWithMeta, {});
+      const prevMeta = prevDataRequest ? prevDataRequest.getMeta() : undefined;
+      const prevData = prevDataRequest
+        ? (prevDataRequest.getData() as MVTSingleLayerVectorSourceConfig)
+        : undefined;
+      const urlToken =
+        !prevData || isRefreshOnlyQuery(prevMeta ? prevMeta.query : undefined, searchFilters.query)
+          ? uuid()
+          : prevData.urlToken;
+
+      const newUrlTemplateAndMeta = await this._source.getUrlTemplateWithMeta(searchFilters);
+
+      let urlTemplate;
+      if (newUrlTemplateAndMeta.refreshTokenParamName) {
+        const parsedUrl = parseUrl(newUrlTemplateAndMeta.urlTemplate, true);
+        const separator = !parsedUrl.query || Object.keys(parsedUrl.query).length === 0 ? '?' : '&';
+        urlTemplate = `${newUrlTemplateAndMeta.urlTemplate}${separator}${newUrlTemplateAndMeta.refreshTokenParamName}=${urlToken}`;
+      } else {
+        urlTemplate = newUrlTemplateAndMeta.urlTemplate;
+      }
+
+      const urlTemplateAndMetaWithToken = {
+        ...newUrlTemplateAndMeta,
+        urlToken,
+        urlTemplate,
+      };
+      stopLoading(SOURCE_DATA_REQUEST_ID, requestToken, urlTemplateAndMetaWithToken, {});
     } catch (error) {
       onLoadError(SOURCE_DATA_REQUEST_ID, requestToken, error.message);
     }
   }
 
   async syncData(syncContext: DataRequestContext) {
-    await this._syncSourceStyleMeta(syncContext, this._source, this._style);
-    await this._syncSourceFormatters(syncContext, this._source, this._style);
+    await this._syncSourceStyleMeta(syncContext, this._source, this._style as IVectorStyle);
+    await this._syncSourceFormatters(syncContext, this._source, this._style as IVectorStyle);
     await this._syncMVTUrlTemplate(syncContext);
   }
 
-  _syncSourceBindingWithMb(mbMap: unknown) {
-    // @ts-expect-error
+  _syncSourceBindingWithMb(mbMap: MbMap) {
     const mbSource = mbMap.getSource(this._getMbSourceId());
     if (mbSource) {
       return;
@@ -100,7 +140,7 @@ export class TiledVectorLayer extends VectorLayer {
     if (!sourceDataRequest) {
       // this is possible if the layer was invisible at startup.
       // the actions will not perform any data=syncing as an optimization when a layer is invisible
-      // when turning the layer back into visible, it's possible the url has not been resovled yet.
+      // when turning the layer back into visible, it's possible the url had not been resolved yet.
       return;
     }
 
@@ -110,7 +150,6 @@ export class TiledVectorLayer extends VectorLayer {
     }
 
     const mbSourceId = this._getMbSourceId();
-    // @ts-expect-error
     mbMap.addSource(mbSourceId, {
       type: 'vector',
       tiles: [sourceMeta.urlTemplate],
@@ -123,7 +162,7 @@ export class TiledVectorLayer extends VectorLayer {
     return this._getMbSourceId() === mbSourceId;
   }
 
-  _syncStylePropertiesWithMb(mbMap: unknown) {
+  _syncStylePropertiesWithMb(mbMap: MbMap) {
     // @ts-ignore
     const mbSource = mbMap.getSource(this._getMbSourceId());
     if (!mbSource) {
@@ -141,14 +180,19 @@ export class TiledVectorLayer extends VectorLayer {
 
     this._setMbPointsProperties(mbMap, sourceMeta.layerName);
     this._setMbLinePolygonProperties(mbMap, sourceMeta.layerName);
+    this._setMbCentroidProperties(mbMap, sourceMeta.layerName);
   }
 
-  _requiresPrevSourceCleanup(mbMap: unknown): boolean {
-    // @ts-expect-error
-    const mbTileSource = mbMap.getSource(this._getMbSourceId());
-    if (!mbTileSource) {
+  _requiresPrevSourceCleanup(mbMap: MbMap): boolean {
+    const mbSource = mbMap.getSource(this._getMbSourceId()) as MbVectorSource | MbGeoJSONSource;
+    if (!mbSource) {
       return false;
     }
+    if (!('tiles' in mbSource)) {
+      // Expected source is not compatible, so remove.
+      return true;
+    }
+    const mbTileSource = mbSource as MbVectorSource;
 
     const dataRequest = this.getSourceDataRequest();
     if (!dataRequest) {
@@ -161,7 +205,7 @@ export class TiledVectorLayer extends VectorLayer {
     }
 
     const isSourceDifferent =
-      mbTileSource.tiles[0] !== tiledSourceMeta.urlTemplate ||
+      mbTileSource.tiles?.[0] !== tiledSourceMeta.urlTemplate ||
       mbTileSource.minzoom !== tiledSourceMeta.minSourceZoom ||
       mbTileSource.maxzoom !== tiledSourceMeta.maxSourceZoom;
 
@@ -171,8 +215,10 @@ export class TiledVectorLayer extends VectorLayer {
 
     const layerIds = this.getMbLayerIds();
     for (let i = 0; i < layerIds.length; i++) {
-      // @ts-expect-error
       const mbLayer = mbMap.getLayer(layerIds[i]);
+      // The mapbox type in the spec is specified with `source-layer`
+      // but the programmable JS-object uses camelcase `sourceLayer`
+      // @ts-expect-error
       if (mbLayer && mbLayer.sourceLayer !== tiledSourceMeta.layerName) {
         // If the source-pointer of one of the layers is stale, they will all be stale.
         // In this case, all the mb-layers need to be removed and re-added.
@@ -183,7 +229,7 @@ export class TiledVectorLayer extends VectorLayer {
     return false;
   }
 
-  syncLayerWithMB(mbMap: unknown) {
+  syncLayerWithMB(mbMap: MbMap) {
     this._removeStaleMbSourcesAndLayers(mbMap);
     this._syncSourceBindingWithMb(mbMap);
     this._syncStylePropertiesWithMb(mbMap);

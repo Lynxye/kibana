@@ -1,8 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import expect from '@kbn/expect';
 import { FtrProviderContext } from '../../../ftr_provider_context';
 
@@ -10,14 +12,7 @@ export default function ({ getPageObjects, getService }: FtrProviderContext) {
   const esArchiver = getService('esArchiver');
   const security = getService('security');
   const testSubjects = getService('testSubjects');
-  const PageObjects = getPageObjects([
-    'common',
-    'settings',
-    'security',
-    'error',
-    'header',
-    'savedObjects',
-  ]);
+  const PageObjects = getPageObjects(['common', 'settings', 'security', 'error', 'savedObjects']);
   let version: string = '';
 
   describe('feature controls saved objects management', () => {
@@ -75,7 +70,6 @@ export default function ({ getPageObjects, getService }: FtrProviderContext) {
         it('shows all saved objects', async () => {
           const objects = await PageObjects.savedObjects.getRowTitles();
           expect(objects).to.eql([
-            'Advanced Settings [6.0.0]',
             `Advanced Settings [${version}]`,
             'A Dashboard',
             'logstash-*',
@@ -86,10 +80,6 @@ export default function ({ getPageObjects, getService }: FtrProviderContext) {
         it('can view all saved objects in applications', async () => {
           const bools = await PageObjects.savedObjects.getTableSummary();
           expect(bools).to.eql([
-            {
-              title: 'Advanced Settings [6.0.0]',
-              canViewInApp: false,
-            },
             {
               title: `Advanced Settings [${version}]`,
               canViewInApp: false,
@@ -194,7 +184,6 @@ export default function ({ getPageObjects, getService }: FtrProviderContext) {
         it('shows all saved objects', async () => {
           const objects = await PageObjects.savedObjects.getRowTitles();
           expect(objects).to.eql([
-            'Advanced Settings [6.0.0]',
             `Advanced Settings [${version}]`,
             'A Dashboard',
             'logstash-*',
@@ -205,10 +194,6 @@ export default function ({ getPageObjects, getService }: FtrProviderContext) {
         it('cannot view any saved objects in applications', async () => {
           const bools = await PageObjects.savedObjects.getTableSummary();
           expect(bools).to.eql([
-            {
-              title: 'Advanced Settings [6.0.0]',
-              canViewInApp: false,
-            },
             {
               title: `Advanced Settings [${version}]`,
               canViewInApp: false,
@@ -277,7 +262,7 @@ export default function ({ getPageObjects, getService }: FtrProviderContext) {
           kibana: [
             {
               feature: {
-                visualize: ['all'],
+                visualize: ['minimal_all'],
               },
               spaces: ['*'],
             },
@@ -310,12 +295,6 @@ export default function ({ getPageObjects, getService }: FtrProviderContext) {
       });
 
       describe('listing', () => {
-        it(`doesn't display  management section`, async () => {
-          await PageObjects.settings.navigateTo();
-          await testSubjects.existOrFail('managementHome'); // this ensures we've gotten to the management page
-          await testSubjects.missingOrFail('objects');
-        });
-
         it(`can't navigate to listing page`, async () => {
           await PageObjects.common.navigateToUrl('management', 'kibana/objects', {
             ensureCurrentUrl: false,
@@ -323,7 +302,7 @@ export default function ({ getPageObjects, getService }: FtrProviderContext) {
             shouldUseHashForSubUrl: false,
           });
 
-          await testSubjects.existOrFail('managementHome');
+          await testSubjects.existOrFail('appNotFoundPageContent');
         });
       });
 
@@ -338,8 +317,7 @@ export default function ({ getPageObjects, getService }: FtrProviderContext) {
               shouldUseHashForSubUrl: false,
             }
           );
-          await PageObjects.header.waitUntilLoadingHasFinished();
-          await testSubjects.existOrFail('managementHome');
+          await testSubjects.existOrFail('appNotFoundPageContent');
         });
       });
     });

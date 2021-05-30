@@ -1,14 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { difference } from 'lodash';
 import { getNewJobLimits } from '../../../../services/ml_server_info';
-import { mlJobService } from '../../../../services/job_service';
 import { processCreatedBy } from '../../../../../../common/util/job_utils';
 import { getSavedObjectsClient } from '../../../../util/dependency_cache';
+import { ml } from '../../../../services/ml_api_service';
 
 export function saveJob(job, newJobData, finish) {
   return new Promise((resolve, reject) => {
@@ -41,14 +42,9 @@ export function saveJob(job, newJobData, finish) {
 
     // if anything has changed, post the changes
     if (Object.keys(jobData).length) {
-      mlJobService
-        .updateJob(job.job_id, jobData)
-        .then((resp) => {
-          if (resp.success) {
-            saveDatafeedWrapper();
-          } else {
-            reject(resp);
-          }
+      ml.updateJob({ jobId: job.job_id, job: jobData })
+        .then(() => {
+          saveDatafeedWrapper();
         })
         .catch((error) => {
           reject(error);
@@ -59,17 +55,17 @@ export function saveJob(job, newJobData, finish) {
   });
 }
 
-function saveDatafeed(datafeedData, job) {
+function saveDatafeed(datafeedConfig, job) {
   return new Promise((resolve, reject) => {
-    if (Object.keys(datafeedData).length) {
+    if (Object.keys(datafeedConfig).length) {
       const datafeedId = job.datafeed_config.datafeed_id;
-      mlJobService.updateDatafeed(datafeedId, datafeedData).then((resp) => {
-        if (resp.success) {
+      ml.updateDatafeed({ datafeedId, datafeedConfig })
+        .then(() => {
           resolve();
-        } else {
-          reject(resp);
-        }
-      });
+        })
+        .catch((error) => {
+          reject(error);
+        });
     } else {
       resolve();
     }

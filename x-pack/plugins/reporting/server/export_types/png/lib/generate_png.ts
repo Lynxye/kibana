@@ -1,16 +1,27 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import apm from 'elastic-apm-node';
 import * as Rx from 'rxjs';
-import { map } from 'rxjs/operators';
+import { finalize, map, tap } from 'rxjs/operators';
 import { ReportingCore } from '../../../';
 import { LevelLogger } from '../../../lib';
 import { LayoutParams, PreserveLayout } from '../../../lib/layouts';
-import { ConditionalHeaders, ScreenshotResults } from '../../../types';
+import { ScreenshotResults } from '../../../lib/screenshots';
+import { ConditionalHeaders } from '../../common';
+
+function getBase64DecodedSize(value: string) {
+  // @see https://en.wikipedia.org/wiki/Base64#Output_padding
+  return (
+    (value.length * 3) / 4 -
+    Number(value[value.length - 1] === '=') -
+    Number(value[value.length - 2] === '=')
+  );
+}
 
 export async function generatePngObservableFactory(reporting: ReportingCore) {
   const getScreenshots = await reporting.getScreenshotsObservable();
@@ -18,7 +29,7 @@ export async function generatePngObservableFactory(reporting: ReportingCore) {
   return function generatePngObservable(
     logger: LevelLogger,
     url: string,
-    browserTimezone: string,
+    browserTimezone: string | undefined,
     conditionalHeaders: ConditionalHeaders,
     layoutParams: LayoutParams
   ): Rx.Observable<{ base64: string | null; warnings: string[] }> {
@@ -27,10 +38,11 @@ export async function generatePngObservableFactory(reporting: ReportingCore) {
     if (!layoutParams || !layoutParams.dimensions) {
       throw new Error(`LayoutParams.Dimensions is undefined.`);
     }
-    const layout = new PreserveLayout(layoutParams.dimensions);
+    const layout = new PreserveLayout(layoutParams.dimensions, layoutParams.selectors);
     if (apmLayout) apmLayout.end();
 
     const apmScreenshots = apmTrans?.startSpan('screenshots_pipeline', 'setup');
+    let apmBuffer: typeof apm.currentSpan;
     const screenshots$ = getScreenshots({
       logger,
       urls: [url],
@@ -38,19 +50,28 @@ export async function generatePngObservableFactory(reporting: ReportingCore) {
       layout,
       browserTimezone,
     }).pipe(
-      map((results: ScreenshotResults[]) => {
-        if (apmScreenshots) apmScreenshots.end();
-        if (apmTrans) apmTrans.end();
+      tap(() => {
+        apmScreenshots?.end();
+        apmBuffer = apmTrans?.startSpan('get_buffer', 'output') ?? null;
+      }),
+      map((results: ScreenshotResults[]) => ({
+        base64: results[0].screenshots[0].base64EncodedData,
+        warnings: results.reduce((found, current) => {
+          if (current.error) {
+            found.push(current.error.message);
+          }
+          return found;
+        }, [] as string[]),
+      })),
+      tap(({ base64 }) => {
+        const byteLength = getBase64DecodedSize(base64);
 
-        return {
-          base64: results[0].screenshots[0].base64EncodedData,
-          warnings: results.reduce((found, current) => {
-            if (current.error) {
-              found.push(current.error.message);
-            }
-            return found;
-          }, [] as string[]),
-        };
+        logger.debug(`PNG buffer byte length: ${byteLength}`);
+        apmTrans?.setLabel('byte_length', byteLength, false);
+      }),
+      finalize(() => {
+        apmBuffer?.end();
+        apmTrans?.end();
       })
     );
 

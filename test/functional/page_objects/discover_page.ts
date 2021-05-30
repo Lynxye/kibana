@@ -1,20 +1,9 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import { FtrProviderContext } from '../ftr_provider_context';
@@ -27,15 +16,26 @@ export function DiscoverPageProvider({ getService, getPageObjects }: FtrProvider
   const { header } = getPageObjects(['header']);
   const browser = getService('browser');
   const globalNav = getService('globalNav');
-  const config = getService('config');
-  const defaultFindTimeout = config.get('timeouts.find');
   const elasticChart = getService('elasticChart');
   const docTable = getService('docTable');
+  const config = getService('config');
+  const defaultFindTimeout = config.get('timeouts.find');
+  const dataGrid = getService('dataGrid');
+  const kibanaServer = getService('kibanaServer');
 
   class DiscoverPage {
     public async getChartTimespan() {
       const el = await find.byCssSelector('[data-test-subj="discoverIntervalDateRange"]');
       return await el.getVisibleText();
+    }
+
+    public async getDocTable() {
+      const isLegacyDefault = await this.useLegacyTable();
+      if (isLegacyDefault) {
+        return docTable;
+      } else {
+        return dataGrid;
+      }
     }
 
     public async findFieldByName(name: string) {
@@ -84,12 +84,16 @@ export function DiscoverPageProvider({ getService, getPageObjects }: FtrProvider
     }
 
     public async waitUntilSearchingHasFinished() {
-      const spinner = await testSubjects.find('loadingSpinner');
-      await find.waitForElementHidden(spinner, defaultFindTimeout * 10);
+      await testSubjects.missingOrFail('loadingSpinner', { timeout: defaultFindTimeout * 10 });
     }
 
     public async getColumnHeaders() {
-      return await docTable.getHeaderFields('embeddedSavedSearchDocTable');
+      const isLegacy = await this.useLegacyTable();
+      if (isLegacy) {
+        return await docTable.getHeaderFields('embeddedSavedSearchDocTable');
+      }
+      const table = await this.getDocTable();
+      return await table.getHeaderFields();
     }
 
     public async openLoadSavedSearchPanel() {
@@ -119,8 +123,7 @@ export function DiscoverPageProvider({ getService, getPageObjects }: FtrProvider
 
     public async loadSavedSearch(searchName: string) {
       await this.openLoadSavedSearchPanel();
-      const searchLink = await find.byButtonText(searchName);
-      await searchLink.click();
+      await testSubjects.click(`savedObjectTitle${searchName.split(' ').join('-')}`);
       await header.waitUntilLoadingHasFinished();
     }
 
@@ -149,12 +152,14 @@ export function DiscoverPageProvider({ getService, getPageObjects }: FtrProvider
     }
 
     public async clickHistogramBar() {
+      await elasticChart.waitForRenderComplete();
       const el = await elasticChart.getCanvas();
 
-      await browser.getActions().move({ x: 0, y: 20, origin: el._webElement }).click().perform();
+      await browser.getActions().move({ x: 0, y: 0, origin: el._webElement }).click().perform();
     }
 
     public async brushHistogram() {
+      await elasticChart.waitForRenderComplete();
       const el = await elasticChart.getCanvas();
 
       await browser.dragAndDrop(
@@ -190,26 +195,52 @@ export function DiscoverPageProvider({ getService, getPageObjects }: FtrProvider
     }
 
     public async getDocHeader() {
-      const docHeader = await find.byCssSelector('thead > tr:nth-child(1)');
-      return await docHeader.getVisibleText();
+      const table = await this.getDocTable();
+      const docHeader = await table.getHeaders();
+      return docHeader.join();
     }
 
     public async getDocTableRows() {
       await header.waitUntilLoadingHasFinished();
-      const rows = await testSubjects.findAll('docTableRow');
-      return rows;
+      const table = await this.getDocTable();
+      return await table.getBodyRows();
+    }
+
+    public async useLegacyTable() {
+      return (await kibanaServer.uiSettings.get('doc_table:legacy')) !== false;
     }
 
     public async getDocTableIndex(index: number) {
+      const isLegacyDefault = await this.useLegacyTable();
+      if (isLegacyDefault) {
+        const row = await find.byCssSelector(`tr.kbnDocTable__row:nth-child(${index})`);
+        return await row.getVisibleText();
+      }
+
+      const row = await dataGrid.getRow({ rowIndex: index - 1 });
+      const result = await Promise.all(row.map(async (cell) => await cell.getVisibleText()));
+      // Remove control columns
+      return result.slice(2).join(' ');
+    }
+
+    public async getDocTableIndexLegacy(index: number) {
       const row = await find.byCssSelector(`tr.kbnDocTable__row:nth-child(${index})`);
       return await row.getVisibleText();
     }
 
-    public async getDocTableField(index: number) {
-      const field = await find.byCssSelector(
-        `tr.kbnDocTable__row:nth-child(${index}) > [data-test-subj='docTableField']`
-      );
-      return await field.getVisibleText();
+    public async getDocTableField(index: number, cellIdx: number = -1) {
+      const isLegacyDefault = await this.useLegacyTable();
+      const usedDefaultCellIdx = isLegacyDefault ? 0 : 2;
+      const usedCellIdx = cellIdx === -1 ? usedDefaultCellIdx : cellIdx;
+      if (isLegacyDefault) {
+        const fields = await find.allByCssSelector(
+          `tr.kbnDocTable__row:nth-child(${index}) [data-test-subj='docTableField']`
+        );
+        return await fields[usedCellIdx].getVisibleText();
+      }
+      const row = await dataGrid.getRow({ rowIndex: index - 1 });
+      const result = await Promise.all(row.map(async (cell) => await cell.getVisibleText()));
+      return result[usedCellIdx];
     }
 
     public async skipToEndOfDocTable() {
@@ -221,24 +252,45 @@ export function DiscoverPageProvider({ getService, getPageObjects }: FtrProvider
       return skipButton.click();
     }
 
+    /**
+     * When scrolling down the legacy table there's a link to scroll up
+     * So this is done by this function
+     */
+    public async backToTop() {
+      const skipButton = await testSubjects.find('discoverBackToTop');
+      return skipButton.click();
+    }
+
     public async getDocTableFooter() {
       return await testSubjects.find('discoverDocTableFooter');
     }
 
     public async clickDocSortDown() {
-      await find.clickByCssSelector('.fa-sort-down');
+      const isLegacyDefault = await this.useLegacyTable();
+      if (isLegacyDefault) {
+        await find.clickByCssSelector('.fa-sort-down');
+      } else {
+        await dataGrid.clickDocSortAsc();
+      }
     }
 
     public async clickDocSortUp() {
-      await find.clickByCssSelector('.fa-sort-up');
+      const isLegacyDefault = await this.useLegacyTable();
+      if (isLegacyDefault) {
+        await find.clickByCssSelector('.fa-sort-up');
+      } else {
+        await dataGrid.clickDocSortDesc();
+      }
+    }
+
+    public async isShowingDocViewer() {
+      return await testSubjects.exists('kbnDocViewer');
     }
 
     public async getMarks() {
       const table = await docTable.getTable();
-      const $ = await table.parseDomContent();
-      return $('mark')
-        .toArray()
-        .map((mark) => $(mark).text());
+      const marks = await table.findAllByTagName('mark');
+      return await Promise.all(marks.map((mark) => mark.getVisibleText()));
     }
 
     public async toggleSidebarCollapse() {
@@ -248,14 +300,37 @@ export function DiscoverPageProvider({ getService, getPageObjects }: FtrProvider
     public async getAllFieldNames() {
       const sidebar = await testSubjects.find('discover-sidebar');
       const $ = await sidebar.parseDomContent();
-      return $('.dscSidebar__item[attr-field]')
+      return $('.dscSidebarField__name')
         .toArray()
-        .map((field) => $(field).find('span.eui-textTruncate').text());
+        .map((field) => $(field).text());
     }
 
-    public async getSidebarWidth() {
-      const sidebar = await find.byCssSelector('.sidebar-list');
-      return await sidebar.getAttribute('clientWidth');
+    public async editField(field: string) {
+      await retry.try(async () => {
+        await testSubjects.click(`field-${field}`);
+        await testSubjects.click(`discoverFieldListPanelEdit-${field}`);
+        await find.byClassName('indexPatternFieldEditor__form');
+      });
+    }
+
+    public async removeField(field: string) {
+      await testSubjects.click(`field-${field}`);
+      await testSubjects.click(`discoverFieldListPanelDelete-${field}`);
+      await testSubjects.existOrFail('runtimeFieldDeleteConfirmModal');
+    }
+
+    public async clickIndexPatternActions() {
+      await retry.try(async () => {
+        await testSubjects.click('discoverIndexPatternActions');
+        await testSubjects.existOrFail('discover-addRuntimeField-popover');
+      });
+    }
+
+    public async clickAddNewField() {
+      await retry.try(async () => {
+        await testSubjects.click('indexPattern-add-field');
+        await find.byClassName('indexPatternFieldEditor__form');
+      });
     }
 
     public async hasNoResults() {
@@ -270,8 +345,12 @@ export function DiscoverPageProvider({ getService, getPageObjects }: FtrProvider
       return await testSubjects.click(`field-${field}`);
     }
 
-    public async clickFieldSort(field: string) {
-      return await testSubjects.click(`docTableHeaderFieldSort_${field}`);
+    public async clickFieldSort(field: string, text = 'Sort New-Old') {
+      const isLegacyDefault = await this.useLegacyTable();
+      if (isLegacyDefault) {
+        return await testSubjects.click(`docTableHeaderFieldSort_${field}`);
+      }
+      return await dataGrid.clickDocSortAsc(field, text);
     }
 
     public async clickFieldListItemToggle(field: string) {
@@ -286,6 +365,9 @@ export function DiscoverPageProvider({ getService, getPageObjects }: FtrProvider
     }
 
     public async clickFieldListItemRemove(field: string) {
+      if (!(await testSubjects.exists('fieldList-selected'))) {
+        return;
+      }
       const selectedList = await testSubjects.find('fieldList-selected');
       if (await testSubjects.descendantExists(`field-${field}`, selectedList)) {
         await this.clickFieldListItemToggle(field);
@@ -332,6 +414,7 @@ export function DiscoverPageProvider({ getService, getPageObjects }: FtrProvider
 
     public async selectIndexPattern(indexPattern: string) {
       await testSubjects.click('indexPattern-switch-link');
+      await find.setValue('[data-test-subj="indexPattern-switcher"] input', indexPattern);
       await find.clickByCssSelector(
         `[data-test-subj="indexPattern-switcher"] [title="${indexPattern}"]`
       );
@@ -339,8 +422,13 @@ export function DiscoverPageProvider({ getService, getPageObjects }: FtrProvider
     }
 
     public async removeHeaderColumn(name: string) {
-      await testSubjects.moveMouseTo(`docTableHeader-${name}`);
-      await testSubjects.click(`docTableRemoveHeader-${name}`);
+      const isLegacyDefault = await this.useLegacyTable();
+      if (isLegacyDefault) {
+        await testSubjects.moveMouseTo(`docTableHeader-${name}`);
+        await testSubjects.click(`docTableRemoveHeader-${name}`);
+      } else {
+        await dataGrid.clickRemoveColumn(name);
+      }
     }
 
     public async openSidebarFieldFilter() {
@@ -350,11 +438,11 @@ export function DiscoverPageProvider({ getService, getPageObjects }: FtrProvider
 
     public async closeSidebarFieldFilter() {
       await testSubjects.click('toggleFieldFilterButton');
-      await testSubjects.missingOrFail('filterSelectionPanel', { allowHidden: true });
+      await testSubjects.missingOrFail('filterSelectionPanel');
     }
 
     public async waitForChartLoadingComplete(renderCount: number) {
-      await elasticChart.waitForRenderingCount('discoverChart', renderCount);
+      await elasticChart.waitForRenderingCount(renderCount, 'discoverChart');
     }
 
     public async waitForDocTableLoadingComplete() {
@@ -385,6 +473,42 @@ export function DiscoverPageProvider({ getService, getPageObjects }: FtrProvider
       await retry.waitFor('Discover app on screen', async () => {
         return await this.isDiscoverAppOnScreen();
       });
+    }
+
+    public async showAllFilterActions() {
+      await testSubjects.click('showFilterActions');
+    }
+
+    public async clickSavedQueriesPopOver() {
+      await testSubjects.click('saved-query-management-popover-button');
+    }
+
+    public async clickCurrentSavedQuery() {
+      await testSubjects.click('saved-query-management-save-button');
+    }
+
+    public async setSaveQueryFormTitle(savedQueryName: string) {
+      await testSubjects.setValue('saveQueryFormTitle', savedQueryName);
+    }
+
+    public async toggleIncludeFilters() {
+      await testSubjects.click('saveQueryFormIncludeFiltersOption');
+    }
+
+    public async saveCurrentSavedQuery() {
+      await testSubjects.click('savedQueryFormSaveButton');
+    }
+
+    public async deleteSavedQuery() {
+      await testSubjects.click('delete-saved-query-TEST-button');
+    }
+
+    public async confirmDeletionOfSavedQuery() {
+      await testSubjects.click('confirmModalConfirmButton');
+    }
+
+    public async clearSavedQuery() {
+      await testSubjects.click('saved-query-management-clear-button');
     }
   }
 

@@ -1,20 +1,9 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import {
@@ -27,12 +16,12 @@ import {
 } from 'angular';
 import $ from 'jquery';
 import { set } from '@elastic/safer-lodash-set';
-import { cloneDeep, forOwn, get } from 'lodash';
+import { get } from 'lodash';
 import * as Rx from 'rxjs';
 import { ChromeBreadcrumb, EnvironmentMode, PackageInfo } from 'kibana/public';
 import { History } from 'history';
 
-import { CoreStart, LegacyCoreStart } from 'kibana/public';
+import { CoreStart } from 'kibana/public';
 import { isSystemApiRequest } from '../utils';
 import { formatAngularHttpError, isAngularHttpError } from '../notify/lib';
 
@@ -72,32 +61,18 @@ function isDummyRoute($route: any, isLocalAngular: boolean) {
 
 export const configureAppAngularModule = (
   angularModule: IModule,
-  newPlatform:
-    | LegacyCoreStart
-    | {
-        core: CoreStart;
-        readonly env: {
-          mode: Readonly<EnvironmentMode>;
-          packageInfo: Readonly<PackageInfo>;
-        };
-      },
+  newPlatform: {
+    core: CoreStart;
+    readonly env: {
+      mode: Readonly<EnvironmentMode>;
+      packageInfo: Readonly<PackageInfo>;
+    };
+  },
   isLocalAngular: boolean,
   getHistory?: () => History
 ) => {
   const core = 'core' in newPlatform ? newPlatform.core : newPlatform;
-  const packageInfo =
-    'env' in newPlatform
-      ? newPlatform.env.packageInfo
-      : newPlatform.injectedMetadata.getLegacyMetadata();
-
-  if ('injectedMetadata' in newPlatform) {
-    forOwn(newPlatform.injectedMetadata.getInjectedVars(), (val, name) => {
-      if (name !== undefined) {
-        // The legacy platform modifies some of these values, clone to an unfrozen object.
-        angularModule.value(name, cloneDeep(val));
-      }
-    });
-  }
+  const packageInfo = newPlatform.env.packageInfo;
 
   angularModule
     .value('kbnVersion', packageInfo.version)
@@ -105,13 +80,7 @@ export const configureAppAngularModule = (
     .value('buildSha', packageInfo.buildSha)
     .value('esUrl', getEsUrl(core))
     .value('uiCapabilities', core.application.capabilities)
-    .config(
-      setupCompileProvider(
-        'injectedMetadata' in newPlatform
-          ? newPlatform.injectedMetadata.getLegacyMetadata().devMode
-          : newPlatform.env.mode.dev
-      )
-    )
+    .config(setupCompileProvider(newPlatform.env.mode.dev))
     .config(setupLocationProvider())
     .config($setupXsrfRequestInterceptor(packageInfo.version))
     .run(capture$httpLoadingCount(core))

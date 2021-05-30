@@ -8,14 +8,15 @@
   ],
   "from": "now-60m",
   "index": [
-    "filebeat-*"
+    "filebeat-*",
+    "logs-aws*"
   ],
   "interval": "10m",
   "language": "kuery",
-  "license": "Elastic License",
+  "license": "Elastic License v2",
   "name": "AWS IAM Group Deletion",
-  "note": "The AWS Filebeat module must be enabled to use this rule.",
-  "query": "event.action:DeleteGroup and event.dataset:aws.cloudtrail and event.provider:iam.amazonaws.com and event.outcome:success",
+  "note": "## Config\n\nThe AWS Fleet integration, Filebeat module, or similarly structured data is required to be compatible with this rule.",
+  "query": "event.dataset:aws.cloudtrail and event.provider:iam.amazonaws.com and event.action:DeleteGroup and event.outcome:success",
   "references": [
     "https://awscli.amazonaws.com/v2/documentation/api/latest/reference/iam/delete-group.html",
     "https://docs.aws.amazon.com/IAM/latest/APIReference/API_DeleteGroup.html"
@@ -24,11 +25,12 @@
   "rule_id": "867616ec-41e5-4edc-ada2-ab13ab45de8a",
   "severity": "low",
   "tags": [
-    "AWS",
     "Elastic",
+    "Cloud",
+    "AWS",
+    "Continuous Monitoring",
     "SecOps",
-    "Monitoring",
-    "Continuous Monitoring"
+    "Monitoring"
   ],
   "threat": [
     {
@@ -47,6 +49,7 @@
       ]
     }
   ],
+  "timestamp_override": "event.ingested",
   "type": "query",
-  "version": 1
+  "version": 5
 }

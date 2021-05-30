@@ -1,27 +1,16 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import React from 'react';
 import { shallow } from 'enzyme';
 
 import { SourceFiltersTable } from './source_filters_table';
-import { IIndexPattern } from 'src/plugins/data/public';
+import { IndexPattern } from 'src/plugins/data/public';
 
 jest.mock('@elastic/eui', () => ({
   EuiButton: 'eui-button',
@@ -52,7 +41,7 @@ const getIndexPatternMock = (mockedFields: any = {}) =>
   ({
     sourceFilters: [{ value: 'time*' }, { value: 'nam*' }, { value: 'age*' }],
     ...mockedFields,
-  } as IIndexPattern);
+  } as IndexPattern);
 
 describe('SourceFiltersTable', () => {
   test('should render normally', () => {
@@ -61,6 +50,7 @@ describe('SourceFiltersTable', () => {
         indexPattern={getIndexPatternMock()}
         fieldWildcardMatcher={() => {}}
         filterFilter={''}
+        saveIndexPattern={async () => {}}
       />
     );
 
@@ -73,6 +63,7 @@ describe('SourceFiltersTable', () => {
         indexPattern={getIndexPatternMock()}
         fieldWildcardMatcher={() => {}}
         filterFilter={''}
+        saveIndexPattern={async () => {}}
       />
     );
 
@@ -88,6 +79,7 @@ describe('SourceFiltersTable', () => {
         })}
         filterFilter={''}
         fieldWildcardMatcher={() => {}}
+        saveIndexPattern={async () => {}}
       />
     );
 
@@ -98,11 +90,14 @@ describe('SourceFiltersTable', () => {
   test('should show a delete modal', () => {
     const component = shallow<SourceFiltersTable>(
       <SourceFiltersTable
-        indexPattern={getIndexPatternMock({
-          sourceFilters: [{ value: 'tim*' }],
-        })}
+        indexPattern={
+          getIndexPatternMock({
+            sourceFilters: [{ value: 'tim*' }],
+          }) as IndexPattern
+        }
         filterFilter={''}
         fieldWildcardMatcher={() => {}}
+        saveIndexPattern={async () => {}}
       />
     );
 
@@ -112,15 +107,17 @@ describe('SourceFiltersTable', () => {
   });
 
   test('should remove a filter', async () => {
-    const save = jest.fn();
+    const saveIndexPattern = jest.fn(async () => {});
     const component = shallow<SourceFiltersTable>(
       <SourceFiltersTable
-        indexPattern={getIndexPatternMock({
-          save,
-          sourceFilters: [{ value: 'tim*' }, { value: 'na*' }],
-        })}
+        indexPattern={
+          getIndexPatternMock({
+            sourceFilters: [{ value: 'tim*' }, { value: 'na*' }],
+          }) as IndexPattern
+        }
         filterFilter={''}
         fieldWildcardMatcher={() => {}}
+        saveIndexPattern={saveIndexPattern}
       />
     );
 
@@ -129,47 +126,49 @@ describe('SourceFiltersTable', () => {
     await component.instance().deleteFilter();
     component.update(); // We are not calling `.setState` directly so we need to re-render
 
-    expect(save).toBeCalled();
+    expect(saveIndexPattern).toBeCalled();
     expect(component).toMatchSnapshot();
   });
 
   test('should add a filter', async () => {
-    const save = jest.fn();
+    const saveIndexPattern = jest.fn(async () => {});
     const component = shallow<SourceFiltersTable>(
       <SourceFiltersTable
         indexPattern={getIndexPatternMock({
-          save,
           sourceFilters: [{ value: 'tim*' }],
         })}
         filterFilter={''}
         fieldWildcardMatcher={() => {}}
+        saveIndexPattern={saveIndexPattern}
       />
     );
 
     await component.instance().onAddFilter('na*');
     component.update(); // We are not calling `.setState` directly so we need to re-render
 
-    expect(save).toBeCalled();
+    expect(saveIndexPattern).toBeCalled();
     expect(component).toMatchSnapshot();
   });
 
   test('should update a filter', async () => {
-    const save = jest.fn();
+    const saveIndexPattern = jest.fn(async () => {});
     const component = shallow<SourceFiltersTable>(
       <SourceFiltersTable
-        indexPattern={getIndexPatternMock({
-          save,
-          sourceFilters: [{ value: 'tim*' }],
-        })}
+        indexPattern={
+          getIndexPatternMock({
+            sourceFilters: [{ value: 'tim*' }],
+          }) as IndexPattern
+        }
         filterFilter={''}
         fieldWildcardMatcher={() => {}}
+        saveIndexPattern={saveIndexPattern}
       />
     );
 
     await component.instance().saveFilter({ clientId: 'tim*', value: 'ti*' });
     component.update(); // We are not calling `.setState` directly so we need to re-render
 
-    expect(save).toBeCalled();
+    expect(saveIndexPattern).toBeCalled();
     expect(component).toMatchSnapshot();
   });
 });

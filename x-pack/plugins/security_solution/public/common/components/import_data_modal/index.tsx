@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import {
@@ -14,7 +15,6 @@ import {
   EuiModalFooter,
   EuiModalHeader,
   EuiModalHeaderTitle,
-  EuiOverlayMask,
   EuiSpacer,
   EuiText,
 } from '@elastic/eui';
@@ -23,6 +23,8 @@ import React, { useCallback, useState } from 'react';
 import {
   ImportDataResponse,
   ImportDataProps,
+  ImportRulesResponseError,
+  ImportResponseError,
 } from '../../../detections/containers/detection_engine/rules';
 import {
   displayErrorToast,
@@ -47,6 +49,12 @@ interface ImportDataModalProps {
   successMessage: (totalCount: number) => string;
   title: string;
 }
+
+const isImportRulesResponseError = (
+  error: ImportRulesResponseError | ImportResponseError
+): error is ImportRulesResponseError => {
+  return (error as ImportRulesResponseError).rule_id !== undefined;
+};
 
 /**
  * Modal component for importing Rules from a json file
@@ -96,7 +104,11 @@ export const ImportDataModalComponent = ({
         }
         if (importResponse.errors.length > 0) {
           const formattedErrors = importResponse.errors.map((e) =>
-            failedDetailed(e.rule_id, e.error.status_code, e.error.message)
+            failedDetailed(
+              isImportRulesResponseError(e) ? e.rule_id : e.id,
+              e.error.status_code,
+              e.error.message
+            )
           );
           displayErrorToast(errorMessage, formattedErrors, dispatchToaster);
         }
@@ -119,51 +131,49 @@ export const ImportDataModalComponent = ({
   return (
     <>
       {showModal && (
-        <EuiOverlayMask>
-          <EuiModal onClose={closeModal} maxWidth={'750px'}>
-            <EuiModalHeader>
-              <EuiModalHeaderTitle>{title}</EuiModalHeaderTitle>
-            </EuiModalHeader>
+        <EuiModal onClose={closeModal} maxWidth={'750px'}>
+          <EuiModalHeader>
+            <EuiModalHeaderTitle>{title}</EuiModalHeaderTitle>
+          </EuiModalHeader>
 
-            <EuiModalBody>
-              <EuiText size="s">
-                <h4>{description}</h4>
-              </EuiText>
+          <EuiModalBody>
+            <EuiText size="s">
+              <h4>{description}</h4>
+            </EuiText>
 
-              <EuiSpacer size="s" />
-              <EuiFilePicker
-                id="rule-file-picker"
-                initialPromptText={subtitle}
-                onChange={(files: FileList | null) => {
-                  setSelectedFiles(files && files.length > 0 ? files : null);
-                }}
-                display={'large'}
-                fullWidth={true}
-                isLoading={isImporting}
+            <EuiSpacer size="s" />
+            <EuiFilePicker
+              id="rule-file-picker"
+              initialPromptText={subtitle}
+              onChange={(files: FileList | null) => {
+                setSelectedFiles(files && files.length > 0 ? files : null);
+              }}
+              display={'large'}
+              fullWidth={true}
+              isLoading={isImporting}
+            />
+            <EuiSpacer size="s" />
+            {showCheckBox && (
+              <EuiCheckbox
+                id="import-data-modal-checkbox-label"
+                label={checkBoxLabel}
+                checked={overwrite}
+                onChange={() => setOverwrite(!overwrite)}
               />
-              <EuiSpacer size="s" />
-              {showCheckBox && (
-                <EuiCheckbox
-                  id="import-data-modal-checkbox-label"
-                  label={checkBoxLabel}
-                  checked={overwrite}
-                  onChange={() => setOverwrite(!overwrite)}
-                />
-              )}
-            </EuiModalBody>
+            )}
+          </EuiModalBody>
 
-            <EuiModalFooter>
-              <EuiButtonEmpty onClick={handleCloseModal}>{i18n.CANCEL_BUTTON}</EuiButtonEmpty>
-              <EuiButton
-                onClick={importDataCallback}
-                disabled={selectedFiles == null || isImporting}
-                fill
-              >
-                {submitBtnText}
-              </EuiButton>
-            </EuiModalFooter>
-          </EuiModal>
-        </EuiOverlayMask>
+          <EuiModalFooter>
+            <EuiButtonEmpty onClick={handleCloseModal}>{i18n.CANCEL_BUTTON}</EuiButtonEmpty>
+            <EuiButton
+              onClick={importDataCallback}
+              disabled={selectedFiles == null || isImporting}
+              fill
+            >
+              {submitBtnText}
+            </EuiButton>
+          </EuiModalFooter>
+        </EuiModal>
       )}
     </>
   );

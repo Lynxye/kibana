@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { useEffect, useState, Fragment } from 'react';
@@ -52,9 +53,13 @@ export const RestoreList: React.FunctionComponent = () => {
   const [currentInterval, setCurrentInterval] = useState<number>(INTERVAL_OPTIONS[1]);
 
   // Load restores
-  const { error, isLoading, data: restores = [], isInitialRequest, sendRequest } = useLoadRestores(
-    currentInterval
-  );
+  const {
+    error,
+    isLoading,
+    data: restores = [],
+    isInitialRequest,
+    resendRequest,
+  } = useLoadRestores(currentInterval);
 
   const { uiMetricService, history } = useServices();
 
@@ -174,7 +179,7 @@ export const RestoreList: React.FunctionComponent = () => {
                       key={interval}
                       icon="empty"
                       onClick={() => {
-                        sendRequest();
+                        resendRequest();
                         setCurrentInterval(interval);
                         setIsIntervalMenuOpen(false);
                       }}

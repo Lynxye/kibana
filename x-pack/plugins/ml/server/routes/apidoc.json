@@ -1,6 +1,6 @@
 {
   "name": "ml_kibana_api",
-  "version": "7.8.0",
+  "version": "7.13.0",
   "description": "This is the documentation of the REST API provided by the Machine Learning Kibana plugin. Each API is experimental and can include breaking changes in any version.",
   "title": "ML Kibana API",
   "order": [
@@ -16,10 +16,15 @@
     "GetDataFrameAnalyticsMessages",
     "UpdateDataFrameAnalytics",
     "DeleteDataFrameAnalytics",
+    "JobsExist",
+    "GetDataFrameAnalyticsIdMap",
+    "AnalyticsNewJobCaps",
+    "ValidateDataFrameAnalytics",
 
     "DataVisualizer",
     "GetOverallStats",
     "GetStatsForFields",
+    "GetHistogramsForFields",
 
     "AnomalyDetectors",
     "CreateAnomalyDetectors",
@@ -40,7 +45,6 @@
 
     "FileDataVisualizer",
     "AnalyzeFile",
-    "ImportFile",
 
     "ResultsService",
     "GetAnomaliesTableData",
@@ -49,6 +53,8 @@
     "GetCategoryExamples",
     "GetPartitionFieldsValues",
     "AnomalySearch",
+    "GetCategorizerStats",
+    "GetCategoryStoppedPartitions",
 
     "Modules",
     "DataRecognizer",
@@ -68,6 +74,7 @@
     "CloseJobs",
     "JobsSummary",
     "JobsWithTimeRange",
+    "GetJobForCloning",
     "CreateFullJobsList",
     "GetAllGroups",
     "JobsExist",
@@ -78,9 +85,11 @@
     "GetLookBackProgress",
     "ValidateCategoryExamples",
     "TopCategories",
+    "DatafeedPreview",
     "UpdateGroups",
     "DeletingJobTasks",
     "DeleteJobs",
+    "RevertModelSnapshot",
 
     "Calendars",
     "PutCalendars",
@@ -118,9 +127,6 @@
     "ValidateCardinality",
     "ValidateJob",
 
-    "NotificationSettings",
-    "GetNotificationSettings",
-
     "DatafeedService",
     "CreateDatafeed",
     "PreviewDatafeed",
@@ -135,6 +141,24 @@
 
     "FieldsService",
     "GetCardinalityOfFields",
-    "GetTimeFieldRange"
+    "GetTimeFieldRange",
+
+    "JobSavedObjects",
+    "SavedObjectsStatus",
+    "SyncJobSavedObjects",
+    "InitializeJobSavedObjects",
+    "UpdateJobsSpaces",
+    "RemoveJobsFromCurrentSpace",
+    "JobsSpaces",
+    "CanDeleteJob",
+
+    "TrainedModels",
+    "GetTrainedModel",
+    "GetTrainedModelStats",
+    "GetTrainedModelPipelines",
+    "DeleteTrainedModel",
+
+    "Alerting",
+    "PreviewAlert"
   ]
 }

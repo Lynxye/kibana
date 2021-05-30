@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React from 'react';
@@ -11,11 +12,24 @@ import {
   createMockFramePublicAPI,
   createMockDatasource,
 } from '../../mocks';
-import { EuiKeyPadMenuItem } from '@elastic/eui';
-import { mountWithIntl as mount } from 'test_utils/enzyme_helpers';
+
+// Tests are executed in a jsdom environment who does not have sizing methods,
+// thus the AutoSizer will always compute a 0x0 size space
+// Mock the AutoSizer inside EuiSelectable (Chart Switch) and return some dimensions > 0
+jest.mock('react-virtualized-auto-sizer', () => {
+  return function (props: {
+    children: (dimensions: { width: number; height: number }) => React.ReactNode;
+  }) {
+    const { children } = props;
+    return <div>{children({ width: 100, height: 100 })}</div>;
+  };
+});
+
+import { mountWithIntl as mount } from '@kbn/test/jest';
 import { Visualization, FramePublicAPI, DatasourcePublicAPI } from '../../../types';
 import { Action } from '../state_management';
 import { ChartSwitch } from './chart_switch';
+import { PaletteOutput } from 'src/plugins/charts/public';
 
 describe('chart_switch', () => {
   function generateVisualization(id: string): jest.Mocked<Visualization> {
@@ -28,6 +42,7 @@ describe('chart_switch', () => {
           icon: 'empty',
           id,
           label: `Label ${id}`,
+          groupLabel: `${id}Group`,
         },
       ],
       initialize: jest.fn((_frame, state?: unknown) => {
@@ -68,16 +83,19 @@ describe('chart_switch', () => {
             icon: 'empty',
             id: 'subvisC1',
             label: 'C1',
+            groupLabel: 'visCGroup',
           },
           {
             icon: 'empty',
             id: 'subvisC2',
             label: 'C2',
+            groupLabel: 'visCGroup',
           },
           {
             icon: 'empty',
             id: 'subvisC3',
             label: 'C3',
+            groupLabel: 'visCGroup',
           },
         ],
         getVisualizationTypeId: jest.fn((state) => state.type),
@@ -164,10 +182,7 @@ describe('chart_switch', () => {
 
   function getMenuItem(subType: string, component: ReactWrapper) {
     showFlyout(component);
-    return component
-      .find(EuiKeyPadMenuItem)
-      .find(`[data-test-subj="lnsChartSwitchPopover_${subType}"]`)
-      .first();
+    return component.find(`[data-test-subj="lnsChartSwitchPopover_${subType}"]`).first();
   }
 
   it('should use suggested state if there is a suggestion from the target visualization', () => {
@@ -279,7 +294,12 @@ describe('chart_switch', () => {
       />
     );
 
-    expect(getMenuItem('visB', component).prop('betaBadgeIconType')).toEqual('alert');
+    expect(
+      getMenuItem('visB', component)
+        .find('[data-test-subj="lnsChartSwitchPopoverAlert_visB"]')
+        .first()
+        .props().type
+    ).toEqual('alert');
   });
 
   it('should indicate data loss if not all layers will be used', () => {
@@ -299,7 +319,12 @@ describe('chart_switch', () => {
       />
     );
 
-    expect(getMenuItem('visB', component).prop('betaBadgeIconType')).toEqual('alert');
+    expect(
+      getMenuItem('visB', component)
+        .find('[data-test-subj="lnsChartSwitchPopoverAlert_visB"]')
+        .first()
+        .props().type
+    ).toEqual('alert');
   });
 
   it('should support multi-layer suggestions without data loss', () => {
@@ -342,7 +367,9 @@ describe('chart_switch', () => {
       />
     );
 
-    expect(getMenuItem('visB', component).prop('betaBadgeIconType')).toBeUndefined();
+    expect(
+      getMenuItem('visB', component).find('[data-test-subj="lnsChartSwitchPopoverAlert_visB"]')
+    ).toHaveLength(0);
   });
 
   it('should indicate data loss if no data will be used', () => {
@@ -363,7 +390,12 @@ describe('chart_switch', () => {
       />
     );
 
-    expect(getMenuItem('visB', component).prop('betaBadgeIconType')).toEqual('alert');
+    expect(
+      getMenuItem('visB', component)
+        .find('[data-test-subj="lnsChartSwitchPopoverAlert_visB"]')
+        .first()
+        .props().type
+    ).toEqual('alert');
   });
 
   it('should not indicate data loss if there is no data', () => {
@@ -385,7 +417,9 @@ describe('chart_switch', () => {
       />
     );
 
-    expect(getMenuItem('visB', component).prop('betaBadgeIconType')).toBeUndefined();
+    expect(
+      getMenuItem('visB', component).find('[data-test-subj="lnsChartSwitchPopoverAlert_visB"]')
+    ).toHaveLength(0);
   });
 
   it('should not show a warning when the subvisualization is the same', () => {
@@ -409,7 +443,11 @@ describe('chart_switch', () => {
       />
     );
 
-    expect(getMenuItem('subvisC2', component).prop('betaBadgeIconType')).not.toBeDefined();
+    expect(
+      getMenuItem('subvisC2', component).find(
+        '[data-test-subj="lnsChartSwitchPopoverAlert_subvisC2"]'
+      )
+    ).toHaveLength(0);
   });
 
   it('should get suggestions when switching subvisualization', () => {
@@ -445,6 +483,39 @@ describe('chart_switch', () => {
       expect.objectContaining({
         type: 'SWITCH_VISUALIZATION',
         initialState: 'visB initial state',
+      })
+    );
+  });
+
+  it('should query main palette from active chart and pass into suggestions', () => {
+    const dispatch = jest.fn();
+    const visualizations = mockVisualizations();
+    const mockPalette: PaletteOutput = { type: 'palette', name: 'mock' };
+    visualizations.visA.getMainPalette = jest.fn(() => mockPalette);
+    visualizations.visB.getSuggestions.mockReturnValueOnce([]);
+    const frame = mockFrame(['a', 'b', 'c']);
+    const currentVisState = {};
+
+    const component = mount(
+      <ChartSwitch
+        visualizationId="visA"
+        visualizationState={currentVisState}
+        visualizationMap={visualizations}
+        dispatch={dispatch}
+        framePublicAPI={frame}
+        datasourceMap={mockDatasourceMap()}
+        datasourceStates={mockDatasourceStates()}
+      />
+    );
+
+    switchTo('visB', component);
+
+    expect(visualizations.visA.getMainPalette).toHaveBeenCalledWith(currentVisState);
+
+    expect(visualizations.visB.getSuggestions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        keptLayerIds: ['a'],
+        mainPalette: mockPalette,
       })
     );
   });

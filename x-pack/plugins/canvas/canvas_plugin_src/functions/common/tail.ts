@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { takeRight } from 'lodash';
@@ -26,6 +27,7 @@ export function tail(): ExpressionFunctionDefinition<'tail', Datatable, Argument
         aliases: ['_'],
         types: ['number'],
         help: argHelp.count,
+        default: 1,
       },
     },
     fn: (input, args) => ({

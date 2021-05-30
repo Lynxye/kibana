@@ -1,56 +1,38 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import {
-  EuiFlexGroup,
-  EuiFlexItem,
-  EuiTitle,
-  EuiSpacer,
-  EuiPanel,
-} from '@elastic/eui';
+import { EuiFlexGroup, EuiFlexItem } from '@elastic/eui';
 import React from 'react';
+import { UXMetrics } from './UXMetrics';
+import { ImpactfulMetrics } from './ImpactfulMetrics';
+import { PageLoadAndViews } from './Panels/PageLoadAndViews';
+import { VisitorBreakdownsPanel } from './Panels/VisitorBreakdowns';
+import { useBreakPoints } from '../../../hooks/use_break_points';
 import { ClientMetrics } from './ClientMetrics';
-import { PageViewsTrend } from './PageViewsTrend';
-import { PageLoadDistribution } from './PageLoadDistribution';
-import { I18LABELS } from './translations';
-import { VisitorBreakdown } from './VisitorBreakdown';
 
 export function RumDashboard() {
+  const { isSmall } = useBreakPoints();
+
   return (
-    <EuiFlexGroup direction="column" gutterSize="s">
+    <EuiFlexGroup direction={isSmall ? 'row' : 'column'} gutterSize="s">
       <EuiFlexItem>
-        <EuiPanel>
-          <EuiFlexGroup justifyContent="spaceBetween">
-            <EuiFlexItem grow={1} data-cy={`client-metrics`}>
-              <EuiTitle size="xs">
-                <h3>{I18LABELS.pageLoadTimes}</h3>
-              </EuiTitle>
-              <EuiSpacer size="s" />
-              <ClientMetrics />
-            </EuiFlexItem>
-          </EuiFlexGroup>
-        </EuiPanel>
+        <ClientMetrics />
       </EuiFlexItem>
       <EuiFlexItem>
-        <EuiPanel>
-          <EuiFlexGroup justifyContent="spaceBetween">
-            <EuiFlexItem grow={3}>
-              <PageLoadDistribution />
-              <PageViewsTrend />
-            </EuiFlexItem>
-          </EuiFlexGroup>
-        </EuiPanel>
-        <EuiSpacer size="s" />
-        <EuiPanel>
-          <EuiFlexGroup justifyContent="spaceBetween">
-            <EuiFlexItem grow={3}>
-              <VisitorBreakdown />
-            </EuiFlexItem>
-          </EuiFlexGroup>
-        </EuiPanel>
+        <UXMetrics />
+      </EuiFlexItem>
+      <EuiFlexItem>
+        <PageLoadAndViews />
+      </EuiFlexItem>
+      <EuiFlexItem>
+        <VisitorBreakdownsPanel />
+      </EuiFlexItem>
+      <EuiFlexItem>
+        <ImpactfulMetrics />
       </EuiFlexItem>
     </EuiFlexGroup>
   );

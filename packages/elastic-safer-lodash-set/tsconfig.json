@@ -1,9 +1,9 @@
 {
-  "extends": "../../tsconfig.json",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "incremental": false,
+  },
   "include": [
-    "**/*"
+    "**/*",
   ],
-  "exclude": [
-    "**/*.test-d.ts"
-  ]
 }

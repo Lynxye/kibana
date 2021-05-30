@@ -1,15 +1,17 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import Boom from 'boom';
+import Boom from '@hapi/boom';
 import { i18n } from '@kbn/i18n';
-import { ILegacyScopedClusterClient } from 'kibana/server';
+import { IScopedClusterClient } from 'kibana/server';
 import { ModelSnapshot } from '../../../common/types/anomaly_detection_jobs';
 import { datafeedsProvider } from './datafeeds';
 import { FormCalendar, CalendarManager } from '../calendar';
+import type { MlClient } from '../../lib/ml_client';
 
 export interface ModelSnapshotsResponse {
   count: number;
@@ -19,9 +21,8 @@ export interface RevertModelSnapshotResponse {
   model: ModelSnapshot;
 }
 
-export function modelSnapshotProvider(mlClusterClient: ILegacyScopedClusterClient) {
-  const { callAsInternalUser } = mlClusterClient;
-  const { forceStartDatafeeds, getDatafeedIdsByJobId } = datafeedsProvider(mlClusterClient);
+export function modelSnapshotProvider(client: IScopedClusterClient, mlClient: MlClient) {
+  const { forceStartDatafeeds, getDatafeedIdsByJobId } = datafeedsProvider(client, mlClient);
 
   async function revertModelSnapshot(
     jobId: string,
@@ -29,17 +30,17 @@ export function modelSnapshotProvider(mlClusterClient: ILegacyScopedClusterClien
     replay: boolean,
     end?: number,
     deleteInterveningResults: boolean = true,
-    calendarEvents?: [{ start: number; end: number; description: string }]
+    calendarEvents?: Array<{ start: number; end: number; description: string }>
   ) {
     let datafeedId = `datafeed-${jobId}`;
     // ensure job exists
-    await callAsInternalUser('ml.jobs', { jobId: [jobId] });
+    await mlClient.getJobs({ job_id: jobId });
 
     try {
       // ensure the datafeed exists
       // the datafeed is probably called datafeed-<jobId>
-      await callAsInternalUser('ml.datafeeds', {
-        datafeedId: [datafeedId],
+      await mlClient.getDatafeeds({
+        datafeed_id: datafeedId,
       });
     } catch (e) {
       // if the datafeed isn't called datafeed-<jobId>
@@ -52,26 +53,29 @@ export function modelSnapshotProvider(mlClusterClient: ILegacyScopedClusterClien
     }
 
     // ensure the snapshot exists
-    const snapshot = (await callAsInternalUser('ml.modelSnapshots', {
-      jobId,
-      snapshotId,
-    })) as ModelSnapshotsResponse;
+    const { body: snapshot } = await mlClient.getModelSnapshots<ModelSnapshotsResponse>({
+      job_id: jobId,
+      snapshot_id: snapshotId,
+    });
 
     // apply the snapshot revert
-    const { model } = (await callAsInternalUser('ml.revertModelSnapshot', {
-      jobId,
-      snapshotId,
+    const {
+      body: { model },
+    } = await mlClient.revertModelSnapshot<RevertModelSnapshotResponse>({
+      job_id: jobId,
+      snapshot_id: snapshotId,
       body: {
         delete_intervening_results: deleteInterveningResults,
       },
-    })) as RevertModelSnapshotResponse;
+    });
 
     // create calendar (if specified) and replay datafeed
     if (replay && model.snapshot_id === snapshotId && snapshot.model_snapshots.length) {
       // create calendar before starting restarting the datafeed
       if (calendarEvents !== undefined && calendarEvents.length) {
+        const calendarId = String(Date.now());
         const calendar: FormCalendar = {
-          calendarId: String(Date.now()),
+          calendarId,
           job_ids: [jobId],
           description: i18n.translate(
             'xpack.ml.models.jobService.revertModelSnapshot.autoCreatedCalendar.description',
@@ -80,16 +84,18 @@ export function modelSnapshotProvider(mlClusterClient: ILegacyScopedClusterClien
             }
           ),
           events: calendarEvents.map((s) => ({
+            calendar_id: calendarId,
+            event_id: '',
             description: s.description,
-            start_time: s.start,
-            end_time: s.end,
+            start_time: `${s.start}`,
+            end_time: `${s.end}`,
           })),
         };
-        const cm = new CalendarManager(mlClusterClient);
+        const cm = new CalendarManager(mlClient);
         await cm.newCalendar(calendar);
       }
 
-      forceStartDatafeeds([datafeedId], snapshot.model_snapshots[0].latest_record_time_stamp, end);
+      forceStartDatafeeds([datafeedId], +snapshot.model_snapshots[0].latest_record_time_stamp, end);
     }
 
     return { success: true };

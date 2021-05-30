@@ -1,23 +1,12 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
-import Boom from 'boom';
+import Boom from '@hapi/boom';
 
 import { SavedObjectsErrorHelpers } from './errors';
 
@@ -269,6 +258,53 @@ describe('savedObjectsClient/errorTypes', () => {
           const error = Boom.notFound();
           SavedObjectsErrorHelpers.decorateConflictError(error);
           expect(error.output).toHaveProperty('statusCode', 404);
+        });
+      });
+    });
+  });
+
+  describe('TooManyRequests error', () => {
+    describe('decorateTooManyRequestsError', () => {
+      it('returns original object', () => {
+        const error = new Error();
+        expect(SavedObjectsErrorHelpers.decorateTooManyRequestsError(error)).toBe(error);
+      });
+
+      it('makes the error identifiable as a TooManyRequests error', () => {
+        const error = new Error();
+        expect(SavedObjectsErrorHelpers.isTooManyRequestsError(error)).toBe(false);
+        SavedObjectsErrorHelpers.decorateTooManyRequestsError(error);
+        expect(SavedObjectsErrorHelpers.isTooManyRequestsError(error)).toBe(true);
+      });
+
+      it('adds boom properties', () => {
+        const error = SavedObjectsErrorHelpers.decorateTooManyRequestsError(new Error());
+        expect(error).toHaveProperty('isBoom', true);
+      });
+
+      describe('error.output', () => {
+        it('defaults to message of error', () => {
+          const error = SavedObjectsErrorHelpers.decorateTooManyRequestsError(new Error('foobar'));
+          expect(error.output.payload).toHaveProperty('message', 'foobar');
+        });
+
+        it('prefixes message with passed reason', () => {
+          const error = SavedObjectsErrorHelpers.decorateTooManyRequestsError(
+            new Error('foobar'),
+            'biz'
+          );
+          expect(error.output.payload).toHaveProperty('message', 'biz: foobar');
+        });
+
+        it('sets statusCode to 429', () => {
+          const error = SavedObjectsErrorHelpers.decorateTooManyRequestsError(new Error('foo'));
+          expect(error.output).toHaveProperty('statusCode', 429);
+        });
+
+        it('preserves boom properties of input', () => {
+          const error = Boom.tooManyRequests();
+          SavedObjectsErrorHelpers.decorateTooManyRequestsError(error);
+          expect(error.output).toHaveProperty('statusCode', 429);
         });
       });
     });

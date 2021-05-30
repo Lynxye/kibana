@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { useState } from 'react';
@@ -18,12 +19,13 @@ import {
   TooltipValueFormatter,
   DARK_THEME,
   LIGHT_THEME,
+  Fit,
+  Position,
 } from '@elastic/charts';
 import {
   EUI_CHARTS_THEME_DARK,
   EUI_CHARTS_THEME_LIGHT,
 } from '@elastic/eui/dist/eui_charts_theme';
-import { Position } from '@elastic/charts/dist/utils/commons';
 import styled from 'styled-components';
 import { PercentileAnnotations } from '../PageLoadDistribution/PercentileAnnotations';
 import { I18LABELS } from '../translations';
@@ -35,7 +37,7 @@ import { BreakdownSeries } from '../PageLoadDistribution/BreakdownSeries';
 
 interface PageLoadData {
   pageLoadDistribution: Array<{ x: number; y: number }>;
-  percentiles: Record<string, number> | undefined;
+  percentiles: Record<string, number | null> | undefined;
   minDuration: number;
   maxDuration: number;
 }
@@ -43,7 +45,7 @@ interface PageLoadData {
 interface Props {
   onPercentileChange: (min: number, max: number) => void;
   data?: PageLoadData | null;
-  breakdowns: BreakdownItem[];
+  breakdown: BreakdownItem | null;
   percentileRange: PercentileRange;
   loading: boolean;
 }
@@ -57,7 +59,7 @@ const PageLoadChart = styled(Chart)`
 export function PageLoadDistChart({
   onPercentileChange,
   data,
-  breakdowns,
+  breakdown,
   loading,
   percentileRange,
 }: Props) {
@@ -87,17 +89,17 @@ export function PageLoadDistChart({
 
   const [darkMode] = useUiSetting$<boolean>('theme:darkMode');
 
+  const euiChartTheme = darkMode
+    ? EUI_CHARTS_THEME_DARK
+    : EUI_CHARTS_THEME_LIGHT;
+
   return (
     <ChartWrapper loading={loading || breakdownLoading} height="250px">
       {(!loading || data) && (
         <PageLoadChart>
           <Settings
             baseTheme={darkMode ? DARK_THEME : LIGHT_THEME}
-            theme={
-              darkMode
-                ? EUI_CHARTS_THEME_DARK.theme
-                : EUI_CHARTS_THEME_LIGHT.theme
-            }
+            theme={euiChartTheme.theme}
             onBrushEnd={onBrushEnd}
             tooltip={tooltipProps}
             showLegend
@@ -112,27 +114,35 @@ export function PageLoadDistChart({
             id="left"
             title={I18LABELS.percPageLoaded}
             position={Position.Left}
-            tickFormat={(d) => numeral(d).format('0.0') + '%'}
+            labelFormat={(d) => d + ' %'}
           />
           <LineSeries
+            sortIndex={0}
+            fit={Fit.Linear}
             id={'PagesPercentage'}
             name={I18LABELS.overall}
             xScaleType={ScaleType.Linear}
             yScaleType={ScaleType.Linear}
             data={data?.pageLoadDistribution ?? []}
             curve={CurveType.CURVE_CATMULL_ROM}
+            lineSeriesStyle={{
+              point: { visible: false },
+              line: { strokeWidth: 3 },
+            }}
+            color={euiChartTheme.theme.colors?.vizColors?.[1]}
+            tickFormat={(d) => numeral(d).format('0.0') + ' %'}
           />
-          {breakdowns.map(({ name, type }) => (
+          {breakdown && (
             <BreakdownSeries
-              key={`${type}-${name}`}
-              field={type}
-              value={name}
+              key={`${breakdown.type}-${breakdown.name}`}
+              field={breakdown.type}
+              value={breakdown.name}
               percentileRange={percentileRange}
               onLoadingChange={(bLoading) => {
                 setBreakdownLoading(bLoading);
               }}
             />
-          ))}
+          )}
         </PageLoadChart>
       )}
     </ChartWrapper>

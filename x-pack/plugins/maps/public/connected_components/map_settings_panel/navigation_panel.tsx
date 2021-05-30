@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { ChangeEvent } from 'react';
@@ -39,6 +40,12 @@ const initialLocationOptions = [
     id: INITIAL_LOCATION.LAST_SAVED_LOCATION,
     label: i18n.translate('xpack.maps.mapSettingsPanel.lastSavedLocationLabel', {
       defaultMessage: 'Map location at save',
+    }),
+  },
+  {
+    id: INITIAL_LOCATION.AUTO_FIT_TO_BOUNDS,
+    label: i18n.translate('xpack.maps.mapSettingsPanel.autoFitToBoundsLocationLabel', {
+      defaultMessage: 'Auto fit map to data bounds',
     }),
   },
   {
@@ -125,7 +132,10 @@ export function NavigationPanel({ center, settings, updateMapSetting, zoom }: Pr
   };
 
   function renderInitialLocationInputs() {
-    if (settings.initialLocation === INITIAL_LOCATION.LAST_SAVED_LOCATION) {
+    if (
+      settings.initialLocation === INITIAL_LOCATION.LAST_SAVED_LOCATION ||
+      settings.initialLocation === INITIAL_LOCATION.AUTO_FIT_TO_BOUNDS
+    ) {
       return null;
     }
 

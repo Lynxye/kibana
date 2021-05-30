@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { IInterpreterRenderHandlers } from 'src/plugins/expressions';
@@ -47,3 +48,6 @@ export interface RendererSpec<RendererConfig = {}> {
 }
 
 export type RendererFactory<RendererConfig = {}> = () => RendererSpec<RendererConfig>;
+
+export type AnyRendererFactory = RendererFactory<any>;
+export type AnyRendererSpec = RendererSpec<any>;

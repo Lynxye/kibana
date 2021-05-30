@@ -1,25 +1,23 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import ApolloClient from 'apollo-client';
-import React, { useEffect, useState, useCallback } from 'react';
-import { connect, ConnectedProps } from 'react-redux';
-import { Dispatch } from 'redux';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { useDispatch } from 'react-redux';
 
-import { DeleteTimelineMutation, SortFieldTimeline, Direction } from '../../../graphql/types';
-import { State } from '../../../common/store';
-import { ColumnHeaderOptions, TimelineModel } from '../../../timelines/store/timeline/model';
+import { sourcererSelectors } from '../../../common/store';
+import { useShallowEqualSelector, useDeepEqualSelector } from '../../../common/hooks/use_selector';
+import { SortFieldTimeline, TimelineId } from '../../../../common/types/timeline';
+import { TimelineModel } from '../../../timelines/store/timeline/model';
 import { timelineSelectors } from '../../../timelines/store/timeline';
-import { timelineDefaults } from '../../../timelines/store/timeline/defaults';
 import {
   createTimeline as dispatchCreateNewTimeline,
   updateIsLoading as dispatchUpdateIsLoading,
 } from '../../../timelines/store/timeline/actions';
 
-import { deleteTimelineMutation } from '../../containers/delete/persist.gql_query';
 import { useGetAllTimeline } from '../../containers/all';
 
 import { defaultHeaders } from '../timeline/body/column_headers/default_headers';
@@ -46,9 +44,10 @@ import {
 import { DEFAULT_SORT_FIELD, DEFAULT_SORT_DIRECTION } from './constants';
 import { useTimelineTypes } from './use_timeline_types';
 import { useTimelineStatus } from './use_timeline_status';
+import { deleteTimelinesByIds } from '../../containers/api';
+import { Direction } from '../../../../common/search_strategy';
 
 interface OwnProps<TCache = object> {
-  apolloClient: ApolloClient<TCache>;
   /** Displays open timeline in modal */
   isModal: boolean;
   closeModalTimeline?: () => void;
@@ -60,8 +59,7 @@ export type OpenTimelineOwnProps = OwnProps &
   Pick<
     OpenTimelineProps,
     'defaultPageSize' | 'title' | 'importDataModalToggle' | 'setImportDataModalToggle'
-  > &
-  PropsFromRedux;
+  >;
 
 /** Returns a collection of selected timeline ids */
 export const getSelectedTimelineIds = (selectedItems: OpenTimelineResult[]): string[] =>
@@ -76,20 +74,16 @@ export const getSelectedTimelineIds = (selectedItems: OpenTimelineResult[]): str
 /** Manages the state (e.g table selection) of the (pure) `OpenTimeline` component */
 export const StatefulOpenTimelineComponent = React.memo<OpenTimelineOwnProps>(
   ({
-    apolloClient,
     closeModalTimeline,
-    createNewTimeline,
     defaultPageSize,
     hideActions = [],
     isModal = false,
     importDataModalToggle,
     onOpenTimeline,
     setImportDataModalToggle,
-    timeline,
     title,
-    updateTimeline,
-    updateIsLoading,
   }) => {
+    const dispatch = useDispatch();
     /** Required by EuiTable for expandable rows: a map of `TimelineResult.savedObjectId` to rendered notes */
     const [itemIdToExpandedNotesRowMap, setItemIdToExpandedNotesRowMap] = useState<
       Record<string, JSX.Element>
@@ -108,6 +102,22 @@ export const StatefulOpenTimelineComponent = React.memo<OpenTimelineOwnProps>(
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>(DEFAULT_SORT_DIRECTION);
     /** The requested field to sort on */
     const [sortField, setSortField] = useState(DEFAULT_SORT_FIELD);
+
+    const getTimeline = useMemo(() => timelineSelectors.getTimelineByIdSelector(), []);
+    const timelineSavedObjectId = useShallowEqualSelector(
+      (state) => getTimeline(state, TimelineId.active)?.savedObjectId ?? ''
+    );
+
+    const existingIndexNamesSelector = useMemo(
+      () => sourcererSelectors.getAllExistingIndexNamesSelector(),
+      []
+    );
+    const existingIndexNames = useDeepEqualSelector<string[]>(existingIndexNamesSelector);
+
+    const updateTimeline = useMemo(() => dispatchUpdateTimeline(dispatch), [dispatch]);
+    const updateIsLoading = useCallback((payload) => dispatch(dispatchUpdateIsLoading(payload)), [
+      dispatch,
+    ]);
 
     const {
       customTemplateTimelineCount,
@@ -191,21 +201,21 @@ export const StatefulOpenTimelineComponent = React.memo<OpenTimelineOwnProps>(
 
     const deleteTimelines: DeleteTimelines = useCallback(
       async (timelineIds: string[]) => {
-        if (timelineIds.includes(timeline.savedObjectId || '')) {
-          createNewTimeline({ id: 'timeline-1', columns: defaultHeaders, show: false });
+        if (timelineIds.includes(timelineSavedObjectId)) {
+          dispatch(
+            dispatchCreateNewTimeline({
+              id: TimelineId.active,
+              columns: defaultHeaders,
+              indexNames: existingIndexNames,
+              show: false,
+            })
+          );
         }
 
-        await apolloClient.mutate<
-          DeleteTimelineMutation.Mutation,
-          DeleteTimelineMutation.Variables
-        >({
-          mutation: deleteTimelineMutation,
-          fetchPolicy: 'no-cache',
-          variables: { id: timelineIds },
-        });
+        await deleteTimelinesByIds(timelineIds);
         refetch();
       },
-      [apolloClient, createNewTimeline, refetch, timeline]
+      [dispatch, existingIndexNames, refetch, timelineSavedObjectId]
     );
 
     const onDeleteOneTimeline: OnDeleteOneTimeline = useCallback(
@@ -272,7 +282,6 @@ export const StatefulOpenTimelineComponent = React.memo<OpenTimelineOwnProps>(
         }
 
         queryTimelineById({
-          apolloClient,
           duplicate,
           onOpenTimeline,
           timelineId,
@@ -282,7 +291,7 @@ export const StatefulOpenTimelineComponent = React.memo<OpenTimelineOwnProps>(
         });
       },
       // eslint-disable-next-line react-hooks/exhaustive-deps
-      [apolloClient, updateIsLoading, updateTimeline]
+      [updateIsLoading, updateTimeline]
     );
 
     useEffect(() => {
@@ -366,34 +375,4 @@ export const StatefulOpenTimelineComponent = React.memo<OpenTimelineOwnProps>(
   }
 );
 
-const makeMapStateToProps = () => {
-  const getTimeline = timelineSelectors.getTimelineByIdSelector();
-  const mapStateToProps = (state: State) => {
-    const timeline = getTimeline(state, 'timeline-1') ?? timelineDefaults;
-    return {
-      timeline,
-    };
-  };
-  return mapStateToProps;
-};
-
-const mapDispatchToProps = (dispatch: Dispatch) => ({
-  createNewTimeline: ({
-    id,
-    columns,
-    show,
-  }: {
-    id: string;
-    columns: ColumnHeaderOptions[];
-    show?: boolean;
-  }) => dispatch(dispatchCreateNewTimeline({ id, columns, show })),
-  updateIsLoading: ({ id, isLoading }: { id: string; isLoading: boolean }) =>
-    dispatch(dispatchUpdateIsLoading({ id, isLoading })),
-  updateTimeline: dispatchUpdateTimeline(dispatch),
-});
-
-const connector = connect(makeMapStateToProps, mapDispatchToProps);
-
-type PropsFromRedux = ConnectedProps<typeof connector>;
-
-export const StatefulOpenTimeline = connector(StatefulOpenTimelineComponent);
+export const StatefulOpenTimeline = React.memo(StatefulOpenTimelineComponent);

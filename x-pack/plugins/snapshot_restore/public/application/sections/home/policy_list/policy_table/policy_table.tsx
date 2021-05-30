@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { useState } from 'react';
@@ -21,7 +22,7 @@ import {
 } from '@elastic/eui';
 
 import { SlmPolicy } from '../../../../../../common/types';
-import { Error } from '../../../../../shared_imports';
+import { UseRequestResponse } from '../../../../../shared_imports';
 import { UIM_POLICY_SHOW_DETAILS_CLICK } from '../../../../constants';
 import { useServices } from '../../../../app_context';
 import {
@@ -30,13 +31,12 @@ import {
   PolicyDeleteProvider,
 } from '../../../../components';
 import { linkToAddPolicy, linkToEditPolicy } from '../../../../services/navigation';
-import { SendRequestResponse } from '../../../../../shared_imports';
 
 import { reactRouterNavigate } from '../../../../../../../../../src/plugins/kibana_react/public';
 
 interface Props {
   policies: SlmPolicy[];
-  reload: () => Promise<SendRequestResponse<any, Error>>;
+  reload: UseRequestResponse['resendRequest'];
   openPolicyDetailsUrl: (name: SlmPolicy['name']) => string;
   onPolicyDeleted: (policiesDeleted: Array<SlmPolicy['name']>) => void;
   onPolicyExecuted: () => void;
@@ -117,11 +117,7 @@ export const PolicyTable: React.FunctionComponent<Props> = ({
         // Alert user if last snapshot failed
         if (lastSuccess && lastFailure && lastFailure.time > lastSuccess.time) {
           return (
-            <EuiFlexGroup
-              gutterSize="s"
-              alignItems="center"
-              className="snapshotRestorePolicyTableSnapshotFailureContainer"
-            >
+            <EuiFlexGroup gutterSize="s" alignItems="center">
               <EuiFlexItem grow={false}>
                 <EuiToolTip
                   position="top"
@@ -382,7 +378,7 @@ export const PolicyTable: React.FunctionComponent<Props> = ({
       >
         <FormattedMessage
           id="xpack.snapshotRestore.policyList.table.addPolicyButton"
-          defaultMessage="Create a policy"
+          defaultMessage="Create policy"
         />
       </EuiButton>,
     ],

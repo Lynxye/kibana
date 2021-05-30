@@ -1,14 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { Dictionary } from '../../../common/types/common';
+import { EsFieldName } from '../../../common/types/fields';
 
 export type EsId = string;
 export type EsDocSource = Dictionary<any>;
-export type EsFieldName = string;
 
 export interface EsDoc extends Dictionary<any> {
   _id: EsId;

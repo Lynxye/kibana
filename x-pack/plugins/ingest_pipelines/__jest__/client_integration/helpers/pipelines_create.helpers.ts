@@ -1,14 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { registerTestBed, TestBedConfig, TestBed } from '../../../../../test_utils';
-import { BASE_PATH } from '../../../common/constants';
+import { registerTestBed, TestBedConfig, TestBed } from '@kbn/test/jest';
 import { PipelinesCreate } from '../../../public/application/sections/pipelines_create';
 import { getFormActions, PipelineFormTestSubjects } from './pipeline_form.helpers';
 import { WithAppDependencies } from './setup_environment';
+import { getCreatePath, ROUTES } from '../../../public/application/services/navigation';
 
 export type PipelinesCreateTestBed = TestBed<PipelineFormTestSubjects> & {
   actions: ReturnType<typeof getFormActions>;
@@ -16,8 +17,8 @@ export type PipelinesCreateTestBed = TestBed<PipelineFormTestSubjects> & {
 
 const testBedConfig: TestBedConfig = {
   memoryRouter: {
-    initialEntries: [`${BASE_PATH}/create`],
-    componentRoutePath: `${BASE_PATH}/create`,
+    initialEntries: [getCreatePath()],
+    componentRoutePath: ROUTES.create,
   },
   doMountAsync: true,
 };

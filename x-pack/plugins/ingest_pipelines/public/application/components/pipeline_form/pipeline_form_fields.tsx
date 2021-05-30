@@ -1,27 +1,24 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { useState } from 'react';
 import { FormattedMessage } from '@kbn/i18n/react';
-import { EuiSpacer, EuiSwitch, EuiFlexGroup, EuiFlexItem } from '@elastic/eui';
+import { EuiSpacer, EuiSwitch } from '@elastic/eui';
 
 import { Processor } from '../../../../common/types';
 
-import { getUseField, getFormRow, Field, useKibana } from '../../../shared_imports';
+import { getUseField, getFormRow, Field } from '../../../shared_imports';
 
 import {
   ProcessorsEditorContextProvider,
-  GlobalOnFailureProcessorsEditor,
-  ProcessorsEditor,
   OnUpdateHandler,
   OnDoneLoadJsonHandler,
-} from '../pipeline_processors_editor';
-
-import { ProcessorsHeader } from './processors_header';
-import { OnFailureProcessorsTitle } from './on_failure_processors_title';
+  PipelineEditor,
+} from '../pipeline_editor';
 
 interface Props {
   processors: Processor[];
@@ -45,8 +42,6 @@ export const PipelineFormFields: React.FunctionComponent<Props> = ({
   hasVersion,
   onEditorFlyoutOpen,
 }) => {
-  const { services } = useKibana();
-
   const [isVersionVisible, setIsVersionVisible] = useState<boolean>(hasVersion);
 
   return (
@@ -120,34 +115,12 @@ export const PipelineFormFields: React.FunctionComponent<Props> = ({
       </FormRow>
 
       {/* Pipeline Processors Editor */}
-
       <ProcessorsEditorContextProvider
         onFlyoutOpen={onEditorFlyoutOpen}
-        links={{ esDocsBasePath: services.documentation.getEsDocsBasePath() }}
-        api={services.api}
-        toasts={services.notifications.toasts}
         onUpdate={onProcessorsUpdate}
         value={{ processors, onFailure }}
       >
-        <div className="pipelineProcessorsEditor">
-          <EuiFlexGroup gutterSize="m" responsive={false} direction="column">
-            <EuiFlexItem grow={false}>
-              <ProcessorsHeader onLoadJson={onLoadJson} />
-            </EuiFlexItem>
-            <EuiFlexItem grow={false}>
-              <ProcessorsEditor />
-            </EuiFlexItem>
-            <EuiFlexItem>
-              <EuiSpacer size="s" />
-            </EuiFlexItem>
-            <EuiFlexItem grow={false}>
-              <OnFailureProcessorsTitle />
-            </EuiFlexItem>
-            <EuiFlexItem grow={false}>
-              <GlobalOnFailureProcessorsEditor />
-            </EuiFlexItem>
-          </EuiFlexGroup>
-        </div>
+        <PipelineEditor onLoadJson={onLoadJson} />
       </ProcessorsEditorContextProvider>
     </>
   );

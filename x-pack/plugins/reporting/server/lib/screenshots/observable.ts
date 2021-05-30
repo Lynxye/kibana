@@ -1,29 +1,21 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import apm from 'elastic-apm-node';
 import * as Rx from 'rxjs';
-import {
-  catchError,
-  concatMap,
-  first,
-  mergeMap,
-  take,
-  takeUntil,
-  tap,
-  toArray,
-} from 'rxjs/operators';
+import { catchError, concatMap, first, mergeMap, take, takeUntil, toArray } from 'rxjs/operators';
 import { HeadlessChromiumDriverFactory } from '../../browsers';
+import { CaptureConfig } from '../../types';
 import {
-  CaptureConfig,
   ElementsPositionAndAttribute,
   ScreenshotObservableOpts,
   ScreenshotResults,
   ScreenshotsObservableFn,
-} from '../../types';
+} from './';
 import { checkPageIsOpen } from './check_browser_open';
 import { DEFAULT_PAGELOAD_SELECTOR } from './constants';
 import { getElementPositionAndAttributes } from './get_element_position_data';
@@ -65,7 +57,9 @@ export function screenshotsObservableFactory(
 
     return create$.pipe(
       mergeMap(({ driver, exit$ }) => {
-        if (apmCreatePage) apmCreatePage.end();
+        apmCreatePage?.end();
+        exit$.subscribe({ error: () => apmTrans?.end() });
+
         return Rx.from(urls).pipe(
           concatMap((url, index) => {
             const setup$: Rx.Observable<ScreenSetupData> = Rx.of(1).pipe(
@@ -87,6 +81,7 @@ export function screenshotsObservableFactory(
               }),
               mergeMap(() => getNumberOfItems(captureConfig, driver, layout, logger)),
               mergeMap(async (itemsCount) => {
+                // set the viewport to the dimentions from the job, to allow elements to flow into the expected layout
                 const viewport = layout.getViewport(itemsCount) || getDefaultViewPort();
                 await Promise.all([
                   driver.setViewport(viewport, logger),
@@ -133,7 +128,7 @@ export function screenshotsObservableFactory(
                   const elements = data.elementsPositionAndAttributes
                     ? data.elementsPositionAndAttributes
                     : getDefaultElementPosition(layout.getViewport(1));
-                  const screenshots = await getScreenshots(driver, elements, logger);
+                  const screenshots = await getScreenshots(driver, layout, elements, logger);
                   const { timeRange, error: setupError } = data;
                   return {
                     timeRange,
@@ -149,10 +144,7 @@ export function screenshotsObservableFactory(
           toArray()
         );
       }),
-      first(),
-      tap(() => {
-        if (apmTrans) apmTrans.end();
-      })
+      first()
     );
   };
 }

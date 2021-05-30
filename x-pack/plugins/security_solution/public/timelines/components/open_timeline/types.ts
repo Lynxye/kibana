@@ -1,13 +1,14 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { SetStateAction, Dispatch } from 'react';
+import type React from 'react';
 import { AllTimelinesVariables } from '../../containers/all';
 import { TimelineModel } from '../../store/timeline/model';
-import { NoteResult } from '../../../graphql/types';
+import { NoteResult } from '../../../../common/types/timeline/note';
 import {
   TimelineTypeLiteral,
   TimelineTypeLiteralWithNull,
@@ -25,9 +26,11 @@ export interface FavoriteTimelineResult {
 }
 
 export interface TimelineResultNote {
+  eventId?: string | null;
   savedObjectId?: string | null;
   note?: string | null;
   noteId?: string | null;
+  timelineId?: string | null;
   updated?: number | null;
   updatedBy?: string | null;
 }
@@ -93,7 +96,9 @@ export type OnOpenTimeline = ({
 }) => void;
 
 export type OnOpenDeleteTimelineModal = (selectedItem: OpenTimelineResult) => void;
-export type SetActionTimeline = Dispatch<SetStateAction<OpenTimelineResult | undefined>>;
+export type SetActionTimeline = React.Dispatch<
+  React.SetStateAction<OpenTimelineResult | undefined>
+>;
 export type EnableExportTimelineDownloader = (selectedItem: OpenTimelineResult) => void;
 /** Invoked when the user presses enters to submit the text in the search input */
 export type OnQueryChange = (query: EuiSearchBarQuery) => void;
@@ -162,9 +167,9 @@ export interface OpenTimelineProps {
   /** The currently applied search criteria */
   query: string;
   /** Refetch table */
-  refetch?: (existingTimeline?: OpenTimelineResult[], existingCount?: number) => void;
-  /** The results of executing a search */
-  searchResults: OpenTimelineResult[];
+  refetch?: () => void;
+  /** The results of executing a search, null is the status before data fatched */
+  searchResults: OpenTimelineResult[] | null;
   /** the currently-selected timelines in the table */
   selectedItems: OpenTimelineResult[];
   /** Toggle export timelines modal*/
@@ -216,13 +221,11 @@ export enum TimelineTabsStyle {
 }
 
 export interface TimelineTab {
-  count: number | undefined;
   disabled: boolean;
   href: string;
   id: TimelineTypeLiteral;
   name: string;
   onClick: (ev: { preventDefault: () => void }) => void;
-  withNext: boolean;
 }
 
 export interface TemplateTimelineFilter {

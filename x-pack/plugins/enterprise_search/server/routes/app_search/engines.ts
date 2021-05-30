@@ -1,59 +1,98 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import fetch from 'node-fetch';
-import querystring from 'querystring';
 import { schema } from '@kbn/config-schema';
 
-import { IRouteDependencies } from '../../plugin';
-import { ENGINES_PAGE_SIZE } from '../../../common/constants';
+import { RouteDependencies } from '../../plugin';
 
-export function registerEnginesRoute({ router, config, log }: IRouteDependencies) {
+interface EnginesResponse {
+  results: object[];
+  meta: { page: { total_results: number } };
+}
+
+export function registerEnginesRoutes({
+  router,
+  enterpriseSearchRequestHandler,
+}: RouteDependencies) {
   router.get(
     {
       path: '/api/app_search/engines',
       validate: {
         query: schema.object({
           type: schema.oneOf([schema.literal('indexed'), schema.literal('meta')]),
-          pageIndex: schema.number(),
+          'page[current]': schema.number(),
+          'page[size]': schema.number(),
         }),
       },
     },
     async (context, request, response) => {
-      try {
-        const enterpriseSearchUrl = config.host as string;
-        const { type, pageIndex } = request.query;
-
-        const params = querystring.stringify({
-          type,
-          'page[current]': pageIndex,
-          'page[size]': ENGINES_PAGE_SIZE,
-        });
-        const url = `${encodeURI(enterpriseSearchUrl)}/as/engines/collection?${params}`;
-
-        const enginesResponse = await fetch(url, {
-          headers: { Authorization: request.headers.authorization as string },
-        });
-
-        const engines = await enginesResponse.json();
-        const hasValidData =
-          Array.isArray(engines?.results) && typeof engines?.meta?.page?.total_results === 'number';
-
-        if (hasValidData) {
-          return response.ok({ body: engines });
-        } else {
-          // Either a completely incorrect Enterprise Search host URL was configured, or App Search is returning bad data
-          throw new Error(`Invalid data received from App Search: ${JSON.stringify(engines)}`);
-        }
-      } catch (e) {
-        log.error(`Cannot connect to App Search: ${e.toString()}`);
-        if (e instanceof Error) log.debug(e.stack as string);
-
-        return response.notFound({ body: 'cannot-connect' });
-      }
+      return enterpriseSearchRequestHandler.createRequest({
+        path: '/as/engines/collection',
+        hasValidData: (body?: EnginesResponse) =>
+          Array.isArray(body?.results) && typeof body?.meta?.page?.total_results === 'number',
+      })(context, request, response);
     }
+  );
+
+  router.post(
+    {
+      path: '/api/app_search/engines',
+      validate: {
+        body: schema.object({
+          name: schema.string(),
+          language: schema.maybe(schema.string()),
+          source_engines: schema.maybe(schema.arrayOf(schema.string())),
+          type: schema.maybe(schema.string()),
+        }),
+      },
+    },
+    enterpriseSearchRequestHandler.createRequest({
+      path: '/as/engines/collection',
+    })
+  );
+
+  // Single engine endpoints
+  router.get(
+    {
+      path: '/api/app_search/engines/{name}',
+      validate: {
+        params: schema.object({
+          name: schema.string(),
+        }),
+      },
+    },
+    enterpriseSearchRequestHandler.createRequest({
+      path: '/as/engines/:name/details',
+    })
+  );
+  router.delete(
+    {
+      path: '/api/app_search/engines/{name}',
+      validate: {
+        params: schema.object({
+          name: schema.string(),
+        }),
+      },
+    },
+    enterpriseSearchRequestHandler.createRequest({
+      path: '/as/engines/:name',
+    })
+  );
+  router.get(
+    {
+      path: '/api/app_search/engines/{name}/overview',
+      validate: {
+        params: schema.object({
+          name: schema.string(),
+        }),
+      },
+    },
+    enterpriseSearchRequestHandler.createRequest({
+      path: '/as/engines/:name/overview_metrics',
+    })
   );
 }

@@ -1,15 +1,17 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import rison from 'rison-node';
 import { schema } from '@kbn/config-schema';
-import { authorizedUserPreRoutingFactory } from './lib/authorized_user_pre_routing';
-import { HandlerErrorFunction, HandlerFunction } from './types';
+import rison from 'rison-node';
 import { ReportingCore } from '../';
 import { API_BASE_URL } from '../../common/constants';
+import { BaseParams } from '../types';
+import { authorizedUserPreRoutingFactory } from './lib/authorized_user_pre_routing';
+import { HandlerErrorFunction, HandlerFunction } from './types';
 
 const BASE_GENERATE = `${API_BASE_URL}/generate`;
 
@@ -22,35 +24,31 @@ export function registerGenerateFromJobParams(
   const userHandler = authorizedUserPreRoutingFactory(reporting);
   const { router } = setupDeps;
 
+  // TODO: find a way to abstract this using ExportTypeRegistry: it needs a new
+  // public method to return this array
+  // const registry = reporting.getExportTypesRegistry();
+  // const kibanaAccessControlTags = registry.getAllAccessControlTags();
+  const useKibanaAccessControl = reporting.getDeprecatedAllowedRoles() === false; // true if Reporting's deprecated access control feature is disabled
+  const kibanaAccessControlTags = useKibanaAccessControl ? ['access:generateReport'] : [];
+
   router.post(
     {
       path: `${BASE_GENERATE}/{exportType}`,
       validate: {
-        params: schema.object({
-          exportType: schema.string({ minLength: 2 }),
-        }),
-        body: schema.nullable(
-          schema.object({
-            jobParams: schema.maybe(schema.string()),
-          })
-        ),
-        query: schema.nullable(
-          schema.object({
-            jobParams: schema.string({
-              defaultValue: '',
-            }),
-          })
-        ),
+        params: schema.object({ exportType: schema.string({ minLength: 2 }) }),
+        body: schema.nullable(schema.object({ jobParams: schema.maybe(schema.string()) })),
+        query: schema.nullable(schema.object({ jobParams: schema.string({ defaultValue: '' }) })),
       },
+      options: { tags: kibanaAccessControlTags },
     },
     userHandler(async (user, context, req, res) => {
-      let jobParamsRison: string | null;
+      let jobParamsRison: null | string = null;
 
       if (req.body) {
-        const { jobParams: jobParamsPayload } = req.body as { jobParams: string };
-        jobParamsRison = jobParamsPayload;
-      } else {
-        const { jobParams: queryJobParams } = req.query as { jobParams: string };
+        const { jobParams: jobParamsPayload } = req.body;
+        jobParamsRison = jobParamsPayload ? jobParamsPayload : null;
+      } else if (req.query?.jobParams) {
+        const { jobParams: queryJobParams } = req.query;
         if (queryJobParams) {
           jobParamsRison = queryJobParams;
         } else {
@@ -65,11 +63,11 @@ export function registerGenerateFromJobParams(
         });
       }
 
-      const { exportType } = req.params as { exportType: string };
+      const { exportType } = req.params;
       let jobParams;
 
       try {
-        jobParams = rison.decode(jobParamsRison) as object | null;
+        jobParams = rison.decode(jobParamsRison) as BaseParams | null;
         if (!jobParams) {
           return res.customError({
             statusCode: 400,

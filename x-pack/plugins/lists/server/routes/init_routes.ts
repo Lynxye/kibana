@@ -1,12 +1,11 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { IRouter } from 'kibana/server';
-
-import { SecurityPluginSetup } from '../../../security/server';
+import type { ListsPluginRouter } from '../types';
 import { ConfigType } from '../config';
 
 import {
@@ -23,6 +22,7 @@ import {
   deleteListIndexRoute,
   deleteListItemRoute,
   deleteListRoute,
+  exportExceptionListRoute,
   exportListItemRoute,
   findEndpointListItemRoute,
   findExceptionListItemRoute,
@@ -39,6 +39,7 @@ import {
   readListItemRoute,
   readListRoute,
   readPrivilegesRoute,
+  summaryExceptionListRoute,
   updateEndpointListItemRoute,
   updateExceptionListItemRoute,
   updateExceptionListRoute,
@@ -46,11 +47,7 @@ import {
   updateListRoute,
 } from '.';
 
-export const initRoutes = (
-  router: IRouter,
-  config: ConfigType,
-  security: SecurityPluginSetup | null | undefined
-): void => {
+export const initRoutes = (router: ListsPluginRouter, config: ConfigType): void => {
   // lists
   createListRoute(router);
   readListRoute(router);
@@ -58,7 +55,7 @@ export const initRoutes = (
   deleteListRoute(router);
   patchListRoute(router);
   findListRoute(router);
-  readPrivilegesRoute(router, security);
+  readPrivilegesRoute(router);
 
   // list items
   createListItemRoute(router);
@@ -81,6 +78,7 @@ export const initRoutes = (
   updateExceptionListRoute(router);
   deleteExceptionListRoute(router);
   findExceptionListRoute(router);
+  exportExceptionListRoute(router);
 
   // exception list items
   createExceptionListItemRoute(router);
@@ -98,4 +96,7 @@ export const initRoutes = (
   updateEndpointListItemRoute(router);
   deleteEndpointListItemRoute(router);
   findEndpointListItemRoute(router);
+
+  // exception list items summary
+  summaryExceptionListRoute(router);
 };

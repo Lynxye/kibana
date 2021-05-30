@@ -22,13 +22,13 @@ exports[`Storyshots shareables/Footer/PageControls component 1`] = `
     >
       <button
         aria-label="Previous Page"
-        className="euiButtonIcon euiButtonIcon--ghost"
+        className="euiButtonIcon euiButtonIcon--ghost euiButtonIcon--empty euiButtonIcon--xSmall"
         data-test-subj="pageControlsPrevPage"
         disabled={true}
         onClick={[Function]}
         type="button"
       >
-        <div
+        <span
           aria-hidden="true"
           className="euiButtonIcon__icon"
           data-euiicon-type="arrowLeft"
@@ -42,11 +42,12 @@ exports[`Storyshots shareables/Footer/PageControls component 1`] = `
       <button
         className="euiButtonEmpty euiButtonEmpty--ghost euiButtonEmpty--small"
         data-test-subj="pageControlsCurrentPage"
+        disabled={false}
         onClick={[Function]}
         type="button"
       >
         <span
-          className="euiButtonEmpty__content"
+          className="euiButtonContent euiButtonEmpty__content"
         >
           <span
             className="euiButtonEmpty__text"
@@ -71,13 +72,13 @@ exports[`Storyshots shareables/Footer/PageControls component 1`] = `
     >
       <button
         aria-label="Next Page"
-        className="euiButtonIcon euiButtonIcon--ghost"
+        className="euiButtonIcon euiButtonIcon--ghost euiButtonIcon--empty euiButtonIcon--xSmall"
         data-test-subj="pageControlsNextPage"
         disabled={false}
         onClick={[Function]}
         type="button"
       >
-        <div
+        <span
           aria-hidden="true"
           className="euiButtonIcon__icon"
           data-euiicon-type="arrowRight"
@@ -116,13 +117,13 @@ exports[`Storyshots shareables/Footer/PageControls contextual: austin 1`] = `
     >
       <button
         aria-label="Previous Page"
-        className="euiButtonIcon euiButtonIcon--ghost"
+        className="euiButtonIcon euiButtonIcon--ghost euiButtonIcon--empty euiButtonIcon--xSmall"
         data-test-subj="pageControlsPrevPage"
         disabled={true}
         onClick={[Function]}
         type="button"
       >
-        <div
+        <span
           aria-hidden="true"
           className="euiButtonIcon__icon"
           data-euiicon-type="arrowLeft"
@@ -136,11 +137,12 @@ exports[`Storyshots shareables/Footer/PageControls contextual: austin 1`] = `
       <button
         className="euiButtonEmpty euiButtonEmpty--ghost euiButtonEmpty--small"
         data-test-subj="pageControlsCurrentPage"
+        disabled={false}
         onClick={[Function]}
         type="button"
       >
         <span
-          className="euiButtonEmpty__content"
+          className="euiButtonContent euiButtonEmpty__content"
         >
           <span
             className="euiButtonEmpty__text"
@@ -165,13 +167,13 @@ exports[`Storyshots shareables/Footer/PageControls contextual: austin 1`] = `
     >
       <button
         aria-label="Next Page"
-        className="euiButtonIcon euiButtonIcon--ghost"
+        className="euiButtonIcon euiButtonIcon--ghost euiButtonIcon--empty euiButtonIcon--xSmall"
         data-test-subj="pageControlsNextPage"
         disabled={false}
         onClick={[Function]}
         type="button"
       >
-        <div
+        <span
           aria-hidden="true"
           className="euiButtonIcon__icon"
           data-euiicon-type="arrowRight"
@@ -210,13 +212,13 @@ exports[`Storyshots shareables/Footer/PageControls contextual: hello 1`] = `
     >
       <button
         aria-label="Previous Page"
-        className="euiButtonIcon euiButtonIcon--ghost"
+        className="euiButtonIcon euiButtonIcon--ghost euiButtonIcon--empty euiButtonIcon--xSmall"
         data-test-subj="pageControlsPrevPage"
         disabled={true}
         onClick={[Function]}
         type="button"
       >
-        <div
+        <span
           aria-hidden="true"
           className="euiButtonIcon__icon"
           data-euiicon-type="arrowLeft"
@@ -230,11 +232,12 @@ exports[`Storyshots shareables/Footer/PageControls contextual: hello 1`] = `
       <button
         className="euiButtonEmpty euiButtonEmpty--ghost euiButtonEmpty--small"
         data-test-subj="pageControlsCurrentPage"
+        disabled={false}
         onClick={[Function]}
         type="button"
       >
         <span
-          className="euiButtonEmpty__content"
+          className="euiButtonContent euiButtonEmpty__content"
         >
           <span
             className="euiButtonEmpty__text"
@@ -259,13 +262,13 @@ exports[`Storyshots shareables/Footer/PageControls contextual: hello 1`] = `
     >
       <button
         aria-label="Next Page"
-        className="euiButtonIcon euiButtonIcon--ghost"
+        className="euiButtonIcon euiButtonIcon--ghost euiButtonIcon--empty euiButtonIcon--xSmall"
         data-test-subj="pageControlsNextPage"
         disabled={false}
         onClick={[Function]}
         type="button"
       >
-        <div
+        <span
           aria-hidden="true"
           className="euiButtonIcon__icon"
           data-euiicon-type="arrowRight"

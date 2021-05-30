@@ -1,20 +1,9 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import { Observable } from 'rxjs';
@@ -37,11 +26,17 @@ export interface ElasticsearchServiceSetup {
   /**
    * @deprecated
    * Use {@link ElasticsearchServiceStart.legacy} instead.
-   *
-   * */
+   */
   legacy: {
     /**
+     * Provide direct access to the current elasticsearch configuration.
+     *
+     * @deprecated this will be removed in a later version.
+     */
+    readonly config$: Observable<ElasticsearchConfig>;
+    /**
      * @deprecated
+     * @removeBy 7.16
      * Use {@link ElasticsearchServiceStart.legacy | ElasticsearchServiceStart.legacy.createClient} instead.
      *
      * Create application specific Elasticsearch cluster API client with customized config. See {@link ILegacyClusterClient}.
@@ -66,6 +61,7 @@ export interface ElasticsearchServiceSetup {
     ) => ILegacyCustomClusterClient;
 
     /**
+     * @removeBy 7.16
      * @deprecated
      * Use {@link ElasticsearchServiceStart.legacy | ElasticsearchServiceStart.legacy.client} instead.
      *
@@ -82,11 +78,7 @@ export interface ElasticsearchServiceSetup {
 }
 
 /** @internal */
-export interface InternalElasticsearchServiceSetup {
-  // Required for the BWC with the legacy Kibana only.
-  readonly legacy: ElasticsearchServiceSetup['legacy'] & {
-    readonly config$: Observable<ElasticsearchConfig>;
-  };
+export interface InternalElasticsearchServiceSetup extends ElasticsearchServiceSetup {
   esNodesCompatibility$: Observable<NodesVersionCompatibility>;
   status$: Observable<ServiceStatus<ElasticsearchStatusMeta>>;
 }
@@ -133,7 +125,16 @@ export interface ElasticsearchServiceStart {
    * */
   legacy: {
     /**
+     * Provide direct access to the current elasticsearch configuration.
+     *
+     * @deprecated this will be removed in a later version.
+     */
+    readonly config$: Observable<ElasticsearchConfig>;
+    /**
      * Create application specific Elasticsearch cluster API client with customized config. See {@link ILegacyClusterClient}.
+     *
+     * @deprecated
+     * @removeBy 7.16
      *
      * @param type Unique identifier of the client
      * @param clientConfig A config consists of Elasticsearch JS client options and
@@ -157,6 +158,9 @@ export interface ElasticsearchServiceStart {
     /**
      * A pre-configured {@link ILegacyClusterClient | legacy Elasticsearch client}.
      *
+     * @deprecated
+     * @removeBy 7.16
+     *
      * @example
      * ```js
      * const client = core.elasticsearch.legacy.client;
@@ -175,6 +179,7 @@ export type InternalElasticsearchServiceStart = ElasticsearchServiceStart;
 export interface ElasticsearchStatusMeta {
   warningNodes: NodesVersionCompatibility['warningNodes'];
   incompatibleNodes: NodesVersionCompatibility['incompatibleNodes'];
+  nodesInfoRequestError?: NodesVersionCompatibility['nodesInfoRequestError'];
 }
 
 /**

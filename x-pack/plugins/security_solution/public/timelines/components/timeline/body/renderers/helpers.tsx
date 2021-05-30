@@ -1,14 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { EuiFlexItem } from '@elastic/eui';
 import { isNumber, isEmpty } from 'lodash/fp';
 import styled from 'styled-components';
 
-import { TimelineNonEcsData } from '../../../../../graphql/types';
+import { TimelineNonEcsData } from '../../../../../../common/search_strategy/timeline';
 
 export const deleteItemIdx = (data: TimelineNonEcsData[], idx: number) => [
   ...data.slice(0, idx),
@@ -50,14 +51,35 @@ export const isFileEvent = ({
   eventCategory: string | null | undefined;
   eventDataset: string | null | undefined;
 }) =>
-  (eventCategory != null && eventCategory.toLowerCase() === 'file') ||
-  (eventDataset != null && eventDataset.toLowerCase() === 'file');
+  eventCategory?.toLowerCase() === 'file' ||
+  eventDataset?.toLowerCase() === 'file' ||
+  eventDataset?.toLowerCase() === 'endpoint.events.file';
 
 export const isProcessStoppedOrTerminationEvent = (
   eventAction: string | null | undefined
 ): boolean => ['process_stopped', 'termination_event'].includes(`${eventAction}`.toLowerCase());
 
 export const showVia = (eventAction: string | null | undefined): boolean =>
-  ['file_create_event', 'created', 'file_delete_event', 'deleted'].includes(
-    `${eventAction}`.toLowerCase()
-  );
+  [
+    'created',
+    'creation',
+    'deleted',
+    'deletion',
+    'file_create_event',
+    'file_delete_event',
+    'files-encrypted',
+    'load',
+    'modification',
+    'overwrite',
+    'rename',
+  ].includes(`${eventAction}`.toLowerCase());
+
+export const excludeFileNameAndPath = ({
+  eventAction,
+  eventCategory,
+  eventType,
+}: {
+  eventAction: string | null | undefined;
+  eventCategory: string | null | undefined;
+  eventType: string | null | undefined;
+}) => false;

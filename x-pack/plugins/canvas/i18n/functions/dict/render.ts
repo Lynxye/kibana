@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
@@ -13,7 +14,7 @@ import { CONTEXT, CSS } from '../../constants';
 export const help: FunctionHelp<FunctionFactory<typeof render>> = {
   help: i18n.translate('xpack.canvas.functions.renderHelpText', {
     defaultMessage:
-      'Render the {CONTEXT} as a specific element and sets element level options, such as background and border styling.',
+      'Renders the {CONTEXT} as a specific element and sets element level options, such as background and border styling.',
     values: {
       CONTEXT,
     },

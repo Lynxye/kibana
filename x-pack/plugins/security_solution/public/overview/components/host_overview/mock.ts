@@ -1,12 +1,13 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { HostsData } from '../../../graphql/types';
+import { HostsStrategyResponse } from '../../../../common/search_strategy';
 
-export const mockData: { Hosts: HostsData; DateFields: string[] } = {
+export const mockData: { Hosts: HostsStrategyResponse; DateFields: string[] } = {
   Hosts: {
     totalCount: 1,
     edges: [
@@ -47,6 +48,7 @@ export const mockData: { Hosts: HostsData; DateFields: string[] } = {
       fakeTotalCount: 50,
       showMorePagesIndicator: true,
     },
+    rawResponse: {} as HostsStrategyResponse['rawResponse'],
   },
   DateFields: ['lastBeat'],
 };

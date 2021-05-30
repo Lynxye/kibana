@@ -1,16 +1,16 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import { act } from 'react-dom/test-utils';
 
 import { componentHelpers, MappingsEditorTestBed } from '../helpers';
 import { getFieldConfig } from '../../../lib';
 
 const { setup, getMappingsEditorDataFactory } = componentHelpers.mappingsEditor;
-const onChangeHandler = jest.fn();
-const getMappingsEditorData = getMappingsEditorDataFactory(onChangeHandler);
 
 // Parameters automatically added to the text datatype when saved (with the default values)
 export const defaultTextParameters = {
@@ -24,14 +24,14 @@ export const defaultTextParameters = {
   store: false,
 };
 
-// FLAKY: https://github.com/elastic/kibana/issues/66669
-describe.skip('Mappings editor: text datatype', () => {
-  let testBed: MappingsEditorTestBed;
-
+describe('Mappings editor: text datatype', () => {
   /**
    * Variable to store the mappings data forwarded to the consumer component
    */
   let data: any;
+  let onChangeHandler: jest.Mock = jest.fn();
+  let getMappingsEditorData = getMappingsEditorDataFactory(onChangeHandler);
+  let testBed: MappingsEditorTestBed;
 
   beforeAll(() => {
     jest.useFakeTimers();
@@ -41,8 +41,9 @@ describe.skip('Mappings editor: text datatype', () => {
     jest.useRealTimers();
   });
 
-  afterEach(() => {
-    onChangeHandler.mockReset();
+  beforeEach(() => {
+    onChangeHandler = jest.fn();
+    getMappingsEditorData = getMappingsEditorDataFactory(onChangeHandler);
   });
 
   test('initial view and default parameters values', async () => {
@@ -56,7 +57,10 @@ describe.skip('Mappings editor: text datatype', () => {
 
     const updatedMappings = { ...defaultMappings };
 
-    testBed = setup({ value: defaultMappings, onChange: onChangeHandler });
+    await act(async () => {
+      testBed = setup({ value: defaultMappings, onChange: onChangeHandler });
+    });
+    testBed.component.update();
 
     const {
       component,
@@ -64,7 +68,7 @@ describe.skip('Mappings editor: text datatype', () => {
     } = testBed;
 
     // Open the flyout to edit the field
-    startEditField('myField');
+    await startEditField('myField');
 
     // It should have searchable ("index" param) active by default
     const indexFieldConfig = getFieldConfig('index');
@@ -80,7 +84,7 @@ describe.skip('Mappings editor: text datatype', () => {
 
     ({ data } = await getMappingsEditorData(component));
     expect(data).toEqual(updatedMappings);
-  }, 10000);
+  });
 
   test('analyzer parameter: default values', async () => {
     const defaultMappings = {
@@ -96,7 +100,10 @@ describe.skip('Mappings editor: text datatype', () => {
       },
     };
 
-    testBed = setup({ value: defaultMappings, onChange: onChangeHandler });
+    await act(async () => {
+      testBed = setup({ value: defaultMappings, onChange: onChangeHandler });
+    });
+    testBed.component.update();
 
     const {
       component,
@@ -113,8 +120,8 @@ describe.skip('Mappings editor: text datatype', () => {
     const fieldToEdit = 'myField';
 
     // Start edit and immediately save to have all the default values
-    startEditField(fieldToEdit);
-    showAdvancedSettings();
+    await startEditField(fieldToEdit);
+    await showAdvancedSettings();
     await updateFieldAndCloseFlyout();
 
     expect(exists('mappingsEditorFieldEdit')).toBe(false);
@@ -133,8 +140,8 @@ describe.skip('Mappings editor: text datatype', () => {
     expect(data).toEqual(updatedMappings);
 
     // Re-open the edit panel
-    startEditField(fieldToEdit);
-    showAdvancedSettings();
+    await startEditField(fieldToEdit);
+    await showAdvancedSettings();
 
     // When no analyzer is defined, defaults to "Index default"
     let indexAnalyzerValue = find('indexAnalyzer.select').props().value;
@@ -158,9 +165,8 @@ describe.skip('Mappings editor: text datatype', () => {
     expect(exists('searchAnalyzer')).toBe(false);
 
     // Uncheck the "Use same analyzer for search" checkbox and make sure the dedicated select appears
-    selectCheckBox('useSameAnalyzerForSearchCheckBox.input', false);
-    act(() => {
-      jest.advanceTimersByTime(1000);
+    await act(async () => {
+      selectCheckBox('useSameAnalyzerForSearchCheckBox.input', false);
     });
     component.update();
 
@@ -169,7 +175,6 @@ describe.skip('Mappings editor: text datatype', () => {
     let searchAnalyzerValue = find('searchAnalyzer.select').props().value;
     expect(searchAnalyzerValue).toEqual('index_default');
 
-    // Change the value of the 3 analyzers
     await act(async () => {
       // Change the value of the 3 analyzers
       setSelectValue('indexAnalyzer.select', 'standard', false);
@@ -195,8 +200,8 @@ describe.skip('Mappings editor: text datatype', () => {
     expect(data).toEqual(updatedMappings);
 
     // Re-open the flyout and make sure the select have the correct updated value
-    startEditField('myField');
-    showAdvancedSettings();
+    await startEditField('myField');
+    await showAdvancedSettings();
 
     isUseSameAnalyzerForSearchChecked = getCheckboxValue('useSameAnalyzerForSearchCheckBox.input');
     expect(isUseSameAnalyzerForSearchChecked).toBe(false);
@@ -208,7 +213,7 @@ describe.skip('Mappings editor: text datatype', () => {
     expect(indexAnalyzerValue).toBe('standard');
     expect(searchAnalyzerValue).toBe('simple');
     expect(searchQuoteAnalyzerValue).toBe('whitespace');
-  }, 50000);
+  });
 
   test('analyzer parameter: custom analyzer (external plugin)', async () => {
     const defaultMappings = {
@@ -234,7 +239,10 @@ describe.skip('Mappings editor: text datatype', () => {
       },
     };
 
-    testBed = setup({ value: defaultMappings, onChange: onChangeHandler });
+    await act(async () => {
+      testBed = setup({ value: defaultMappings, onChange: onChangeHandler });
+    });
+    testBed.component.update();
 
     const {
       find,
@@ -245,8 +253,8 @@ describe.skip('Mappings editor: text datatype', () => {
     } = testBed;
     const fieldToEdit = 'myField';
 
-    startEditField(fieldToEdit);
-    showAdvancedSettings();
+    await startEditField(fieldToEdit);
+    await showAdvancedSettings();
 
     expect(exists('indexAnalyzer-custom')).toBe(true);
     expect(exists('searchAnalyzer-custom')).toBe(true);
@@ -301,7 +309,7 @@ describe.skip('Mappings editor: text datatype', () => {
     };
 
     expect(data).toEqual(updatedMappings);
-  }, 100000);
+  });
 
   test('analyzer parameter: custom analyzer (from index settings)', async () => {
     const indexSettings = {
@@ -320,8 +328,6 @@ describe.skip('Mappings editor: text datatype', () => {
     const customAnalyzers = Object.keys(indexSettings.analysis.analyzer);
 
     const defaultMappings = {
-      _meta: {},
-      _source: {},
       properties: {
         myField: {
           type: 'text',
@@ -340,11 +346,14 @@ describe.skip('Mappings editor: text datatype', () => {
       },
     };
 
-    testBed = setup({
-      value: defaultMappings,
-      onChange: onChangeHandler,
-      indexSettings,
+    await act(async () => {
+      testBed = setup({
+        value: defaultMappings,
+        onChange: onChangeHandler,
+        indexSettings,
+      });
     });
+    testBed.component.update();
 
     const {
       component,
@@ -354,8 +363,8 @@ describe.skip('Mappings editor: text datatype', () => {
     } = testBed;
     const fieldToEdit = 'myField';
 
-    startEditField(fieldToEdit);
-    showAdvancedSettings();
+    await startEditField(fieldToEdit);
+    await showAdvancedSettings();
 
     // It should have 2 selects
     const indexAnalyzerSelects = find('indexAnalyzer.select');
@@ -395,5 +404,5 @@ describe.skip('Mappings editor: text datatype', () => {
     };
 
     expect(data).toEqual(updatedMappings);
-  }, 50000);
+  });
 });

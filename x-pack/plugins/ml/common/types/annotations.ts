@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 // The Annotation interface is based on annotation documents stored in the
@@ -103,8 +104,7 @@ export function isAnnotation(arg: any): arg is Annotation {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
-export interface Annotations extends Array<Annotation> {}
+export type Annotations = Annotation[];
 
 export function isAnnotations(arg: any): arg is Annotations {
   if (Array.isArray(arg) === false) {
@@ -134,5 +134,12 @@ export type EsAggregationResult = Record<string, TermAggregationResult>;
 export interface GetAnnotationsResponse {
   aggregations?: EsAggregationResult;
   annotations: Record<string, Annotations>;
+  error?: string;
   success: boolean;
+}
+
+export interface AnnotationsTable {
+  annotationsData: Annotations;
+  aggregations: EsAggregationResult;
+  error?: string;
 }

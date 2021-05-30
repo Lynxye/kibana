@@ -1,13 +1,14 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import {
-  AddRulesProps,
   PatchRuleProps,
-  NewRule,
+  CreateRulesProps,
+  UpdateRulesProps,
   PrePackagedRulesStatusResponse,
   BasicFetchProps,
   RuleStatusResponse,
@@ -16,13 +17,18 @@ import {
   FetchRulesResponse,
   FetchRulesProps,
 } from '../types';
-import { ruleMock, savedRuleMock, rulesMock } from '../mock';
+import { savedRuleMock, rulesMock } from '../mock';
+import { getRulesSchemaMock } from '../../../../../../common/detection_engine/schemas/response/rules_schema.mocks';
+import { RulesSchema } from '../../../../../../common/detection_engine/schemas/response';
 
-export const addRule = async ({ rule, signal }: AddRulesProps): Promise<NewRule> =>
-  Promise.resolve(ruleMock);
+export const updateRule = async ({ rule, signal }: UpdateRulesProps): Promise<RulesSchema> =>
+  Promise.resolve(getRulesSchemaMock());
 
-export const patchRule = async ({ ruleProperties, signal }: PatchRuleProps): Promise<NewRule> =>
-  Promise.resolve(ruleMock);
+export const createRule = async ({ rule, signal }: CreateRulesProps): Promise<RulesSchema> =>
+  Promise.resolve(getRulesSchemaMock());
+
+export const patchRule = async ({ ruleProperties, signal }: PatchRuleProps): Promise<RulesSchema> =>
+  Promise.resolve(getRulesSchemaMock());
 
 export const getPrePackagedRulesStatus = async ({
   signal,
@@ -62,7 +68,7 @@ export const getRuleStatusById = async ({
         gap: null,
         bulk_create_time_durations: ['2235.01'],
         search_after_time_durations: ['616.97'],
-        last_look_back_date: '2020-03-19T00:32:07.996Z',
+        last_look_back_date: '2020-03-19T00:32:07.996Z', // NOTE: This is no longer used on the UI, but left here in case users are using it within the API
       },
       failures: [],
     },
@@ -88,14 +94,15 @@ export const getRulesStatusByIds = async ({
         gap: null,
         bulk_create_time_durations: ['2235.01'],
         search_after_time_durations: ['616.97'],
-        last_look_back_date: '2020-03-19T00:32:07.996Z',
+        last_look_back_date: '2020-03-19T00:32:07.996Z', // NOTE: This is no longer used on the UI, but left here in case users are using it within the API
       },
       failures: [],
     },
   });
 
-export const fetchRuleById = async ({ id, signal }: FetchRuleProps): Promise<Rule> =>
-  Promise.resolve(savedRuleMock);
+export const fetchRuleById = jest.fn(
+  async ({ id, signal }: FetchRuleProps): Promise<Rule> => savedRuleMock
+);
 
 export const fetchRules = async ({
   filterOptions = {

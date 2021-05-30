@@ -1,20 +1,20 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { mount } from 'enzyme';
 import React from 'react';
 import { Router } from 'react-router-dom';
-
+import { waitFor } from '@testing-library/react';
 import '../../common/mock/match_media';
 import { Filter } from '../../../../../../src/plugins/data/common/es_query';
-import { useWithSource } from '../../common/containers/source';
+import { useSourcererScope } from '../../common/containers/sourcerer';
 import {
   TestProviders,
   mockGlobalState,
-  apolloClientObservable,
   SUB_PLUGINS_REDUCER,
   kibanaObservable,
   createSecuritySolutionStorageMock,
@@ -25,7 +25,7 @@ import { inputsActions } from '../../common/store/inputs';
 import { Network } from './network';
 import { NetworkRoutes } from './navigation';
 
-jest.mock('../../common/containers/source');
+jest.mock('../../common/containers/sourcerer');
 
 // Test will fail because we will to need to mock some core services to make the test work
 // For now let's forget about SiemSearchBar and QueryBar
@@ -61,7 +61,7 @@ const mockHistory = {
 const to = '2018-03-23T18:49:23.132Z';
 const from = '2018-03-24T03:33:52.253Z';
 
-const getMockProps = () => ({
+const mockProps = {
   networkPagePath: '',
   to,
   from,
@@ -69,18 +69,19 @@ const getMockProps = () => ({
   setQuery: jest.fn(),
   capabilitiesFetched: true,
   hasMlUserPermissions: true,
-});
-
-describe('rendering - rendering', () => {
-  test('it renders the Setup Instructions text when no index is available', async () => {
-    (useWithSource as jest.Mock).mockReturnValue({
+};
+const mockUseSourcererScope = useSourcererScope as jest.Mock;
+describe('Network page - rendering', () => {
+  test('it renders the Setup Instructions text when no index is available', () => {
+    mockUseSourcererScope.mockReturnValue({
+      selectedPatterns: [],
       indicesExist: false,
     });
 
     const wrapper = mount(
       <TestProviders>
         <Router history={mockHistory}>
-          <Network {...getMockProps()} />
+          <Network {...mockProps} />
         </Router>
       </TestProviders>
     );
@@ -88,18 +89,21 @@ describe('rendering - rendering', () => {
   });
 
   test('it DOES NOT render the Setup Instructions text when an index is available', async () => {
-    (useWithSource as jest.Mock).mockReturnValue({
+    mockUseSourcererScope.mockReturnValue({
+      selectedPatterns: [],
       indicesExist: true,
       indexPattern: {},
     });
     const wrapper = mount(
       <TestProviders>
         <Router history={mockHistory}>
-          <Network {...getMockProps()} />
+          <Network {...mockProps} />
         </Router>
       </TestProviders>
     );
-    expect(wrapper.find('[data-test-subj="empty-page"]').exists()).toBe(false);
+    await waitFor(() => {
+      expect(wrapper.find('[data-test-subj="empty-page"]').exists()).toBe(false);
+    });
   });
 
   test('it should add the new filters after init', async () => {
@@ -134,32 +138,29 @@ describe('rendering - rendering', () => {
         },
       },
     ];
-    (useWithSource as jest.Mock).mockReturnValue({
+    mockUseSourcererScope.mockReturnValue({
+      selectedPatterns: [],
       indicesExist: true,
       indexPattern: { fields: [], title: 'title' },
     });
     const myState: State = mockGlobalState;
     const { storage } = createSecuritySolutionStorageMock();
-    const myStore = createStore(
-      myState,
-      SUB_PLUGINS_REDUCER,
-      apolloClientObservable,
-      kibanaObservable,
-      storage
-    );
+    const myStore = createStore(myState, SUB_PLUGINS_REDUCER, kibanaObservable, storage);
     const wrapper = mount(
       <TestProviders store={myStore}>
         <Router history={mockHistory}>
-          <Network {...getMockProps()} />
+          <Network {...mockProps} />
         </Router>
       </TestProviders>
     );
-    wrapper.update();
+    await waitFor(() => {
+      wrapper.update();
 
-    myStore.dispatch(inputsActions.setSearchBarFilter({ id: 'global', filters: newFilters }));
-    wrapper.update();
-    expect(wrapper.find(NetworkRoutes).props().filterQuery).toEqual(
-      '{"bool":{"must":[],"filter":[{"match_all":{}},{"bool":{"filter":[{"bool":{"should":[{"match_phrase":{"host.name":"ItRocks"}}],"minimum_should_match":1}}]}}],"should":[],"must_not":[]}}'
-    );
+      myStore.dispatch(inputsActions.setSearchBarFilter({ id: 'global', filters: newFilters }));
+      wrapper.update();
+      expect(wrapper.find(NetworkRoutes).props().filterQuery).toEqual(
+        '{"bool":{"must":[],"filter":[{"match_all":{}},{"bool":{"filter":[{"bool":{"should":[{"match_phrase":{"host.name":"ItRocks"}}],"minimum_should_match":1}}]}}],"should":[],"must_not":[]}}'
+      );
+    });
   });
 });

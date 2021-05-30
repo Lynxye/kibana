@@ -1,23 +1,29 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { IRouter } from 'kibana/server';
-
-import { EXCEPTION_LIST_URL } from '../../common/constants';
-import { buildRouteValidation, buildSiemResponse, transformError } from '../siem_server_deps';
-import { validate } from '../../common/shared_imports';
+import { validate } from '@kbn/securitysolution-io-ts-utils';
+import { transformError } from '@kbn/securitysolution-es-utils';
 import {
   UpdateExceptionListSchemaDecoded,
   exceptionListSchema,
   updateExceptionListSchema,
-} from '../../common/schemas';
+} from '@kbn/securitysolution-io-ts-list-types';
+import { EXCEPTION_LIST_URL } from '@kbn/securitysolution-list-constants';
 
-import { getExceptionListClient } from './utils';
+import type { ListsPluginRouter } from '../types';
 
-export const updateExceptionListRoute = (router: IRouter): void => {
+import {
+  buildRouteValidation,
+  buildSiemResponse,
+  getErrorMessageExceptionList,
+  getExceptionListClient,
+} from './utils';
+
+export const updateExceptionListRoute = (router: ListsPluginRouter): void => {
   router.put(
     {
       options: {
@@ -35,7 +41,6 @@ export const updateExceptionListRoute = (router: IRouter): void => {
       const siemResponse = buildSiemResponse(response);
       try {
         const {
-          _tags,
           _version,
           tags,
           name,
@@ -44,18 +49,18 @@ export const updateExceptionListRoute = (router: IRouter): void => {
           list_id: listId,
           meta,
           namespace_type: namespaceType,
+          os_types: osTypes,
           type,
           version,
         } = request.body;
         const exceptionLists = getExceptionListClient(context);
         if (id == null && listId == null) {
           return siemResponse.error({
-            body: `either id or list_id need to be defined`,
+            body: 'either id or list_id need to be defined',
             statusCode: 404,
           });
         } else {
           const list = await exceptionLists.updateExceptionList({
-            _tags,
             _version,
             description,
             id,
@@ -63,13 +68,14 @@ export const updateExceptionListRoute = (router: IRouter): void => {
             meta,
             name,
             namespaceType,
+            osTypes,
             tags,
             type,
             version,
           });
           if (list == null) {
             return siemResponse.error({
-              body: `exception list id: "${id}" found found`,
+              body: getErrorMessageExceptionList({ id, listId }),
               statusCode: 404,
             });
           } else {

@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
@@ -12,7 +13,8 @@ import { CONTEXT } from '../../constants';
 
 export const help: FunctionHelp<FunctionFactory<ReturnType<typeof toFunctionFactory>>> = {
   help: i18n.translate('xpack.canvas.functions.toHelpText', {
-    defaultMessage: 'Explicitly casts the type of the {CONTEXT} to the specified type.',
+    defaultMessage:
+      'Explicitly casts the type of the {CONTEXT} from one type to the specified type.',
     values: {
       CONTEXT,
     },

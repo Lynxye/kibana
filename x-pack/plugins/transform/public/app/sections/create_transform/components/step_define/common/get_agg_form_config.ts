@@ -1,15 +1,16 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import {
-  PIVOT_SUPPORTED_AGGS,
-  PivotAggsConfigBase,
-  PivotAggsConfigWithUiBase,
   PivotSupportedAggs,
-} from '../../../../../common/pivot_aggs';
+  PIVOT_SUPPORTED_AGGS,
+} from '../../../../../../../common/types/pivot_aggs';
+
+import { PivotAggsConfigBase, PivotAggsConfigWithUiBase } from '../../../../../common/pivot_aggs';
 import { getFilterAggConfig } from './filter_agg/config';
 
 /**

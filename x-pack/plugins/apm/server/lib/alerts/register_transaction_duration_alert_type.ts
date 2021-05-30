@@ -1,31 +1,34 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { schema, TypeOf } from '@kbn/config-schema';
-import { Observable } from 'rxjs';
+import { schema } from '@kbn/config-schema';
 import { take } from 'rxjs/operators';
-import { i18n } from '@kbn/i18n';
-import { ENVIRONMENT_ALL } from '../../../common/environment_filter_values';
+import { QueryContainer } from '@elastic/elasticsearch/api/types';
+import {
+  ALERT_EVALUATION_THRESHOLD,
+  ALERT_EVALUATION_VALUE,
+} from '@kbn/rule-data-utils/target/technical_field_names';
+import { createLifecycleRuleTypeFactory } from '../../../../rule_registry/server';
+import { parseEnvironmentUrlParam } from '../../../common/environment_filter_values';
 import { AlertType, ALERT_TYPES_CONFIG } from '../../../common/alert_types';
-import { ESSearchResponse } from '../../../typings/elasticsearch';
 import {
   PROCESSOR_EVENT,
-  SERVICE_NAME,
-  TRANSACTION_TYPE,
-  TRANSACTION_DURATION,
   SERVICE_ENVIRONMENT,
+  SERVICE_NAME,
+  TRANSACTION_DURATION,
+  TRANSACTION_TYPE,
 } from '../../../common/elasticsearch_fieldnames';
-import { AlertingPlugin } from '../../../../alerts/server';
+import { ProcessorEvent } from '../../../common/processor_event';
+import { getDurationFormatter } from '../../../common/utils/formatters';
+import { environmentQuery } from '../../../server/utils/queries';
 import { getApmIndices } from '../settings/apm_indices/get_apm_indices';
-import { APMConfig } from '../..';
-
-interface RegisterAlertParams {
-  alerts: AlertingPlugin['setup'];
-  config$: Observable<APMConfig>;
-}
+import { apmActionVariables } from './action_variables';
+import { alertingEsClient } from './alerting_es_client';
+import { RegisterRuleDependencies } from './register_apm_alerts';
 
 const paramsSchema = schema.object({
   serviceName: schema.string(),
@@ -44,10 +47,17 @@ const paramsSchema = schema.object({
 const alertTypeConfig = ALERT_TYPES_CONFIG[AlertType.TransactionDuration];
 
 export function registerTransactionDurationAlertType({
-  alerts,
+  alerting,
+  ruleDataClient,
   config$,
-}: RegisterAlertParams) {
-  alerts.registerType({
+  logger,
+}: RegisterRuleDependencies) {
+  const createLifecycleRuleType = createLifecycleRuleTypeFactory({
+    ruleDataClient,
+    logger,
+  });
+
+  const type = createLifecycleRuleType({
     id: AlertType.TransactionDuration,
     name: alertTypeConfig.name,
     actionGroups: alertTypeConfig.actionGroups,
@@ -57,46 +67,28 @@ export function registerTransactionDurationAlertType({
     },
     actionVariables: {
       context: [
-        {
-          description: i18n.translate(
-            'xpack.apm.registerTransactionDurationAlertType.variables.serviceName',
-            {
-              defaultMessage: 'Service name',
-            }
-          ),
-          name: 'serviceName',
-        },
-        {
-          description: i18n.translate(
-            'xpack.apm.registerTransactionDurationAlertType.variables.transactionType',
-            {
-              defaultMessage: 'Transaction type',
-            }
-          ),
-          name: 'transactionType',
-        },
+        apmActionVariables.serviceName,
+        apmActionVariables.transactionType,
+        apmActionVariables.environment,
+        apmActionVariables.threshold,
+        apmActionVariables.triggerValue,
+        apmActionVariables.interval,
       ],
     },
     producer: 'apm',
+    minimumLicenseRequired: 'basic',
     executor: async ({ services, params }) => {
       const config = await config$.pipe(take(1)).toPromise();
-
-      const alertParams = params as TypeOf<typeof paramsSchema>;
-
+      const alertParams = params;
       const indices = await getApmIndices({
         config,
         savedObjectsClient: services.savedObjectsClient,
       });
 
-      const environmentTerm =
-        alertParams.environment === ENVIRONMENT_ALL
-          ? []
-          : [{ term: { [SERVICE_ENVIRONMENT]: alertParams.environment } }];
-
       const searchParams = {
         index: indices['apm_oss.transactionIndices'],
-        size: 0,
         body: {
+          size: 0,
           query: {
             bool: {
               filter: [
@@ -108,32 +100,22 @@ export function registerTransactionDurationAlertType({
                   },
                 },
                 {
-                  term: {
-                    [PROCESSOR_EVENT]: 'transaction',
-                  },
+                  term: { [PROCESSOR_EVENT]: ProcessorEvent.transaction },
                 },
-                {
-                  term: {
-                    [SERVICE_NAME]: alertParams.serviceName,
-                  },
-                },
+                { term: { [SERVICE_NAME]: alertParams.serviceName } },
                 {
                   term: {
                     [TRANSACTION_TYPE]: alertParams.transactionType,
                   },
                 },
-                ...environmentTerm,
-              ],
+                ...environmentQuery(alertParams.environment),
+              ] as QueryContainer[],
             },
           },
           aggs: {
-            agg:
+            latency:
               alertParams.aggregationType === 'avg'
-                ? {
-                    avg: {
-                      field: TRANSACTION_DURATION,
-                    },
-                  }
+                ? { avg: { field: TRANSACTION_DURATION } }
                 : {
                     percentiles: {
                       field: TRANSACTION_DURATION,
@@ -146,30 +128,61 @@ export function registerTransactionDurationAlertType({
         },
       };
 
-      const response: ESSearchResponse<
-        unknown,
-        typeof searchParams
-      > = await services.callCluster('search', searchParams);
+      const response = await alertingEsClient({
+        scopedClusterClient: services.scopedClusterClient,
+        params: searchParams,
+      });
 
       if (!response.aggregations) {
-        return;
+        return {};
       }
 
-      const { agg } = response.aggregations;
+      const { latency } = response.aggregations;
 
-      const value = 'values' in agg ? Object.values(agg.values)[0] : agg?.value;
+      const transactionDuration =
+        'values' in latency ? Object.values(latency.values)[0] : latency?.value;
 
-      if (value && value > alertParams.threshold * 1000) {
-        const alertInstance = services.alertInstanceFactory(
-          AlertType.TransactionDuration
+      const threshold = alertParams.threshold * 1000;
+
+      if (transactionDuration && transactionDuration > threshold) {
+        const durationFormatter = getDurationFormatter(transactionDuration);
+        const transactionDurationFormatted = durationFormatter(
+          transactionDuration
+        ).formatted;
+
+        const environmentParsed = parseEnvironmentUrlParam(
+          alertParams.environment
         );
-        alertInstance.scheduleActions(alertTypeConfig.defaultActionGroupId, {
-          transactionType: alertParams.transactionType,
-          serviceName: alertParams.serviceName,
-        });
+
+        services
+          .alertWithLifecycle({
+            id: `${AlertType.TransactionDuration}_${environmentParsed.text}`,
+            fields: {
+              [SERVICE_NAME]: alertParams.serviceName,
+              ...(environmentParsed.esFieldValue
+                ? {
+                    [SERVICE_ENVIRONMENT]: environmentParsed.esFieldValue,
+                  }
+                : {}),
+              [TRANSACTION_TYPE]: alertParams.transactionType,
+              [PROCESSOR_EVENT]: ProcessorEvent.transaction,
+              [ALERT_EVALUATION_VALUE]: transactionDuration,
+              [ALERT_EVALUATION_THRESHOLD]: alertParams.threshold * 1000,
+            },
+          })
+          .scheduleActions(alertTypeConfig.defaultActionGroupId, {
+            transactionType: alertParams.transactionType,
+            serviceName: alertParams.serviceName,
+            environment: environmentParsed.text,
+            threshold,
+            triggerValue: transactionDurationFormatted,
+            interval: `${alertParams.windowSize}${alertParams.windowUnit}`,
+          });
       }
 
       return {};
     },
   });
+
+  alerting.registerType(type);
 }

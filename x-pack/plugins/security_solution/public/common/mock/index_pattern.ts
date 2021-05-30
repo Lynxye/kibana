@@ -1,10 +1,13 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-export const mockIndexPattern = {
+import { IIndexPattern } from '../../../../../../src/plugins/data/common/index_patterns';
+
+export const mockIndexPattern: IIndexPattern = {
   fields: [
     {
       name: '@timestamp',
@@ -90,6 +93,20 @@ export const mockIndexPattern = {
       type: 'string',
       aggregatable: true,
     },
+    {
+      name: 'nestedField.firstAttributes',
+      searchable: true,
+      type: 'string',
+      aggregatable: false,
+    },
+    {
+      name: 'nestedField.secondAttributes',
+      searchable: true,
+      type: 'string',
+      aggregatable: false,
+    },
   ],
   title: 'filebeat-*,auditbeat-*,packetbeat-*',
 };
+
+export const mockIndexNames = ['filebeat-*', 'auditbeat-*', 'packetbeat-*'];

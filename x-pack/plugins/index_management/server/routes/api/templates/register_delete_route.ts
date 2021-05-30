@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { schema, TypeOf } from '@kbn/config-schema';
@@ -21,13 +22,13 @@ const bodySchema = schema.object({
   ),
 });
 
-export function registerDeleteRoute({ router, license }: RouteDependencies) {
+export function registerDeleteRoute({ router }: RouteDependencies) {
   router.post(
     {
       path: addBasePath('/delete_index_templates'),
       validate: { body: bodySchema },
     },
-    license.guardApiRoute(async (ctx, req, res) => {
+    async (ctx, req, res) => {
       const { callAsCurrentUser } = ctx.dataManagement!.client;
       const { templates } = req.body as TypeOf<typeof bodySchema>;
       const response: { templatesDeleted: Array<TemplateDeserialized['name']>; errors: any[] } = {
@@ -59,6 +60,6 @@ export function registerDeleteRoute({ router, license }: RouteDependencies) {
       );
 
       return res.ok({ body: response });
-    })
+    }
   );
 }

@@ -1,11 +1,13 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
 import { captureBodyRt } from '../runtime_types/capture_body_rt';
+import { logLevelRt } from '../runtime_types/log_level_rt';
 import { RawSettingDefinition } from './types';
 
 export const generalSettings: RawSettingDefinition[] = [
@@ -24,7 +26,7 @@ export const generalSettings: RawSettingDefinition[] = [
           'The maximum total compressed size of the request body which is sent to the APM Server intake api via a chunked encoding (HTTP streaming).\nNote that a small overshoot is possible.\n\nAllowed byte units are `b`, `kb` and `mb`. `1kb` is equal to `1024b`.',
       }
     ),
-    excludeAgents: ['js-base', 'rum-js', 'dotnet', 'go', 'nodejs'],
+    excludeAgents: ['js-base', 'rum-js', 'dotnet', 'go', 'nodejs', 'php'],
   },
 
   // API Request Time
@@ -42,7 +44,7 @@ export const generalSettings: RawSettingDefinition[] = [
           "Maximum time to keep an HTTP request to the APM Server open for.\n\nNOTE: This value has to be lower than the APM Server's `read_timeout` setting.",
       }
     ),
-    excludeAgents: ['js-base', 'rum-js', 'dotnet', 'go', 'nodejs'],
+    excludeAgents: ['js-base', 'rum-js', 'dotnet', 'go', 'nodejs', 'php'],
   },
 
   // Capture body
@@ -67,7 +69,7 @@ export const generalSettings: RawSettingDefinition[] = [
       { text: 'transactions', value: 'transactions' },
       { text: 'all', value: 'all' },
     ],
-    excludeAgents: ['js-base', 'rum-js'],
+    excludeAgents: ['js-base', 'rum-js', 'php'],
   },
 
   // Capture headers
@@ -85,13 +87,14 @@ export const generalSettings: RawSettingDefinition[] = [
           'If set to `true`, the agent will capture HTTP request and response headers (including cookies), as well as message headers/properties when using messaging frameworks (like Kafka).\n\nNOTE: Setting this to `false` reduces network bandwidth, disk space and object allocations.',
       }
     ),
-    excludeAgents: ['js-base', 'rum-js', 'nodejs'],
+    excludeAgents: ['js-base', 'rum-js', 'nodejs', 'php'],
   },
 
   // LOG_LEVEL
   {
     key: 'log_level',
-    type: 'text',
+    validation: logLevelRt,
+    type: 'select',
     defaultValue: 'info',
     label: i18n.translate('xpack.apm.agentConfig.logLevel.label', {
       defaultMessage: 'Log level',
@@ -99,7 +102,16 @@ export const generalSettings: RawSettingDefinition[] = [
     description: i18n.translate('xpack.apm.agentConfig.logLevel.description', {
       defaultMessage: 'Sets the logging level for the agent',
     }),
-    includeAgents: ['dotnet', 'ruby'],
+    options: [
+      { text: 'trace', value: 'trace' },
+      { text: 'debug', value: 'debug' },
+      { text: 'info', value: 'info' },
+      { text: 'warning', value: 'warning' },
+      { text: 'error', value: 'error' },
+      { text: 'critical', value: 'critical' },
+      { text: 'off', value: 'off' },
+    ],
+    includeAgents: ['dotnet', 'ruby', 'java', 'python', 'nodejs', 'go', 'php'],
   },
 
   // Recording
@@ -114,7 +126,7 @@ export const generalSettings: RawSettingDefinition[] = [
       defaultMessage:
         'When recording, the agent instruments incoming HTTP requests, tracks errors, and collects and sends metrics. When set to non-recording, the agent works as a noop, not collecting data and not communicating with the APM Server except for polling for updated configuration. As this is a reversible switch, agent threads are not being killed when set to non-recording, but they will be mostly idle in this state, so the overhead should be negligible. You can use this setting to dynamically control whether Elastic APM is enabled or disabled.',
     }),
-    excludeAgents: ['nodejs'],
+    excludeAgents: ['nodejs', 'rum-js', 'js-base'],
   },
 
   // SERVER_TIMEOUT
@@ -151,7 +163,7 @@ export const generalSettings: RawSettingDefinition[] = [
           'In its default settings, the APM agent will collect a stack trace with every recorded span.\nWhile this is very helpful to find the exact place in your code that causes the span, collecting this stack trace does have some overhead. \nWhen setting this option to a negative value, like `-1ms`, stack traces will be collected for all spans. Setting it to a positive value, e.g. `5ms`, will limit stack trace collection to spans with durations equal to or longer than the given value, e.g. 5 milliseconds.\n\nTo disable stack trace collection for spans completely, set the value to `0ms`.',
       }
     ),
-    excludeAgents: ['js-base', 'rum-js', 'nodejs'],
+    excludeAgents: ['js-base', 'rum-js', 'nodejs', 'php'],
   },
 
   // STACK_TRACE_LIMIT
@@ -177,7 +189,6 @@ export const generalSettings: RawSettingDefinition[] = [
     key: 'transaction_max_spans',
     type: 'integer',
     min: 0,
-    max: 32000,
     defaultValue: '500',
     label: i18n.translate('xpack.apm.agentConfig.transactionMaxSpans.label', {
       defaultMessage: 'Transaction max spans',
@@ -207,5 +218,43 @@ export const generalSettings: RawSettingDefinition[] = [
           'By default, the agent will sample every transaction (e.g. request to your service). To reduce overhead and storage requirements, you can set the sample rate to a value between 0.0 and 1.0. We still record overall time and the result for unsampled transactions, but not context information, labels, or spans.',
       }
     ),
+  },
+
+  // Sanitize field names
+  {
+    key: 'sanitize_field_names',
+    type: 'text',
+    defaultValue:
+      'password, passwd, pwd, secret, *key, *token*, *session*, *credit*, *card*, authorization, set-cookie',
+    label: i18n.translate('xpack.apm.agentConfig.sanitizeFiledNames.label', {
+      defaultMessage: 'Sanitize field names',
+    }),
+    description: i18n.translate(
+      'xpack.apm.agentConfig.sanitizeFiledNames.description',
+      {
+        defaultMessage:
+          'Sometimes it is necessary to sanitize, i.e., remove, sensitive data sent to Elastic APM. This config accepts a list of wildcard patterns of field names which should be sanitized. These apply to HTTP headers (including cookies) and `application/x-www-form-urlencoded` data (POST form fields). The query string and the captured request body (such as `application/json` data) will not get sanitized.',
+      }
+    ),
+    includeAgents: ['java', 'python', 'go', 'dotnet', 'nodejs', 'ruby'],
+  },
+
+  // Ignore transactions based on URLs
+  {
+    key: 'transaction_ignore_urls',
+    type: 'text',
+    defaultValue:
+      'Agent specific - check out the documentation of this config option in the corresponding agent documentation.',
+    label: i18n.translate('xpack.apm.agentConfig.transactionIgnoreUrl.label', {
+      defaultMessage: 'Ignore transactions based on URLs',
+    }),
+    description: i18n.translate(
+      'xpack.apm.agentConfig.transactionIgnoreUrl.description',
+      {
+        defaultMessage:
+          'Used to restrict requests to certain URLs from being instrumented. This config accepts a comma-separated list of wildcard patterns of URL paths that should be ignored. When an incoming HTTP request is detected, its request path will be tested against each element in this list. For example, adding `/home/index` to this list would match and remove instrumentation from `http://localhost/home/index` as well as `http://whatever.com/home/index?value1=123`',
+      }
+    ),
+    includeAgents: ['java', 'nodejs', 'python', 'dotnet', 'ruby', 'go'],
   },
 ];

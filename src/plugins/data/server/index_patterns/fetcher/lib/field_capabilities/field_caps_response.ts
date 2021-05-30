@@ -1,39 +1,16 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import { uniq } from 'lodash';
+import type { estypes } from '@elastic/elasticsearch';
 import { castEsToKbnFieldTypeName } from '../../../../../common';
 import { shouldReadFieldFromDocValues } from './should_read_field_from_doc_values';
 import { FieldDescriptor } from '../../../fetcher';
-
-interface FieldCapObject {
-  type: string;
-  searchable: boolean;
-  aggregatable: boolean;
-  indices?: string[];
-  non_searchable_indices?: string[];
-  non_aggregatable_indices?: string[];
-}
-
-export interface FieldCapsResponse {
-  fields: Record<string, Record<string, FieldCapObject>>;
-}
 
 /**
  *  Read the response from the _field_caps API to determine the type and
@@ -91,10 +68,16 @@ export interface FieldCapsResponse {
  *  @param {FieldCapsResponse} fieldCapsResponse
  *  @return {Array<FieldDescriptor>}
  */
-export function readFieldCapsResponse(fieldCapsResponse: FieldCapsResponse): FieldDescriptor[] {
+export function readFieldCapsResponse(
+  fieldCapsResponse: estypes.FieldCapabilitiesResponse
+): FieldDescriptor[] {
   const capsByNameThenType = fieldCapsResponse.fields;
-  const kibanaFormattedCaps: FieldDescriptor[] = Object.keys(capsByNameThenType).map(
-    (fieldName) => {
+
+  const kibanaFormattedCaps = Object.keys(capsByNameThenType).reduce<{
+    array: FieldDescriptor[];
+    hash: Record<string, FieldDescriptor>;
+  }>(
+    (agg, fieldName) => {
       const capsByType = capsByNameThenType[fieldName];
       const types = Object.keys(capsByType);
 
@@ -119,7 +102,7 @@ export function readFieldCapsResponse(fieldCapsResponse: FieldCapsResponse): Fie
       // ignore the conflict and carry on (my wayward son)
       const uniqueKibanaTypes = uniq(types.map(castEsToKbnFieldTypeName));
       if (uniqueKibanaTypes.length > 1) {
-        return {
+        const field = {
           name: fieldName,
           type: 'conflict',
           esTypes: types,
@@ -134,10 +117,14 @@ export function readFieldCapsResponse(fieldCapsResponse: FieldCapsResponse): Fie
             {}
           ),
         };
+        // This is intentionally using a "hash" and a "push" to be highly optimized with very large indexes
+        agg.array.push(field);
+        agg.hash[fieldName] = field;
+        return agg;
       }
 
       const esType = types[0];
-      return {
+      const field = {
         name: fieldName,
         type: castEsToKbnFieldTypeName(esType),
         esTypes: types,
@@ -145,11 +132,19 @@ export function readFieldCapsResponse(fieldCapsResponse: FieldCapsResponse): Fie
         aggregatable: isAggregatable,
         readFromDocValues: shouldReadFieldFromDocValues(isAggregatable, esType),
       };
+      // This is intentionally using a "hash" and a "push" to be highly optimized with very large indexes
+      agg.array.push(field);
+      agg.hash[fieldName] = field;
+      return agg;
+    },
+    {
+      array: [],
+      hash: {},
     }
   );
 
   // Get all types of sub fields. These could be multi fields or children of nested/object types
-  const subFields = kibanaFormattedCaps.filter((field) => {
+  const subFields = kibanaFormattedCaps.array.filter((field) => {
     return field.name.includes('.');
   });
 
@@ -161,9 +156,9 @@ export function readFieldCapsResponse(fieldCapsResponse: FieldCapsResponse): Fie
       .map((_, index, parentFieldNameParts) => {
         return parentFieldNameParts.slice(0, index + 1).join('.');
       });
-    const parentFieldCaps = parentFieldNames.map((parentFieldName) => {
-      return kibanaFormattedCaps.find((caps) => caps.name === parentFieldName);
-    });
+    const parentFieldCaps = parentFieldNames.map(
+      (parentFieldName) => kibanaFormattedCaps.hash[parentFieldName]
+    );
     const parentFieldCapsAscending = parentFieldCaps.reverse();
 
     if (parentFieldCaps && parentFieldCaps.length > 0) {
@@ -188,7 +183,7 @@ export function readFieldCapsResponse(fieldCapsResponse: FieldCapsResponse): Fie
     }
   });
 
-  return kibanaFormattedCaps.filter((field) => {
+  return kibanaFormattedCaps.array.filter((field) => {
     return !['object', 'nested'].includes(field.type);
   });
 }

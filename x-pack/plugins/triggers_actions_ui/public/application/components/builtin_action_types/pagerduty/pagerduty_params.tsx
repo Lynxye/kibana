@@ -1,11 +1,14 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
-import React, { Fragment } from 'react';
-import { EuiFlexGroup, EuiFlexItem, EuiFormRow, EuiSelect } from '@elastic/eui';
+
+import React from 'react';
+import { EuiFlexGroup, EuiFlexItem, EuiFormRow, EuiSelect, EuiSpacer } from '@elastic/eui';
 import { i18n } from '@kbn/i18n';
+import { isUndefined } from 'lodash';
 import { ActionParamsProps } from '../../../../types';
 import { PagerDutyActionParams } from '.././types';
 import { TextFieldWithMessageVariables } from '../../text_field_with_message_variables';
@@ -94,30 +97,13 @@ const PagerDutyParamsFields: React.FunctionComponent<ActionParamsProps<PagerDuty
       ),
     },
   ];
+
+  const isDedupeKeyRequired = eventAction !== 'trigger';
+  const isTriggerPagerDutyEvent = eventAction === 'trigger';
+
   return (
-    <Fragment>
+    <>
       <EuiFlexGroup>
-        <EuiFlexItem>
-          <EuiFormRow
-            fullWidth
-            label={i18n.translate(
-              'xpack.triggersActionsUI.components.builtinActionTypes.pagerDutyAction.severitySelectFieldLabel',
-              {
-                defaultMessage: 'Severity',
-              }
-            )}
-          >
-            <EuiSelect
-              fullWidth
-              data-test-subj="severitySelect"
-              options={severityOptions}
-              value={severity}
-              onChange={(e) => {
-                editAction('severity', e.target.value, index);
-              }}
-            />
-          </EuiFormRow>
-        </EuiFlexItem>
         <EuiFlexItem>
           <EuiFormRow
             fullWidth
@@ -132,6 +118,7 @@ const PagerDutyParamsFields: React.FunctionComponent<ActionParamsProps<PagerDuty
               fullWidth
               data-test-subj="eventActionSelect"
               options={eventActionOptions}
+              hasNoInitialSelection={isUndefined(eventAction)}
               value={eventAction}
               onChange={(e) => {
                 editAction('eventAction', e.target.value, index);
@@ -144,12 +131,23 @@ const PagerDutyParamsFields: React.FunctionComponent<ActionParamsProps<PagerDuty
         <EuiFlexItem>
           <EuiFormRow
             fullWidth
-            label={i18n.translate(
-              'xpack.triggersActionsUI.components.builtinActionTypes.pagerDutyAction.dedupKeyTextFieldLabel',
-              {
-                defaultMessage: 'DedupKey (optional)',
-              }
-            )}
+            error={errors.dedupKey}
+            isInvalid={errors.dedupKey.length > 0}
+            label={
+              isDedupeKeyRequired
+                ? i18n.translate(
+                    'xpack.triggersActionsUI.components.builtinActionTypes.pagerDutyAction.dedupKeyTextRequiredFieldLabel',
+                    {
+                      defaultMessage: 'DedupKey',
+                    }
+                  )
+                : i18n.translate(
+                    'xpack.triggersActionsUI.components.builtinActionTypes.pagerDutyAction.dedupKeyTextFieldLabel',
+                    {
+                      defaultMessage: 'DedupKey (optional)',
+                    }
+                  )
+            }
           >
             <TextFieldWithMessageVariables
               index={index}
@@ -160,15 +158,19 @@ const PagerDutyParamsFields: React.FunctionComponent<ActionParamsProps<PagerDuty
             />
           </EuiFormRow>
         </EuiFlexItem>
-        <EuiFlexItem>
+      </EuiFlexGroup>
+      {isTriggerPagerDutyEvent ? (
+        <>
+          <EuiSpacer size="m" />
           <EuiFormRow
+            id="pagerDutySummary"
             fullWidth
-            error={errors.timestamp}
-            isInvalid={errors.timestamp.length > 0 && timestamp !== undefined}
+            error={errors.summary}
+            isInvalid={errors.summary.length > 0 && summary !== undefined}
             label={i18n.translate(
-              'xpack.triggersActionsUI.components.builtinActionTypes.pagerDutyAction.timestampTextFieldLabel',
+              'xpack.triggersActionsUI.components.builtinActionTypes.pagerDutyAction.summaryFieldLabel',
               {
-                defaultMessage: 'Timestamp (optional)',
+                defaultMessage: 'Summary',
               }
             )}
           >
@@ -176,104 +178,131 @@ const PagerDutyParamsFields: React.FunctionComponent<ActionParamsProps<PagerDuty
               index={index}
               editAction={editAction}
               messageVariables={messageVariables}
-              paramsProperty={'timestamp'}
-              inputTargetValue={timestamp}
-              errors={errors.timestamp as string[]}
+              paramsProperty={'summary'}
+              inputTargetValue={summary}
+              errors={errors.summary as string[]}
             />
           </EuiFormRow>
-        </EuiFlexItem>
-      </EuiFlexGroup>
-      <EuiFormRow
-        fullWidth
-        label={i18n.translate(
-          'xpack.triggersActionsUI.components.builtinActionTypes.pagerDutyAction.componentTextFieldLabel',
-          {
-            defaultMessage: 'Component (optional)',
-          }
-        )}
-      >
-        <TextFieldWithMessageVariables
-          index={index}
-          editAction={editAction}
-          messageVariables={messageVariables}
-          paramsProperty={'component'}
-          inputTargetValue={component}
-        />
-      </EuiFormRow>
-      <EuiFormRow
-        fullWidth
-        label={i18n.translate(
-          'xpack.triggersActionsUI.components.builtinActionTypes.pagerDutyAction.groupTextFieldLabel',
-          {
-            defaultMessage: 'Group (optional)',
-          }
-        )}
-      >
-        <TextFieldWithMessageVariables
-          index={index}
-          editAction={editAction}
-          messageVariables={messageVariables}
-          paramsProperty={'group'}
-          inputTargetValue={group}
-        />
-      </EuiFormRow>
-      <EuiFormRow
-        fullWidth
-        label={i18n.translate(
-          'xpack.triggersActionsUI.components.builtinActionTypes.pagerDutyAction.sourceTextFieldLabel',
-          {
-            defaultMessage: 'Source (optional)',
-          }
-        )}
-      >
-        <TextFieldWithMessageVariables
-          index={index}
-          editAction={editAction}
-          messageVariables={messageVariables}
-          paramsProperty={'source'}
-          inputTargetValue={source}
-        />
-      </EuiFormRow>
-      <EuiFormRow
-        id="pagerDutySummary"
-        fullWidth
-        error={errors.summary}
-        isInvalid={errors.summary.length > 0 && summary !== undefined}
-        label={i18n.translate(
-          'xpack.triggersActionsUI.components.builtinActionTypes.pagerDutyAction.summaryFieldLabel',
-          {
-            defaultMessage: 'Summary',
-          }
-        )}
-      >
-        <TextFieldWithMessageVariables
-          index={index}
-          editAction={editAction}
-          messageVariables={messageVariables}
-          paramsProperty={'summary'}
-          inputTargetValue={summary}
-          errors={errors.summary as string[]}
-        />
-      </EuiFormRow>
-      <EuiFormRow
-        id="pagerDutyClass"
-        fullWidth
-        label={i18n.translate(
-          'xpack.triggersActionsUI.components.builtinActionTypes.pagerDutyAction.classFieldLabel',
-          {
-            defaultMessage: 'Class (optional)',
-          }
-        )}
-      >
-        <TextFieldWithMessageVariables
-          index={index}
-          editAction={editAction}
-          messageVariables={messageVariables}
-          paramsProperty={'class'}
-          inputTargetValue={actionParams.class}
-        />
-      </EuiFormRow>
-    </Fragment>
+          <EuiSpacer size="m" />
+          <EuiFlexGroup>
+            <EuiFlexItem>
+              <EuiFormRow
+                fullWidth
+                label={i18n.translate(
+                  'xpack.triggersActionsUI.components.builtinActionTypes.pagerDutyAction.severitySelectFieldLabel',
+                  {
+                    defaultMessage: 'Severity (optional)',
+                  }
+                )}
+              >
+                <EuiSelect
+                  fullWidth
+                  data-test-subj="severitySelect"
+                  options={severityOptions}
+                  hasNoInitialSelection={isUndefined(severity)}
+                  value={severity}
+                  onChange={(e) => {
+                    editAction('severity', e.target.value, index);
+                  }}
+                />
+              </EuiFormRow>
+            </EuiFlexItem>
+            <EuiFlexItem>
+              <EuiFormRow
+                fullWidth
+                error={errors.timestamp}
+                isInvalid={errors.timestamp.length > 0 && timestamp !== undefined}
+                label={i18n.translate(
+                  'xpack.triggersActionsUI.components.builtinActionTypes.pagerDutyAction.timestampTextFieldLabel',
+                  {
+                    defaultMessage: 'Timestamp (optional)',
+                  }
+                )}
+              >
+                <TextFieldWithMessageVariables
+                  index={index}
+                  editAction={editAction}
+                  messageVariables={messageVariables}
+                  paramsProperty={'timestamp'}
+                  inputTargetValue={timestamp}
+                  errors={errors.timestamp as string[]}
+                />
+              </EuiFormRow>
+            </EuiFlexItem>
+          </EuiFlexGroup>
+          <EuiSpacer size="m" />
+          <EuiFormRow
+            fullWidth
+            label={i18n.translate(
+              'xpack.triggersActionsUI.components.builtinActionTypes.pagerDutyAction.componentTextFieldLabel',
+              {
+                defaultMessage: 'Component (optional)',
+              }
+            )}
+          >
+            <TextFieldWithMessageVariables
+              index={index}
+              editAction={editAction}
+              messageVariables={messageVariables}
+              paramsProperty={'component'}
+              inputTargetValue={component}
+            />
+          </EuiFormRow>
+          <EuiFormRow
+            fullWidth
+            label={i18n.translate(
+              'xpack.triggersActionsUI.components.builtinActionTypes.pagerDutyAction.groupTextFieldLabel',
+              {
+                defaultMessage: 'Group (optional)',
+              }
+            )}
+          >
+            <TextFieldWithMessageVariables
+              index={index}
+              editAction={editAction}
+              messageVariables={messageVariables}
+              paramsProperty={'group'}
+              inputTargetValue={group}
+            />
+          </EuiFormRow>
+          <EuiFormRow
+            fullWidth
+            label={i18n.translate(
+              'xpack.triggersActionsUI.components.builtinActionTypes.pagerDutyAction.sourceTextFieldLabel',
+              {
+                defaultMessage: 'Source (optional)',
+              }
+            )}
+          >
+            <TextFieldWithMessageVariables
+              index={index}
+              editAction={editAction}
+              messageVariables={messageVariables}
+              paramsProperty={'source'}
+              inputTargetValue={source}
+            />
+          </EuiFormRow>
+          <EuiFormRow
+            id="pagerDutyClass"
+            fullWidth
+            label={i18n.translate(
+              'xpack.triggersActionsUI.components.builtinActionTypes.pagerDutyAction.classFieldLabel',
+              {
+                defaultMessage: 'Class (optional)',
+              }
+            )}
+          >
+            <TextFieldWithMessageVariables
+              index={index}
+              editAction={editAction}
+              messageVariables={messageVariables}
+              paramsProperty={'class'}
+              inputTargetValue={actionParams.class}
+            />
+          </EuiFormRow>
+        </>
+      ) : null}
+    </>
   );
 };
 

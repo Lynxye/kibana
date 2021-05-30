@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -17,12 +18,10 @@ import {
 } from '@elastic/eui';
 import { FormattedMessage } from '@kbn/i18n/react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useHistory } from 'react-router-dom';
 import { selectDynamicSettings } from '../state/selectors';
 import { getDynamicSettings, setDynamicSettings } from '../state/actions/dynamic_settings';
 import { DynamicSettings } from '../../common/runtime_types';
 import { useBreadcrumbs } from '../hooks/use_breadcrumbs';
-import { OVERVIEW_ROUTE } from '../../common/constants';
 import { useKibana } from '../../../../../src/plugins/kibana_react/public';
 import { IndicesForm } from '../components/settings/indices_form';
 import {
@@ -34,6 +33,8 @@ import {
   VALUE_MUST_BE_GREATER_THAN_ZERO,
   VALUE_MUST_BE_AN_INTEGER,
 } from '../../common/translations';
+import { AlertDefaultsForm } from '../components/settings/alert_defaults_form';
+import { BLANK_STR, SPACE_STR } from './translations';
 
 interface SettingsPageFieldErrors {
   heartbeatIndices: string | '';
@@ -65,7 +66,9 @@ const getFieldErrors = (formFields: DynamicSettings | null): SettingsPageFieldEr
   if (formFields) {
     const { certAgeThreshold, certExpirationThreshold, heartbeatIndices } = formFields;
 
-    const indError = heartbeatIndices.match(/^\S+$/) ? '' : Translations.BLANK_STR;
+    const indErrorSpace = heartbeatIndices.includes(' ') ? SPACE_STR : '';
+
+    const indError = indErrorSpace || (heartbeatIndices.match(/^\S+$/) ? '' : BLANK_STR);
 
     const expError = isValidCertVal(certExpirationThreshold);
     const ageError = isValidCertVal(certAgeThreshold);
@@ -83,7 +86,8 @@ const isDirtyForm = (formFields: DynamicSettings | null, settings?: DynamicSetti
   return (
     settings?.certAgeThreshold !== formFields?.certAgeThreshold ||
     settings?.certExpirationThreshold !== formFields?.certExpirationThreshold ||
-    settings?.heartbeatIndices !== formFields?.heartbeatIndices
+    settings?.heartbeatIndices !== formFields?.heartbeatIndices ||
+    JSON.stringify(settings?.defaultConnectors) !== JSON.stringify(formFields?.defaultConnectors)
   );
 };
 
@@ -143,32 +147,27 @@ export const SettingsPage: React.FC = () => {
     </>
   );
 
-  const history = useHistory();
-
   return (
     <>
-      <EuiButtonEmpty
-        color="primary"
-        data-test-subj="uptimeSettingsToOverviewLink"
-        iconType="arrowLeft"
-        href={history.createHref({ pathname: OVERVIEW_ROUTE })}
-        size="s"
-      >
-        {Translations.settings.returnToOverviewLinkLabel}
-      </EuiButtonEmpty>
-      <EuiSpacer size="s" />
-      <EuiPanel>
+      <EuiPanel style={{ maxWidth: 1000, margin: 'auto' }}>
         <EuiFlexGroup>
           <EuiFlexItem grow={false}>{cannotEditNotice}</EuiFlexItem>
         </EuiFlexGroup>
         <EuiFlexGroup>
           <EuiFlexItem grow={false}>
-            <form onSubmit={onApply}>
+            <div id="settings-form">
               <EuiForm>
                 <IndicesForm
                   loading={dss.loading}
                   onChange={onChangeFormField}
                   formFields={formFields}
+                  fieldErrors={fieldErrors}
+                  isDisabled={isFormDisabled}
+                />
+                <AlertDefaultsForm
+                  loading={dss.loading}
+                  formFields={formFields}
+                  onChange={onChangeFormField}
                   fieldErrors={fieldErrors}
                   isDisabled={isFormDisabled}
                 />
@@ -199,7 +198,7 @@ export const SettingsPage: React.FC = () => {
                   <EuiFlexItem grow={false}>
                     <EuiButton
                       data-test-subj="apply-settings-button"
-                      type="submit"
+                      onClick={onApply}
                       color="primary"
                       isDisabled={!isFormDirty || !isFormValid || isFormDisabled}
                       fill
@@ -212,7 +211,7 @@ export const SettingsPage: React.FC = () => {
                   </EuiFlexItem>
                 </EuiFlexGroup>
               </EuiForm>
-            </form>
+            </div>
           </EuiFlexItem>
         </EuiFlexGroup>
       </EuiPanel>

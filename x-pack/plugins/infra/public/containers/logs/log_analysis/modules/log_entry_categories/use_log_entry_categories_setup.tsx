@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { useAnalysisSetupState } from '../../log_analysis_setup_state';
@@ -9,7 +10,9 @@ import { useLogEntryCategoriesModuleContext } from './use_log_entry_categories_m
 
 export const useLogEntryCategoriesSetup = () => {
   const {
+    categoryQualityWarnings,
     cleanUpAndSetUpModule,
+    fetchJobStatus,
     lastSetupErrorMessages,
     moduleDescriptor,
     setUpModule,
@@ -37,8 +40,10 @@ export const useLogEntryCategoriesSetup = () => {
   });
 
   return {
+    categoryQualityWarnings,
     cleanUpAndSetUp,
     endTime,
+    fetchJobStatus,
     isValidating,
     lastSetupErrorMessages,
     moduleDescriptor,

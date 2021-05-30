@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import classNames from 'classnames';
@@ -160,6 +161,7 @@ export const ComponentTemplatesSelector = ({
           // eslint-disable-next-line @typescript-eslint/naming-convention
           'componentTemplatesSelector__selection--is-empty': !hasSelection,
         })}
+        data-test-subj="componentTemplatesSelection"
       >
         {hasSelection ? (
           <>
@@ -200,12 +202,19 @@ export const ComponentTemplatesSelector = ({
             </div>
           </>
         ) : (
-          <div>
-            <FormattedMessage
-              id="xpack.idxMgmt.componentTemplatesSelector.noComponentSelectedLabel"
-              defaultMessage="No component template selected."
-            />
-          </div>
+          <EuiText textAlign="center" data-test-subj="emptyPrompt">
+            <p>
+              <FormattedMessage
+                id="xpack.idxMgmt.componentTemplatesSelector.noComponentSelectedLabel-1"
+                defaultMessage="Add component template building blocks to this template."
+              />
+              <br />
+              <FormattedMessage
+                id="xpack.idxMgmt.componentTemplatesSelector.noComponentSelectedLabel-2"
+                defaultMessage="Component templates are applied in the order specified."
+              />
+            </p>
+          </EuiText>
         )}
       </EuiFlexItem>
 

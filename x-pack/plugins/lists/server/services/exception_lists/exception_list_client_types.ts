@@ -1,15 +1,12 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { SavedObjectsClientContract } from 'kibana/server';
-
-import { NamespaceTypeArray } from '../../../common/schemas/types/default_namespace_array';
-import { NonEmptyStringArrayDecoded } from '../../../common/schemas/types/non_empty_string_array';
-import { EmptyStringArrayDecoded } from '../../../common/schemas/types/empty_string_array';
-import {
+import type {
   CreateCommentsArray,
   Description,
   DescriptionOrUndefined,
@@ -30,6 +27,8 @@ import {
   Name,
   NameOrUndefined,
   NamespaceType,
+  NamespaceTypeArray,
+  OsTypeArray,
   PageOrUndefined,
   PerPageOrUndefined,
   SortFieldOrUndefined,
@@ -37,12 +36,14 @@ import {
   Tags,
   TagsOrUndefined,
   UpdateCommentsArray,
+  _VersionOrUndefined,
+} from '@kbn/securitysolution-io-ts-list-types';
+import {
+  EmptyStringArrayDecoded,
+  NonEmptyStringArrayDecoded,
   Version,
   VersionOrUndefined,
-  _Tags,
-  _TagsOrUndefined,
-  _VersionOrUndefined,
-} from '../../../common/schemas';
+} from '@kbn/securitysolution-io-ts-types';
 
 export interface ConstructorOptions {
   user: string;
@@ -55,8 +56,13 @@ export interface GetExceptionListOptions {
   namespaceType: NamespaceType;
 }
 
+export interface GetExceptionListSummaryOptions {
+  listId: ListIdOrUndefined;
+  id: IdOrUndefined;
+  namespaceType: NamespaceType;
+}
+
 export interface CreateExceptionListOptions {
-  _tags: _Tags;
   listId: ListId;
   namespaceType: NamespaceType;
   name: Name;
@@ -69,12 +75,12 @@ export interface CreateExceptionListOptions {
 }
 
 export interface UpdateExceptionListOptions {
-  _tags: _TagsOrUndefined;
   _version: _VersionOrUndefined;
   id: IdOrUndefined;
   listId: ListIdOrUndefined;
   namespaceType: NamespaceType;
   name: NameOrUndefined;
+  osTypes: OsTypeArray;
   description: DescriptionOrUndefined;
   meta: MetaOrUndefined;
   tags: TagsOrUndefined;
@@ -116,13 +122,13 @@ export interface GetEndpointListItemOptions {
 }
 
 export interface CreateExceptionListItemOptions {
-  _tags: _Tags;
   comments: CreateCommentsArray;
   entries: EntriesArray;
   itemId: ItemId;
   listId: ListId;
   namespaceType: NamespaceType;
   name: Name;
+  osTypes: OsTypeArray;
   description: Description;
   meta: MetaOrUndefined;
   tags: Tags;
@@ -130,19 +136,18 @@ export interface CreateExceptionListItemOptions {
 }
 
 export interface CreateEndpointListItemOptions {
-  _tags: _Tags;
   comments: CreateCommentsArray;
   entries: EntriesArray;
   itemId: ItemId;
   name: Name;
   description: Description;
   meta: MetaOrUndefined;
+  osTypes: OsTypeArray;
   tags: Tags;
   type: ExceptionListItemType;
 }
 
 export interface UpdateExceptionListItemOptions {
-  _tags: _TagsOrUndefined;
   _version: _VersionOrUndefined;
   comments: UpdateCommentsArray;
   entries: EntriesArray;
@@ -150,6 +155,7 @@ export interface UpdateExceptionListItemOptions {
   itemId: ItemIdOrUndefined;
   namespaceType: NamespaceType;
   name: NameOrUndefined;
+  osTypes: OsTypeArray;
   description: DescriptionOrUndefined;
   meta: MetaOrUndefined;
   tags: TagsOrUndefined;
@@ -157,13 +163,13 @@ export interface UpdateExceptionListItemOptions {
 }
 
 export interface UpdateEndpointListItemOptions {
-  _tags: _TagsOrUndefined;
   _version: _VersionOrUndefined;
   comments: UpdateCommentsArray;
   entries: EntriesArray;
   id: IdOrUndefined;
   itemId: ItemIdOrUndefined;
   name: NameOrUndefined;
+  osTypes: OsTypeArray;
   description: DescriptionOrUndefined;
   meta: MetaOrUndefined;
   tags: TagsOrUndefined;
@@ -198,8 +204,16 @@ export interface FindExceptionListsItemOptions {
   sortOrder: SortOrderOrUndefined;
 }
 
+export interface FindValueListExceptionListsItems {
+  valueListId: Id;
+  perPage: PerPageOrUndefined;
+  page: PageOrUndefined;
+  sortField: SortFieldOrUndefined;
+  sortOrder: SortOrderOrUndefined;
+}
+
 export interface FindExceptionListOptions {
-  namespaceType: NamespaceType;
+  namespaceType: NamespaceTypeArray;
   filter: FilterOrUndefined;
   perPage: PerPageOrUndefined;
   page: PageOrUndefined;

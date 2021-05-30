@@ -1,13 +1,14 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import expect from '@kbn/expect';
 import { FtrProviderContext } from '../../../ftr_provider_context';
 import { USER } from '../../../../functional/services/ml/security_common';
-import { COMMON_REQUEST_HEADERS } from '../../../../functional/services/ml/common';
+import { COMMON_REQUEST_HEADERS } from '../../../../functional/services/ml/common_api';
 
 export default ({ getService }: FtrProviderContext) => {
   const supertest = getService('supertestWithoutAuth');
@@ -34,6 +35,7 @@ export default ({ getService }: FtrProviderContext) => {
       beforeEach(async () => {
         for (const testCalendar of testCalendars) {
           await ml.api.createCalendar(testCalendar.calendar_id, testCalendar);
+          // @ts-expect-error not full interface
           await ml.api.createCalendarEvents(testCalendar.calendar_id, testEvents);
         }
       });
@@ -53,6 +55,7 @@ export default ({ getService }: FtrProviderContext) => {
 
         expect(body).to.have.length(testCalendars.length);
         expect(body[0].events).to.have.length(testEvents.length);
+        // @ts-expect-error not full interface
         ml.api.assertAllEventsExistInCalendar(testEvents, body[0]);
       });
 
@@ -65,6 +68,7 @@ export default ({ getService }: FtrProviderContext) => {
 
         expect(body).to.have.length(testCalendars.length);
         expect(body[0].events).to.have.length(testEvents.length);
+        // @ts-expect-error not full interface
         ml.api.assertAllEventsExistInCalendar(testEvents, body[0]);
       });
 
@@ -73,8 +77,8 @@ export default ({ getService }: FtrProviderContext) => {
           .get(`/api/ml/calendars`)
           .auth(USER.ML_UNAUTHORIZED, ml.securityCommon.getPasswordForUser(USER.ML_UNAUTHORIZED))
           .set(COMMON_REQUEST_HEADERS)
-          .expect(404);
-        expect(body.error).to.eql('Not Found');
+          .expect(403);
+        expect(body.error).to.eql('Forbidden');
       });
     });
 
@@ -88,6 +92,7 @@ export default ({ getService }: FtrProviderContext) => {
 
       beforeEach(async () => {
         await ml.api.createCalendar(calendarId, testCalendar);
+        // @ts-expect-error not full interface
         await ml.api.createCalendarEvents(calendarId, testEvents);
       });
 
@@ -105,6 +110,7 @@ export default ({ getService }: FtrProviderContext) => {
         expect(body.job_ids).to.eql(testCalendar.job_ids);
         expect(body.description).to.eql(testCalendar.description);
         expect(body.events).to.have.length(testEvents.length);
+        // @ts-expect-error not full interface
         ml.api.assertAllEventsExistInCalendar(testEvents, body);
       });
 
@@ -118,6 +124,7 @@ export default ({ getService }: FtrProviderContext) => {
         expect(body.job_ids).to.eql(testCalendar.job_ids);
         expect(body.description).to.eql(testCalendar.description);
         expect(body.events).to.have.length(testEvents.length);
+        // @ts-expect-error not full interface
         ml.api.assertAllEventsExistInCalendar(testEvents, body);
       });
 
@@ -126,9 +133,9 @@ export default ({ getService }: FtrProviderContext) => {
           .get(`/api/ml/calendars/${calendarId}`)
           .auth(USER.ML_UNAUTHORIZED, ml.securityCommon.getPasswordForUser(USER.ML_UNAUTHORIZED))
           .set(COMMON_REQUEST_HEADERS)
-          .expect(404);
+          .expect(403);
 
-        expect(body.error).to.eql('Not Found');
+        expect(body.error).to.eql('Forbidden');
       });
     });
 

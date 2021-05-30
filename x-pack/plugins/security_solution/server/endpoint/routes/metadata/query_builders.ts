@@ -1,59 +1,64 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
-import { KibanaRequest } from 'kibana/server';
+
+import { SearchRequest, SortContainer } from '@elastic/elasticsearch/api/types';
+import { KibanaRequest } from '../../../../../../../src/core/server';
 import { esKuery } from '../../../../../../../src/plugins/data/server';
-import { EndpointAppContext } from '../../types';
+import { EndpointAppContext, MetadataQueryStrategy } from '../../types';
 
 export interface QueryBuilderOptions {
   unenrolledAgentIds?: string[];
   statusAgentIDs?: string[];
 }
 
+// sort using either event.created, or HostDetails.event.created,
+// depending on whichever exists. This works for QueryStrat v1 and v2, and the v2+ schema change.
+// using unmapped_type avoids errors when the given field doesn't exist, and sets to the 0-value for that type
+// effectively ignoring it
+// https://www.elastic.co/guide/en/elasticsearch/reference/current/sort-search-results.html#_ignoring_unmapped_fields
+const MetadataSortMethod: SortContainer[] = [
+  {
+    'event.created': {
+      order: 'desc',
+      unmapped_type: 'date',
+    },
+  },
+  {
+    'HostDetails.event.created': {
+      order: 'desc',
+      unmapped_type: 'date',
+    },
+  },
+];
+
 export async function kibanaRequestToMetadataListESQuery(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   request: KibanaRequest<any, any, any>,
   endpointAppContext: EndpointAppContext,
-  index: string,
+  metadataQueryStrategy: MetadataQueryStrategy,
   queryBuilderOptions?: QueryBuilderOptions
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<Record<string, any>> {
   const pagingProperties = await getPagingProperties(request, endpointAppContext);
+
   return {
     body: {
       query: buildQueryBody(
         request,
+        metadataQueryStrategy,
         queryBuilderOptions?.unenrolledAgentIds!,
         queryBuilderOptions?.statusAgentIDs!
       ),
-      collapse: {
-        field: 'host.id',
-        inner_hits: {
-          name: 'most_recent',
-          size: 1,
-          sort: [{ 'event.created': 'desc' }],
-        },
-      },
-      aggs: {
-        total: {
-          cardinality: {
-            field: 'host.id',
-          },
-        },
-      },
-      sort: [
-        {
-          'event.created': {
-            order: 'desc',
-          },
-        },
-      ],
+      ...metadataQueryStrategy.extraBodyProperties,
+      sort: MetadataSortMethod,
     },
     from: pagingProperties.pageIndex * pagingProperties.pageSize,
     size: pagingProperties.pageSize,
-    index,
+    index: metadataQueryStrategy.index,
   };
 }
 
@@ -81,27 +86,34 @@ async function getPagingProperties(
 function buildQueryBody(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   request: KibanaRequest<any, any, any>,
+  metadataQueryStrategy: MetadataQueryStrategy,
   unerolledAgentIds: string[] | undefined,
   statusAgentIDs: string[] | undefined
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Record<string, any> {
+  // the filtered properties may be preceded by 'HostDetails' under an older index mapping
   const filterUnenrolledAgents =
     unerolledAgentIds && unerolledAgentIds.length > 0
       ? {
-          must_not: {
-            terms: {
-              'elastic.agent.id': unerolledAgentIds,
-            },
-          },
+          must_not: [
+            { terms: { 'elastic.agent.id': unerolledAgentIds } }, // OR
+            { terms: { 'HostDetails.elastic.agent.id': unerolledAgentIds } },
+          ],
         }
       : null;
   const filterStatusAgents = statusAgentIDs
     ? {
-        must: {
-          terms: {
-            'elastic.agent.id': statusAgentIDs,
+        filter: [
+          {
+            bool: {
+              // OR's the two together
+              should: [
+                { terms: { 'elastic.agent.id': statusAgentIDs } },
+                { terms: { 'HostDetails.elastic.agent.id': statusAgentIDs } },
+              ],
+            },
           },
-        },
+        ],
       }
     : null;
 
@@ -132,23 +144,55 @@ function buildQueryBody(
       };
 }
 
-export function getESQueryHostMetadataByID(hostID: string, index: string) {
+export function getESQueryHostMetadataByID(
+  agentID: string,
+  metadataQueryStrategy: MetadataQueryStrategy
+): SearchRequest {
   return {
     body: {
       query: {
-        match: {
-          'host.id': hostID,
+        bool: {
+          filter: [
+            {
+              bool: {
+                should: [
+                  { term: { 'agent.id': agentID } },
+                  { term: { 'HostDetails.agent.id': agentID } },
+                ],
+              },
+            },
+          ],
         },
       },
-      sort: [
-        {
-          'event.created': {
-            order: 'desc',
-          },
-        },
-      ],
+      sort: MetadataSortMethod,
       size: 1,
     },
-    index,
+    index: metadataQueryStrategy.index,
+  };
+}
+
+export function getESQueryHostMetadataByIDs(
+  agentIDs: string[],
+  metadataQueryStrategy: MetadataQueryStrategy
+) {
+  return {
+    body: {
+      query: {
+        bool: {
+          filter: [
+            {
+              bool: {
+                should: [
+                  { terms: { 'agent.id': agentIDs } },
+                  { terms: { 'HostDetails.agent.id': agentIDs } },
+                ],
+              },
+            },
+          ],
+        },
+      },
+      sort: MetadataSortMethod,
+    },
+    index: metadataQueryStrategy.index,
   };
 }

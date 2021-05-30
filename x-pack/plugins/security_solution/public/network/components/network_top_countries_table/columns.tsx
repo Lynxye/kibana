@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { get } from 'lodash/fp';
@@ -14,7 +15,7 @@ import {
   FlowTargetSourceDest,
   NetworkTopCountriesEdges,
   TopNetworkTablesEcsField,
-} from '../../../graphql/types';
+} from '../../../../common/search_strategy/security_solution/network';
 import { networkModel } from '../../store';
 import {
   DragEffects,
@@ -37,7 +38,7 @@ export type NetworkTopCountriesColumns = [
   Columns<NetworkTopCountriesEdges>
 ];
 
-export type NetworkTopCountriesColumnsIpDetails = [
+export type NetworkTopCountriesColumnsNetworkDetails = [
   Columns<NetworkTopCountriesEdges>,
   Columns<TopNetworkTablesEcsField['bytes_in']>,
   Columns<TopNetworkTablesEcsField['bytes_out']>,
@@ -164,7 +165,7 @@ export const getCountriesColumnsCurated = (
   flowTarget: FlowTargetSourceDest,
   type: networkModel.NetworkType,
   tableId: string
-): NetworkTopCountriesColumns | NetworkTopCountriesColumnsIpDetails => {
+): NetworkTopCountriesColumns | NetworkTopCountriesColumnsNetworkDetails => {
   const columns = getNetworkTopCountriesColumns(indexPattern, flowTarget, type, tableId);
 
   // Columns to exclude from host details pages

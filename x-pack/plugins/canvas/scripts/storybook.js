@@ -1,21 +1,19 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 const path = require('path');
 const fs = require('fs');
 const del = require('del');
 const { run } = require('@kbn/dev-utils');
+// This is included in the main Kibana package.json
+// eslint-disable-next-line import/no-extraneous-dependencies
 const storybook = require('@storybook/react/standalone');
 const execa = require('execa');
 const { DLL_OUTPUT } = require('./../storybook/constants');
-
-const options = {
-  stdio: ['ignore', 'inherit', 'inherit'],
-  buffer: false,
-};
 
 const storybookOptions = {
   configDir: path.resolve(__dirname, './../storybook'),
@@ -35,12 +33,6 @@ run(
       }
     }
 
-    // Ensure SASS dependencies have been built before doing anything.
-    execa.sync(process.execPath, ['scripts/build_sass'], {
-      cwd: path.resolve(__dirname, '../../../..'),
-      ...options,
-    });
-
     // Build the DLL if necessary.
     if (fs.existsSync(DLL_OUTPUT)) {
       log.info('storybook: DLL exists from previous build; skipping');
@@ -52,7 +44,7 @@ run(
           'webpack',
           '--config',
           'x-pack/plugins/canvas/storybook/webpack.dll.config.js',
-          '--progress',
+          ...(process.stdout.isTTY && !process.env.CI ? ['--progress'] : []),
           '--hide-modules',
           '--display-entrypoints',
           'false',
@@ -100,12 +92,6 @@ run(
     }
 
     log.info('storybook: Starting Storybook');
-
-    // Watch the SASS sheets for changes
-    execa(process.execPath, ['scripts/build_sass', '--watch'], {
-      cwd: path.resolve(__dirname, '../../../..'),
-      ...options,
-    });
 
     if (addon) {
       execa('node', ['scripts/build', '--watch'], {

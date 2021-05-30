@@ -1,163 +1,200 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { getOr } from 'lodash/fp';
-import React from 'react';
-import { Query } from 'react-apollo';
-import { connect } from 'react-redux';
-import { compose } from 'redux';
+import { noop } from 'lodash/fp';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import deepEqual from 'fast-deep-equal';
+import { Subscription } from 'rxjs';
 
-import { DEFAULT_INDEX_KEY } from '../../../../common/constants';
-import {
-  PageInfoPaginated,
-  TlsEdges,
-  TlsSortField,
-  GetTlsQuery,
-  FlowTargetSourceDest,
-} from '../../../graphql/types';
-import { inputsModel, State, inputsSelectors } from '../../../common/store';
-import { withKibana, WithKibanaProps } from '../../../common/lib/kibana';
-import { createFilter, getDefaultFetchPolicy } from '../../../common/containers/helpers';
+import { ESTermQuery } from '../../../../common/typed_json';
+import { inputsModel } from '../../../common/store';
+import { useDeepEqualSelector } from '../../../common/hooks/use_selector';
+import { useKibana } from '../../../common/lib/kibana';
+import { createFilter } from '../../../common/containers/helpers';
 import { generateTablePaginationOptions } from '../../../common/components/paginated_table/helpers';
-import {
-  QueryTemplatePaginated,
-  QueryTemplatePaginatedProps,
-} from '../../../common/containers/query_template_paginated';
 import { networkModel, networkSelectors } from '../../store';
-import { tlsQuery } from './index.gql_query';
+import {
+  NetworkQueries,
+  NetworkTlsRequestOptions,
+  NetworkTlsStrategyResponse,
+} from '../../../../common/search_strategy/security_solution/network';
+import { isCompleteResponse, isErrorResponse } from '../../../../../../../src/plugins/data/common';
 
-const ID = 'tlsQuery';
+import * as i18n from './translations';
+import { getInspectResponse } from '../../../helpers';
+import { FlowTargetSourceDest, PageInfoPaginated } from '../../../../common/search_strategy';
+import { useAppToasts } from '../../../common/hooks/use_app_toasts';
 
-export interface TlsArgs {
+const ID = 'networkTlsQuery';
+
+export interface NetworkTlsArgs {
   id: string;
   inspect: inputsModel.InspectQuery;
   isInspected: boolean;
-  loading: boolean;
   loadPage: (newActivePage: number) => void;
   pageInfo: PageInfoPaginated;
   refetch: inputsModel.Refetch;
-  tls: TlsEdges[];
+  tls: NetworkTlsStrategyResponse['edges'];
   totalCount: number;
 }
 
-export interface OwnProps extends QueryTemplatePaginatedProps {
-  children: (args: TlsArgs) => React.ReactNode;
+interface UseNetworkTls {
   flowTarget: FlowTargetSourceDest;
+  indexNames: string[];
   ip: string;
   type: networkModel.NetworkType;
+  filterQuery?: ESTermQuery | string;
+  endDate: string;
+  startDate: string;
+  skip: boolean;
+  id?: string;
 }
 
-export interface TlsComponentReduxProps {
-  activePage: number;
-  isInspected: boolean;
-  limit: number;
-  sort: TlsSortField;
-}
+export const useNetworkTls = ({
+  endDate,
+  filterQuery,
+  flowTarget,
+  id = ID,
+  indexNames,
+  ip,
+  skip,
+  startDate,
+  type,
+}: UseNetworkTls): [boolean, NetworkTlsArgs] => {
+  const getTlsSelector = useMemo(() => networkSelectors.tlsSelector(), []);
+  const { activePage, limit, sort } = useDeepEqualSelector((state) =>
+    getTlsSelector(state, type, flowTarget)
+  );
+  const { data } = useKibana().services;
+  const refetch = useRef<inputsModel.Refetch>(noop);
+  const abortCtrl = useRef(new AbortController());
+  const searchSubscription$ = useRef(new Subscription());
+  const [loading, setLoading] = useState(false);
 
-type TlsProps = OwnProps & TlsComponentReduxProps & WithKibanaProps;
+  const [networkTlsRequest, setHostRequest] = useState<NetworkTlsRequestOptions | null>(null);
 
-class TlsComponentQuery extends QueryTemplatePaginated<
-  TlsProps,
-  GetTlsQuery.Query,
-  GetTlsQuery.Variables
-> {
-  public render() {
-    const {
-      activePage,
-      children,
-      endDate,
-      filterQuery,
-      flowTarget,
-      id = ID,
-      ip,
-      isInspected,
-      kibana,
-      limit,
-      skip,
-      sourceId,
-      startDate,
-      sort,
-    } = this.props;
-    const variables: GetTlsQuery.Variables = {
-      defaultIndex: kibana.services.uiSettings.get<string[]>(DEFAULT_INDEX_KEY),
-      filterQuery: createFilter(filterQuery),
-      flowTarget,
-      inspect: isInspected,
-      ip,
-      pagination: generateTablePaginationOptions(activePage, limit),
-      sort,
-      sourceId,
-      timerange: {
-        interval: '12h',
-        from: startDate ? startDate : '',
-        to: endDate ? endDate : new Date(Date.now()).toISOString(),
-      },
-    };
-    return (
-      <Query<GetTlsQuery.Query, GetTlsQuery.Variables>
-        query={tlsQuery}
-        fetchPolicy={getDefaultFetchPolicy()}
-        notifyOnNetworkStatusChange
-        skip={skip}
-        variables={variables}
-      >
-        {({ data, loading, fetchMore, networkStatus, refetch }) => {
-          const tls = getOr([], 'source.Tls.edges', data);
-          this.setFetchMore(fetchMore);
-          this.setFetchMoreOptions((newActivePage: number) => ({
-            variables: {
-              pagination: generateTablePaginationOptions(newActivePage, limit),
-            },
-            updateQuery: (prev, { fetchMoreResult }) => {
-              if (!fetchMoreResult) {
-                return prev;
+  const wrappedLoadMore = useCallback(
+    (newActivePage: number) => {
+      setHostRequest((prevRequest) => {
+        if (!prevRequest) {
+          return prevRequest;
+        }
+
+        return {
+          ...prevRequest,
+          pagination: generateTablePaginationOptions(newActivePage, limit),
+        };
+      });
+    },
+    [limit]
+  );
+
+  const [networkTlsResponse, setNetworkTlsResponse] = useState<NetworkTlsArgs>({
+    tls: [],
+    id: ID,
+    inspect: {
+      dsl: [],
+      response: [],
+    },
+    isInspected: false,
+    loadPage: wrappedLoadMore,
+    pageInfo: {
+      activePage: 0,
+      fakeTotalCount: 0,
+      showMorePagesIndicator: false,
+    },
+    refetch: refetch.current,
+    totalCount: -1,
+  });
+  const { addError, addWarning } = useAppToasts();
+
+  const networkTlsSearch = useCallback(
+    (request: NetworkTlsRequestOptions | null) => {
+      if (request == null || skip) {
+        return;
+      }
+
+      const asyncSearch = async () => {
+        abortCtrl.current = new AbortController();
+        setLoading(true);
+
+        searchSubscription$.current = data.search
+          .search<NetworkTlsRequestOptions, NetworkTlsStrategyResponse>(request, {
+            strategy: 'securitySolutionSearchStrategy',
+            abortSignal: abortCtrl.current.signal,
+          })
+          .subscribe({
+            next: (response) => {
+              if (isCompleteResponse(response)) {
+                setLoading(false);
+                setNetworkTlsResponse((prevResponse) => ({
+                  ...prevResponse,
+                  tls: response.edges,
+                  inspect: getInspectResponse(response, prevResponse.inspect),
+                  pageInfo: response.pageInfo,
+                  refetch: refetch.current,
+                  totalCount: response.totalCount,
+                }));
+
+                searchSubscription$.current.unsubscribe();
+              } else if (isErrorResponse(response)) {
+                setLoading(false);
+                addWarning(i18n.ERROR_NETWORK_TLS);
+                searchSubscription$.current.unsubscribe();
               }
-              return {
-                ...fetchMoreResult,
-                source: {
-                  ...fetchMoreResult.source,
-                  Tls: {
-                    ...fetchMoreResult.source.Tls,
-                    edges: [...fetchMoreResult.source.Tls.edges],
-                  },
-                },
-              };
             },
-          }));
-          const isLoading = this.isItAValidLoading(loading, variables, networkStatus);
-          return children({
-            id,
-            inspect: getOr(null, 'source.Tls.inspect', data),
-            isInspected,
-            loading: isLoading,
-            loadPage: this.wrappedLoadMore,
-            pageInfo: getOr({}, 'source.Tls.pageInfo', data),
-            refetch: this.memoizedRefetchQuery(variables, limit, refetch),
-            tls,
-            totalCount: getOr(-1, 'source.Tls.totalCount', data),
+            error: (msg) => {
+              setLoading(false);
+              addError(msg, {
+                title: i18n.FAIL_NETWORK_TLS,
+              });
+              searchSubscription$.current.unsubscribe();
+            },
           });
-        }}
-      </Query>
-    );
-  }
-}
+      };
+      searchSubscription$.current.unsubscribe();
+      abortCtrl.current.abort();
+      asyncSearch();
+      refetch.current = asyncSearch;
+    },
+    [data.search, addError, addWarning, skip]
+  );
 
-const makeMapStateToProps = () => {
-  const getTlsSelector = networkSelectors.tlsSelector();
-  const getQuery = inputsSelectors.globalQueryByIdSelector();
-  return (state: State, { flowTarget, id = ID, type }: OwnProps) => {
-    const { isInspected } = getQuery(state, id);
-    return {
-      ...getTlsSelector(state, type, flowTarget),
-      isInspected,
+  useEffect(() => {
+    setHostRequest((prevRequest) => {
+      const myRequest = {
+        ...(prevRequest ?? {}),
+        defaultIndex: indexNames,
+        factoryQueryType: NetworkQueries.tls,
+        filterQuery: createFilter(filterQuery),
+        flowTarget,
+        ip,
+        pagination: generateTablePaginationOptions(activePage, limit),
+        timerange: {
+          interval: '12h',
+          from: startDate,
+          to: endDate,
+        },
+        sort,
+      };
+      if (!deepEqual(prevRequest, myRequest)) {
+        return myRequest;
+      }
+      return prevRequest;
+    });
+  }, [activePage, indexNames, endDate, filterQuery, limit, startDate, sort, flowTarget, ip, id]);
+
+  useEffect(() => {
+    networkTlsSearch(networkTlsRequest);
+    return () => {
+      searchSubscription$.current.unsubscribe();
+      abortCtrl.current.abort();
     };
-  };
-};
+  }, [networkTlsRequest, networkTlsSearch]);
 
-export const TlsQuery = compose<React.ComponentClass<OwnProps>>(
-  connect(makeMapStateToProps),
-  withKibana
-)(TlsComponentQuery);
+  return [loading, networkTlsResponse];
+};

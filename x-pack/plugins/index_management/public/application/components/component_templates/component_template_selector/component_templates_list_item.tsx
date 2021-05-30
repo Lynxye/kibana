@@ -1,8 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import classNames from 'classnames';
 import React from 'react';
 import {
@@ -48,6 +50,7 @@ export const ComponentTemplatesListItem = ({
       className={classNames('componentTemplatesListItem', {
         'componentTemplatesListItem--selected': isSelectedValue,
       })}
+      data-test-subj="item"
     >
       <EuiFlexGroup justifyContent="spaceBetween">
         <EuiFlexItem grow={false}>
@@ -59,7 +62,7 @@ export const ComponentTemplatesListItem = ({
                 </div>
               </EuiFlexItem>
             )}
-            <EuiFlexItem grow={false}>
+            <EuiFlexItem grow={false} data-test-subj="name">
               {/* <EuiText>{component.name}</EuiText> */}
               <EuiLink onClick={() => onViewDetail(component)}>{component.name}</EuiLink>
             </EuiFlexItem>
@@ -83,7 +86,7 @@ export const ComponentTemplatesListItem = ({
                     <EuiButtonIcon
                       iconType={action.icon}
                       onClick={() => action.handler(component)}
-                      data-test-subj="addPropertyButton"
+                      data-test-subj={`action-${action.icon}`}
                       aria-label={action.label}
                     />
                   </EuiToolTip>

@@ -1,20 +1,20 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { FC, Fragment } from 'react';
 import { EuiCard, EuiIcon } from '@elastic/eui';
 import { i18n } from '@kbn/i18n';
-import { useNavigateToPath } from '../../../../../contexts/kibana';
+import { useMlLink } from '../../../../../contexts/kibana';
+import { ML_PAGES } from '../../../../../../../common/constants/ml_url_generator';
 
 export const BackToListPanel: FC = () => {
-  const navigateToPath = useNavigateToPath();
-
-  const redirectToAnalyticsManagementPage = async () => {
-    await navigateToPath('/data_frame_analytics');
-  };
+  const analyticsManagementPageLink = useMlLink({
+    page: ML_PAGES.DATA_FRAME_ANALYTICS_JOBS_MANAGE,
+  });
 
   return (
     <Fragment>
@@ -30,7 +30,7 @@ export const BackToListPanel: FC = () => {
             defaultMessage: 'Return to the analytics management page.',
           }
         )}
-        onClick={redirectToAnalyticsManagementPage}
+        href={analyticsManagementPageLink}
         data-test-subj="analyticsWizardCardManagement"
       />
     </Fragment>

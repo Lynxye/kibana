@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { EuiFilterButton } from '@elastic/eui';
@@ -15,7 +16,6 @@ export interface FilterStatusButtonProps {
   isActive: boolean;
   value: 'up' | 'down' | '';
   withNext: boolean;
-  color?: string;
 }
 
 export const FilterStatusButton = ({
@@ -24,14 +24,12 @@ export const FilterStatusButton = ({
   isDisabled,
   isActive,
   value,
-  color,
   withNext,
 }: FilterStatusButtonProps) => {
   const [getUrlParams, setUrlParams] = useUrlParams();
   const { statusFilter: urlValue } = getUrlParams();
   return (
     <EuiFilterButton
-      color={(isActive ? color : undefined) as any}
       data-test-subj={dataTestSubj}
       hasActiveFilters={isActive}
       isDisabled={isDisabled}

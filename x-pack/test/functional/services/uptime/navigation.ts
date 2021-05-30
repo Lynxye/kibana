@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { FtrProviderContext } from '../../ftr_provider_context';
@@ -16,6 +17,7 @@ export function UptimeNavigationProvider({ getService, getPageObjects }: FtrProv
     await retry.tryForTime(60 * 1000, async () => {
       if (await testSubjects.exists('uptimeSettingsToOverviewLink', { timeout: 0 })) {
         await testSubjects.click('uptimeSettingsToOverviewLink');
+        await PageObjects.header.waitUntilLoadingHasFinished();
         await testSubjects.existOrFail('uptimeOverviewPage', { timeout: 2000 });
       } else {
         await PageObjects.common.navigateToApp('uptime');

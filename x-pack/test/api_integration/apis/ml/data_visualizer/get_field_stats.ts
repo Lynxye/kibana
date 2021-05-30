@@ -1,14 +1,16 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import expect from '@kbn/expect';
+import { sortBy } from 'lodash';
 
 import { FtrProviderContext } from '../../../ftr_provider_context';
 import { USER } from '../../../../functional/services/ml/security_common';
-import { COMMON_REQUEST_HEADERS } from '../../../../functional/services/ml/common';
+import { COMMON_REQUEST_HEADERS } from '../../../../functional/services/ml/common_api';
 
 export default ({ getService }: FtrProviderContext) => {
   const esArchiver = getService('esArchiver');
@@ -33,7 +35,7 @@ export default ({ getService }: FtrProviderContext) => {
       ],
       samplerShardSize: -1, // No sampling, as otherwise counts could vary on each run.
       timeFieldName: '@timestamp',
-      interval: '1d',
+      interval: 86400000,
       maxExamples: 10,
     },
     expected: {
@@ -41,7 +43,7 @@ export default ({ getService }: FtrProviderContext) => {
       responseBody: [
         {
           documentCounts: {
-            interval: '1d',
+            interval: 86400000,
             buckets: {
               '1454803200000': 846,
               '1454889600000': 846,
@@ -145,6 +147,7 @@ export default ({ getService }: FtrProviderContext) => {
       ],
       samplerShardSize: -1, // No sampling, as otherwise counts could vary on each run.
       timeFieldName: '@timestamp',
+      interval: 86400000,
       maxExamples: 10,
     },
     expected: {
@@ -152,8 +155,7 @@ export default ({ getService }: FtrProviderContext) => {
       responseBody: {
         statusCode: 404,
         error: 'Not Found',
-        message:
-          '[index_not_found_exception] no such index [ft_farequote_not_exists], with { resource.type="index_or_alias" & resource.id="ft_farequote_not_exists" & index_uuid="_na_" & index="ft_farequote_not_exists" }',
+        message: 'index_not_found_exception',
       },
     },
   };
@@ -172,16 +174,6 @@ export default ({ getService }: FtrProviderContext) => {
       .expect(expectedResponsecode);
 
     return body;
-  }
-
-  function compareByFieldName(a: { fieldName: string }, b: { fieldName: string }) {
-    if (a.fieldName < b.fieldName) {
-      return -1;
-    }
-    if (a.fieldName > b.fieldName) {
-      return 1;
-    }
-    return 0;
   }
 
   describe('get_field_stats', function () {
@@ -221,11 +213,8 @@ export default ({ getService }: FtrProviderContext) => {
         nonMetricFieldsTestData.expected.responseCode
       );
 
-      // Sort the fields in the response before validating.
-      const expectedRspFields = nonMetricFieldsTestData.expected.responseBody.sort(
-        compareByFieldName
-      );
-      const actualRspFields = body.sort(compareByFieldName);
+      const expectedRspFields = sortBy(nonMetricFieldsTestData.expected.responseBody, 'fieldName');
+      const actualRspFields = sortBy(body, 'fieldName');
       expect(actualRspFields).to.eql(expectedRspFields);
     });
 
@@ -238,7 +227,7 @@ export default ({ getService }: FtrProviderContext) => {
       );
 
       expect(body.error).to.eql(errorTestData.expected.responseBody.error);
-      expect(body.message).to.eql(errorTestData.expected.responseBody.message);
+      expect(body.message).to.contain(errorTestData.expected.responseBody.message);
     });
   });
 };

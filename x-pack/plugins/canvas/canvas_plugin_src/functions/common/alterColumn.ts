@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { omit } from 'lodash';
@@ -57,14 +58,14 @@ export function alterColumn(): ExpressionFunctionDefinition<
       }
 
       const name = args.name || column.name;
-      const type = args.type || column.type;
+      const type = args.type || column.meta.type;
 
       const columns = input.columns.reduce((all: DatatableColumn[], col) => {
         if (col.name !== args.name) {
           if (col.name !== column.name) {
             all.push(col);
           } else {
-            all.push({ name, type });
+            all.push({ id: name, name, meta: { type } });
           }
         }
         return all;
@@ -76,7 +77,7 @@ export function alterColumn(): ExpressionFunctionDefinition<
         handler = (function getHandler() {
           switch (type) {
             case 'string':
-              if (column.type === 'date') {
+              if (column.meta.type === 'date') {
                 return (v: string) => new Date(v).toISOString();
               }
               return String;

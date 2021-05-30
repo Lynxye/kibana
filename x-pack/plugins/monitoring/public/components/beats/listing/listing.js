@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { PureComponent } from 'react';
@@ -13,6 +14,7 @@ import {
   EuiSpacer,
   EuiLink,
   EuiScreenReaderOnly,
+  EuiPanel,
 } from '@elastic/eui';
 import { Stats } from '../../beats';
 import { formatMetric } from '../../../lib/format_number';
@@ -153,9 +155,11 @@ export class Listing extends PureComponent {
               />
             </h1>
           </EuiScreenReaderOnly>
-          <EuiPageContent>
+          <EuiPanel>
             <Stats stats={stats} />
-            <EuiSpacer size="m" />
+          </EuiPanel>
+          <EuiSpacer size="m" />
+          <EuiPageContent>
             {setupModeCallOut}
             <EuiMonitoringTable
               className="beatsTable"

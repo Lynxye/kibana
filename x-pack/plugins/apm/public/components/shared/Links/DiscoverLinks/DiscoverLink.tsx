@@ -1,19 +1,20 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { EuiLink } from '@elastic/eui';
 import { Location } from 'history';
+import { IBasePath } from 'kibana/public';
 import React from 'react';
-import url from 'url';
+import { useLocation } from 'react-router-dom';
 import rison, { RisonValue } from 'rison-node';
-import { useLocation } from '../../../../hooks/useLocation';
+import url from 'url';
+import { APM_STATIC_INDEX_PATTERN_ID } from '../../../../../common/index_pattern_constants';
+import { useApmPluginContext } from '../../../../context/apm_plugin/use_apm_plugin_context';
 import { getTimepickerRisonData } from '../rison_helpers';
-import { APM_STATIC_INDEX_PATTERN_ID } from '../../../../../../../../src/plugins/apm_oss/public';
-import { useApmPluginContext } from '../../../../hooks/useApmPluginContext';
-import { AppMountContextBasePath } from '../../../../context/ApmPluginContext';
 
 interface Props {
   query: {
@@ -37,7 +38,7 @@ export const getDiscoverHref = ({
   location,
   query,
 }: {
-  basePath: AppMountContextBasePath;
+  basePath: IBasePath;
   location: Location;
   query: Props['query'];
 }) => {

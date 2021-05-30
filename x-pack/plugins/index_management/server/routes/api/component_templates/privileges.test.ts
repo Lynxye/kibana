@@ -1,12 +1,13 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import { httpServerMock, httpServiceMock } from 'src/core/server/mocks';
 import { kibanaResponseFactory, RequestHandlerContext, RequestHandler } from 'src/core/server';
 
-import { License } from '../../../services/license';
 import { IndexDataEnricher } from '../../../services/index_data_enricher';
 
 import { registerPrivilegesRoute } from './privileges';
@@ -45,15 +46,14 @@ describe('GET privileges', () => {
 
     registerPrivilegesRoute({
       router,
-      license: {
-        guardApiRoute: (route: any) => route,
-      } as License,
       config: {
         isSecurityEnabled: () => true,
       },
       indexDataEnricher: mockedIndexDataEnricher,
       lib: {
         isEsError: jest.fn(),
+        parseEsError: jest.fn(),
+        handleEsError: jest.fn(),
       },
     });
 
@@ -114,15 +114,14 @@ describe('GET privileges', () => {
 
       registerPrivilegesRoute({
         router,
-        license: {
-          guardApiRoute: (route: any) => route,
-        } as License,
         config: {
           isSecurityEnabled: () => false,
         },
         indexDataEnricher: mockedIndexDataEnricher,
         lib: {
           isEsError: jest.fn(),
+          parseEsError: jest.fn(),
+          handleEsError: jest.fn(),
         },
       });
 

@@ -1,46 +1,26 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { schema } from '@kbn/config-schema';
 
-import { Request } from 'hapi';
-import { RequestHandlerContext } from 'kibana/server';
 import { wrapError } from '../client/error_wrapper';
-import { mlLog } from '../client/log';
+import { mlLog } from '../lib/log';
 import { capabilitiesProvider } from '../lib/capabilities';
 import { spacesUtilsProvider } from '../lib/spaces_utils';
 import { RouteInitialization, SystemRouteDeps } from '../types';
+import { getMlNodeCount } from '../lib/node_utils';
 
 /**
  * System routes
  */
 export function systemRoutes(
-  { router, mlLicense }: RouteInitialization,
-  { spaces, cloud, resolveMlCapabilities }: SystemRouteDeps
+  { router, mlLicense, routeGuard }: RouteInitialization,
+  { getSpaces, cloud, resolveMlCapabilities }: SystemRouteDeps
 ) {
-  async function getNodeCount(context: RequestHandlerContext) {
-    const filterPath = 'nodes.*.attributes';
-    const resp = await context.ml!.mlClient.callAsInternalUser('nodes.info', {
-      filterPath,
-    });
-
-    let count = 0;
-    if (typeof resp.nodes === 'object') {
-      Object.keys(resp.nodes).forEach((k) => {
-        if (resp.nodes[k].attributes !== undefined) {
-          const maxOpenJobs = resp.nodes[k].attributes['ml.max_open_jobs'];
-          if (maxOpenJobs !== null && maxOpenJobs > 0) {
-            count++;
-          }
-        }
-      });
-    }
-    return { count };
-  }
-
   /**
    * @apiGroup SystemRoutes
    *
@@ -58,15 +38,15 @@ export function systemRoutes(
         tags: ['access:ml:canAccessML'],
       },
     },
-    mlLicense.basicLicenseAPIGuard(async (context, request, response) => {
+    routeGuard.basicLicenseAPIGuard(async ({ mlClient, client, request, response }) => {
       try {
-        const { callAsCurrentUser, callAsInternalUser } = context.ml!.mlClient;
+        const { asCurrentUser } = client;
         let upgradeInProgress = false;
         try {
-          const info = await callAsInternalUser('ml.info');
+          const { body } = await mlClient.info();
           // if ml indices are currently being migrated, upgrade_mode will be set to true
           // pass this back with the privileges to allow for the disabling of UI controls.
-          upgradeInProgress = info.upgrade_mode === true;
+          upgradeInProgress = body.upgrade_mode === true;
         } catch (error) {
           // if the ml.info check fails, it could be due to the user having insufficient privileges
           // most likely they do not have the ml_user role and therefore will be blocked from using
@@ -90,11 +70,12 @@ export function systemRoutes(
             },
           });
         } else {
-          const body = request.body;
-          const resp = await callAsCurrentUser('ml.privilegeCheck', { body });
-          resp.upgradeInProgress = upgradeInProgress;
+          const { body } = await asCurrentUser.security.hasPrivileges({ body: request.body });
           return response.ok({
-            body: resp,
+            body: {
+              ...body,
+              upgradeInProgress,
+            },
           });
         }
       } catch (error) {
@@ -115,13 +96,9 @@ export function systemRoutes(
       path: '/api/ml/ml_capabilities',
       validate: false,
     },
-    mlLicense.basicLicenseAPIGuard(async (context, request, response) => {
+    routeGuard.basicLicenseAPIGuard(async ({ mlClient, request, response }) => {
       try {
-        // if spaces is disabled force isMlEnabledInSpace to be true
-        const { isMlEnabledInSpace } =
-          spaces !== undefined
-            ? spacesUtilsProvider(spaces, (request as unknown) as Request)
-            : { isMlEnabledInSpace: async () => true };
+        const { isMlEnabledInSpace } = spacesUtilsProvider(getSpaces, request);
 
         const mlCapabilities = await resolveMlCapabilities(request);
         if (mlCapabilities === null) {
@@ -129,7 +106,7 @@ export function systemRoutes(
         }
 
         const { getCapabilities } = capabilitiesProvider(
-          context.ml!.mlClient,
+          mlClient,
           mlCapabilities,
           mlLicense,
           isMlEnabledInSpace
@@ -159,10 +136,10 @@ export function systemRoutes(
       },
     },
 
-    mlLicense.basicLicenseAPIGuard(async (context, request, response) => {
+    routeGuard.basicLicenseAPIGuard(async ({ client, response }) => {
       try {
         return response.ok({
-          body: await getNodeCount(context),
+          body: await getMlNodeCount(client),
         });
       } catch (e) {
         return response.customError(wrapError(e));
@@ -185,12 +162,12 @@ export function systemRoutes(
         tags: ['access:ml:canAccessML'],
       },
     },
-    mlLicense.basicLicenseAPIGuard(async (context, request, response) => {
+    routeGuard.basicLicenseAPIGuard(async ({ mlClient, response }) => {
       try {
-        const info = await context.ml!.mlClient.callAsInternalUser('ml.info');
+        const { body } = await mlClient.info();
         const cloudId = cloud && cloud.cloudId;
         return response.ok({
-          body: { ...info, cloudId },
+          body: { ...body, cloudId },
         });
       } catch (error) {
         return response.customError(wrapError(error));
@@ -216,10 +193,11 @@ export function systemRoutes(
         tags: ['access:ml:canGetJobs'],
       },
     },
-    mlLicense.fullLicenseAPIGuard(async (context, request, response) => {
+    routeGuard.fullLicenseAPIGuard(async ({ client, request, response }) => {
       try {
+        const { body } = await client.asCurrentUser.search(request.body);
         return response.ok({
-          body: await context.ml!.mlClient.callAsCurrentUser('search', request.body),
+          body,
         });
       } catch (error) {
         return response.customError(wrapError(error));
@@ -240,25 +218,24 @@ export function systemRoutes(
         body: schema.object({ index: schema.string() }),
       },
       options: {
-        tags: ['access:ml:canGetJobs'],
+        tags: ['access:ml:canAccessML'],
       },
     },
-    mlLicense.fullLicenseAPIGuard(async (context, request, response) => {
+    routeGuard.basicLicenseAPIGuard(async ({ client, request, response }) => {
       try {
         const { index } = request.body;
 
         const options = {
           index: [index],
           fields: ['*'],
-          ignoreUnavailable: true,
-          allowNoIndices: true,
-          ignore: 404,
+          ignore_unavailable: true,
+          allow_no_indices: true,
         };
 
-        const fieldsResult = await context.ml!.mlClient.callAsCurrentUser('fieldCaps', options);
+        const { body } = await client.asCurrentUser.fieldCaps(options);
         const result = { exists: false };
 
-        if (Array.isArray(fieldsResult.indices) && fieldsResult.indices.length !== 0) {
+        if (Array.isArray(body.indices) && body.indices.length !== 0) {
           result.exists = true;
         }
 

@@ -1,22 +1,24 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { isEmpty } from 'lodash';
-import { EuiTitle, EuiText, EuiSpacer } from '@elastic/eui';
-import React, { useState, useEffect, useCallback } from 'react';
+import { EuiSpacer, EuiText, EuiTitle } from '@elastic/eui';
 import { i18n } from '@kbn/i18n';
-import { FetcherResult } from '../../../../../hooks/useFetcher';
-import { history } from '../../../../../utils/history';
+import { History } from 'history';
+import { isEmpty } from 'lodash';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useHistory } from 'react-router-dom';
 import {
-  AgentConfigurationIntake,
   AgentConfiguration,
+  AgentConfigurationIntake,
 } from '../../../../../../common/agent_configuration/configuration_types';
+import { FetcherResult } from '../../../../../hooks/use_fetcher';
+import { fromQuery, toQuery } from '../../../../shared/Links/url_helpers';
 import { ServicePage } from './ServicePage/ServicePage';
 import { SettingsPage } from './SettingsPage/SettingsPage';
-import { fromQuery, toQuery } from '../../../../shared/Links/url_helpers';
 
 type PageStep = 'choose-service-step' | 'choose-settings-step' | 'review-step';
 
@@ -30,7 +32,7 @@ function getInitialNewConfig(
   };
 }
 
-function setPage(pageStep: PageStep) {
+function setPage(pageStep: PageStep, history: History) {
   history.push({
     ...history.location,
     search: fromQuery({
@@ -68,6 +70,7 @@ export function AgentConfigurationCreateEdit({
   pageStep: PageStep;
   existingConfigResult?: FetcherResult<AgentConfiguration>;
 }) {
+  const history = useHistory();
   const existingConfig = existingConfigResult?.data;
   const isEditMode = Boolean(existingConfigResult);
   const [newConfig, setNewConfig] = useState<AgentConfigurationIntake>(
@@ -79,7 +82,6 @@ export function AgentConfigurationCreateEdit({
       ..._newConfig,
       settings: existingConfig?.settings || {},
     }));
-    /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [existingConfig]);
 
   // update newConfig when existingConfig has loaded
@@ -90,7 +92,7 @@ export function AgentConfigurationCreateEdit({
   useEffect(() => {
     // the user tried to edit the service of an existing config
     if (pageStep === 'choose-service-step' && isEditMode) {
-      setPage('choose-settings-step');
+      setPage('choose-settings-step', history);
     }
 
     // the user skipped the first step (select service)
@@ -99,9 +101,9 @@ export function AgentConfigurationCreateEdit({
       !isEditMode &&
       isEmpty(newConfig.service)
     ) {
-      setPage('choose-service-step');
+      setPage('choose-service-step', history);
     }
-  }, [isEditMode, newConfig, pageStep]);
+  }, [history, isEditMode, newConfig, pageStep]);
 
   const unsavedChanges = getUnsavedChanges({ newConfig, existingConfig });
 
@@ -121,9 +123,7 @@ export function AgentConfigurationCreateEdit({
 
       <EuiText size="s">
         {i18n.translate('xpack.apm.agentConfig.newConfig.description', {
-          defaultMessage: `This allows you to fine-tune your agent configuration directly in
-        Kibana. Best of all, changes are automatically propagated to your APM
-        agents so there’s no need to redeploy.`,
+          defaultMessage: `Fine-tune your agent configuration from within the APM app. Changes are automatically propagated to your APM agents, so there’s no need to redeploy.`,
         })}
       </EuiText>
 
@@ -135,7 +135,7 @@ export function AgentConfigurationCreateEdit({
           setNewConfig={setNewConfig}
           onClickNext={() => {
             resetSettings();
-            setPage('choose-settings-step');
+            setPage('choose-settings-step', history);
           }}
         />
       )}
@@ -144,7 +144,7 @@ export function AgentConfigurationCreateEdit({
         <SettingsPage
           status={existingConfigResult?.status}
           unsavedChanges={unsavedChanges}
-          onClickEdit={() => setPage('choose-service-step')}
+          onClickEdit={() => setPage('choose-service-step', history)}
           newConfig={newConfig}
           setNewConfig={setNewConfig}
           resetSettings={resetSettings}

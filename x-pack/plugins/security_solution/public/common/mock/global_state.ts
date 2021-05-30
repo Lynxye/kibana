@@ -1,19 +1,19 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { DEFAULT_TIMELINE_WIDTH } from '../../timelines/components/timeline/body/constants';
 import {
   Direction,
   FlowTarget,
   HostsFields,
   NetworkDnsFields,
   NetworkTopTablesFields,
-  TlsFields,
-  UsersFields,
-} from '../../graphql/types';
+  NetworkTlsFields,
+  NetworkUsersFields,
+} from '../../../common/search_strategy';
 import { State } from '../store';
 
 import { defaultHeaders } from './header';
@@ -22,11 +22,15 @@ import {
   DEFAULT_TO,
   DEFAULT_INTERVAL_TYPE,
   DEFAULT_INTERVAL_VALUE,
+  DEFAULT_INDEX_PATTERN,
 } from '../../../common/constants';
 import { networkModel } from '../../network/store';
-import { TimelineType, TimelineStatus } from '../../../common/types/timeline';
+import { TimelineType, TimelineStatus, TimelineTabs } from '../../../common/types/timeline';
 import { mockManagementState } from '../../management/store/reducer';
 import { ManagementState } from '../../management/types';
+import { initialSourcererState, SourcererScopeName } from '../store/sourcerer/model';
+import { mockBrowserFields, mockDocValueFields } from '../containers/source/mock';
+import { mockIndexPattern } from './index_pattern';
 
 export const mockGlobalState: State = {
   app: {
@@ -35,6 +39,12 @@ export const mockGlobalState: State = {
       { id: 'error-id-1', title: 'title-1', message: ['error-message-1'] },
       { id: 'error-id-2', title: 'title-2', message: ['error-message-2'] },
     ],
+    enableExperimental: {
+      trustedAppsByPolicyEnabled: false,
+      metricsEntitiesEnabled: false,
+      hostIsolationEnabled: false,
+      ruleRegistryEnabled: false,
+    },
   },
   hosts: {
     page: {
@@ -100,7 +110,7 @@ export const mockGlobalState: State = {
         [networkModel.NetworkTableType.tls]: {
           activePage: 0,
           limit: 10,
-          sort: { field: TlsFields._id, direction: Direction.desc },
+          sort: { field: NetworkTlsFields._id, direction: Direction.desc },
         },
         [networkModel.NetworkTableType.http]: {
           activePage: 0,
@@ -116,37 +126,37 @@ export const mockGlobalState: State = {
     details: {
       flowTarget: FlowTarget.source,
       queries: {
-        [networkModel.IpDetailsTableType.topCountriesDestination]: {
+        [networkModel.NetworkDetailsTableType.topCountriesDestination]: {
           activePage: 0,
           limit: 10,
           sort: { field: NetworkTopTablesFields.bytes_out, direction: Direction.desc },
         },
-        [networkModel.IpDetailsTableType.topCountriesSource]: {
+        [networkModel.NetworkDetailsTableType.topCountriesSource]: {
           activePage: 0,
           limit: 10,
           sort: { field: NetworkTopTablesFields.bytes_out, direction: Direction.desc },
         },
-        [networkModel.IpDetailsTableType.topNFlowSource]: {
+        [networkModel.NetworkDetailsTableType.topNFlowSource]: {
           activePage: 0,
           limit: 10,
           sort: { field: NetworkTopTablesFields.bytes_out, direction: Direction.desc },
         },
-        [networkModel.IpDetailsTableType.topNFlowDestination]: {
+        [networkModel.NetworkDetailsTableType.topNFlowDestination]: {
           activePage: 0,
           limit: 10,
           sort: { field: NetworkTopTablesFields.bytes_out, direction: Direction.desc },
         },
-        [networkModel.IpDetailsTableType.tls]: {
+        [networkModel.NetworkDetailsTableType.tls]: {
           activePage: 0,
           limit: 10,
-          sort: { field: TlsFields._id, direction: Direction.desc },
+          sort: { field: NetworkTlsFields._id, direction: Direction.desc },
         },
-        [networkModel.IpDetailsTableType.users]: {
+        [networkModel.NetworkDetailsTableType.users]: {
           activePage: 0,
           limit: 10,
-          sort: { field: UsersFields.name, direction: Direction.asc },
+          sort: { field: NetworkUsersFields.name, direction: Direction.asc },
         },
-        [networkModel.IpDetailsTableType.http]: {
+        [networkModel.NetworkDetailsTableType.http]: {
           activePage: 0,
           limit: 10,
           sort: { direction: Direction.desc },
@@ -199,15 +209,24 @@ export const mockGlobalState: State = {
     },
     timelineById: {
       test: {
+        activeTab: TimelineTabs.query,
+        prevActiveTab: TimelineTabs.notes,
         deletedEventIds: [],
         id: 'test',
         savedObjectId: null,
         columns: defaultHeaders,
+        indexNames: DEFAULT_INDEX_PATTERN,
         itemsPerPage: 5,
         dataProviders: [],
         description: '',
+        eqlOptions: {
+          eventCategoryField: 'event.category',
+          tiebreakerField: '',
+          timestampField: '@timestamp',
+        },
         eventIdToNoteIds: {},
         excludedRowRendererIds: [],
+        expandedDetail: {},
         highlightedDropAndProviderId: '',
         historyIds: [],
         isFavorite: false,
@@ -215,7 +234,7 @@ export const mockGlobalState: State = {
         isSelectAllChecked: false,
         isLoading: false,
         kqlMode: 'filter',
-        kqlQuery: { filterQuery: null, filterQueryDraft: null },
+        kqlQuery: { filterQuery: null },
         loadingEventIds: [],
         title: '',
         timelineType: TimelineType.default,
@@ -232,14 +251,35 @@ export const mockGlobalState: State = {
         pinnedEventIds: {},
         pinnedEventsSaveObject: {},
         itemsPerPageOptions: [5, 10, 20],
-        sort: { columnId: '@timestamp', sortDirection: Direction.desc },
-        width: DEFAULT_TIMELINE_WIDTH,
+        sort: [{ columnId: '@timestamp', columnType: 'number', sortDirection: Direction.desc }],
         isSaving: false,
         version: null,
         status: TimelineStatus.active,
       },
     },
     insertTimeline: null,
+  },
+  sourcerer: {
+    ...initialSourcererState,
+    sourcererScopes: {
+      ...initialSourcererState.sourcererScopes,
+      [SourcererScopeName.default]: {
+        ...initialSourcererState.sourcererScopes[SourcererScopeName.default],
+        selectedPatterns: DEFAULT_INDEX_PATTERN,
+        browserFields: mockBrowserFields,
+        indexPattern: mockIndexPattern,
+        docValueFields: mockDocValueFields,
+        loading: false,
+      },
+      [SourcererScopeName.timeline]: {
+        ...initialSourcererState.sourcererScopes[SourcererScopeName.timeline],
+        selectedPatterns: DEFAULT_INDEX_PATTERN,
+        browserFields: mockBrowserFields,
+        indexPattern: mockIndexPattern,
+        docValueFields: mockDocValueFields,
+        loading: false,
+      },
+    },
   },
   /**
    * These state's are wrapped in `Immutable`, but for compatibility with the overall app architecture,

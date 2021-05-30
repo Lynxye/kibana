@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React from 'react';
@@ -16,7 +17,7 @@ import { convertAnomaliesToHosts } from './convert_anomalies_to_hosts';
 import { Loader } from '../../loader';
 import { getIntervalFromAnomalies } from '../anomaly/get_interval_from_anomalies';
 import { AnomaliesHostTableProps } from '../types';
-import { useMlCapabilities } from '../../ml_popover/hooks/use_ml_capabilities';
+import { useMlCapabilities } from '../hooks/use_ml_capabilities';
 import { BasicTable } from './basic_table';
 import { hostEquality } from './host_equality';
 import { getCriteriaFromHostType } from '../criteria/get_criteria_from_host_type';

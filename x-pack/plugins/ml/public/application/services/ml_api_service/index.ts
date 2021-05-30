@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { Observable } from 'rxjs';
@@ -14,25 +15,33 @@ import { filters } from './filters';
 import { resultsApiProvider } from './results';
 import { jobsApiProvider } from './jobs';
 import { fileDatavisualizer } from './datavisualizer';
-import { MlServerDefaults, MlServerLimits } from '../../../../common/types/ml_server_info';
+import { savedObjectsApiProvider } from './saved_objects';
+import {
+  MlServerDefaults,
+  MlServerLimits,
+  MlNodeCount,
+} from '../../../../common/types/ml_server_info';
 
 import { MlCapabilitiesResponse } from '../../../../common/types/capabilities';
 import { Calendar, CalendarId, UpdateCalendar } from '../../../../common/types/calendars';
+import { BucketSpanEstimatorData } from '../../../../common/types/job_service';
 import {
   Job,
+  JobStats,
   Datafeed,
   CombinedJob,
   Detector,
   AnalysisConfig,
   ModelSnapshot,
+  IndicesOptions,
 } from '../../../../common/types/anomaly_detection_jobs';
-import { ES_AGGREGATION } from '../../../../common/constants/aggregation_types';
 import {
   FieldHistogramRequestConfig,
   FieldRequestConfig,
 } from '../../datavisualizer/index_based/common';
 import { DataRecognizerConfigResponse, Module } from '../../../../common/types/modules';
 import { getHttp } from '../../util/dependency_cache';
+import type { RuntimeMappings } from '../../../../common/types/fields';
 
 export interface MlInfoResponse {
   defaults: MlServerDefaults;
@@ -45,24 +54,11 @@ export interface MlInfoResponse {
   cloudId?: string;
 }
 
-export interface BucketSpanEstimatorData {
-  aggTypes: Array<ES_AGGREGATION | null>;
-  duration: {
-    start: number;
-    end: number;
-  };
-  fields: Array<string | null>;
-  index: string;
-  query: any;
-  splitField: string | undefined;
-  timeField: string | undefined;
-}
-
 export interface BucketSpanEstimatorResponse {
   name: string;
   ms: number;
   error?: boolean;
-  message?: { msg: string } | string;
+  message?: string;
 }
 
 export interface GetTimeFieldRangeResponse {
@@ -115,14 +111,14 @@ export function mlApiServicesProvider(httpService: HttpService) {
   return {
     getJobs(obj?: { jobId?: string }) {
       const jobId = obj && obj.jobId ? `/${obj.jobId}` : '';
-      return httpService.http<any>({
+      return httpService.http<{ jobs: Job[]; count: number }>({
         path: `${basePath()}/anomaly_detectors${jobId}`,
       });
     },
 
     getJobStats(obj: { jobId?: string }) {
       const jobId = obj && obj.jobId ? `/${obj.jobId}` : '';
-      return httpService.http<any>({
+      return httpService.http<{ jobs: JobStats[]; count: number }>({
         path: `${basePath()}/anomaly_detectors${jobId}/_stats`,
       });
     },
@@ -327,14 +323,22 @@ export function mlApiServicesProvider(httpService: HttpService) {
       bucketSpan,
       start,
       end,
+      overallScore,
     }: {
       jobId: string;
       topN: string;
       bucketSpan: string;
       start: number;
       end: number;
+      overallScore?: number;
     }) {
-      const body = JSON.stringify({ topN, bucketSpan, start, end });
+      const body = JSON.stringify({
+        topN,
+        bucketSpan,
+        start,
+        end,
+        ...(overallScore ? { overall_score: overallScore } : {}),
+      });
       return httpService.http<any>({
         path: `${basePath()}/anomaly_detectors/${jobId}/results/overall_buckets`,
         method: 'POST',
@@ -361,13 +365,6 @@ export function mlApiServicesProvider(httpService: HttpService) {
     checkManageMLCapabilities() {
       return httpService.http<MlCapabilitiesResponse>({
         path: `${basePath()}/ml_capabilities`,
-        method: 'GET',
-      });
-    },
-
-    getNotificationSettings() {
-      return httpService.http<any>({
-        path: `${basePath()}/notification_settings`,
         method: 'GET',
       });
     },
@@ -478,6 +475,7 @@ export function mlApiServicesProvider(httpService: HttpService) {
       interval,
       fields,
       maxExamples,
+      runtimeMappings,
     }: {
       indexPatternTitle: string;
       query: any;
@@ -485,9 +483,10 @@ export function mlApiServicesProvider(httpService: HttpService) {
       earliest?: number;
       latest?: number;
       samplerShardSize?: number;
-      interval?: string;
+      interval?: number;
       fields?: FieldRequestConfig[];
       maxExamples?: number;
+      runtimeMappings?: RuntimeMappings;
     }) {
       const body = JSON.stringify({
         query,
@@ -498,6 +497,7 @@ export function mlApiServicesProvider(httpService: HttpService) {
         interval,
         fields,
         maxExamples,
+        runtimeMappings,
       });
 
       return httpService.http<any>({
@@ -512,16 +512,19 @@ export function mlApiServicesProvider(httpService: HttpService) {
       query,
       fields,
       samplerShardSize,
+      runtimeMappings,
     }: {
       indexPatternTitle: string;
       query: any;
       fields: FieldHistogramRequestConfig[];
       samplerShardSize?: number;
+      runtimeMappings?: RuntimeMappings;
     }) {
       const body = JSON.stringify({
         query,
         fields,
         samplerShardSize,
+        runtimeMappings,
       });
 
       return httpService.http<any>({
@@ -540,6 +543,7 @@ export function mlApiServicesProvider(httpService: HttpService) {
       samplerShardSize,
       aggregatableFields,
       nonAggregatableFields,
+      runtimeMappings,
     }: {
       indexPatternTitle: string;
       query: any;
@@ -549,6 +553,7 @@ export function mlApiServicesProvider(httpService: HttpService) {
       samplerShardSize?: number;
       aggregatableFields: string[];
       nonAggregatableFields: string[];
+      runtimeMappings?: RuntimeMappings;
     }) {
       const body = JSON.stringify({
         query,
@@ -558,6 +563,7 @@ export function mlApiServicesProvider(httpService: HttpService) {
         samplerShardSize,
         aggregatableFields,
         nonAggregatableFields,
+        runtimeMappings,
       });
 
       return httpService.http<any>({
@@ -613,7 +619,7 @@ export function mlApiServicesProvider(httpService: HttpService) {
     },
 
     mlNodeCount() {
-      return httpService.http<{ count: number }>({
+      return httpService.http<MlNodeCount>({
         path: `${basePath()}/ml_node_count`,
         method: 'GET',
       });
@@ -627,6 +633,7 @@ export function mlApiServicesProvider(httpService: HttpService) {
     },
 
     calculateModelMemoryLimit$({
+      datafeedConfig,
       analysisConfig,
       indexPattern,
       query,
@@ -634,6 +641,7 @@ export function mlApiServicesProvider(httpService: HttpService) {
       earliestMs,
       latestMs,
     }: {
+      datafeedConfig?: Datafeed;
       analysisConfig: AnalysisConfig;
       indexPattern: string;
       query: any;
@@ -642,6 +650,7 @@ export function mlApiServicesProvider(httpService: HttpService) {
       latestMs: number;
     }) {
       const body = JSON.stringify({
+        datafeedConfig,
         analysisConfig,
         indexPattern,
         query,
@@ -692,12 +701,16 @@ export function mlApiServicesProvider(httpService: HttpService) {
       index,
       timeFieldName,
       query,
+      runtimeMappings,
+      indicesOptions,
     }: {
       index: string;
       timeFieldName?: string;
       query: any;
+      runtimeMappings?: RuntimeMappings;
+      indicesOptions?: IndicesOptions;
     }) {
-      const body = JSON.stringify({ index, timeFieldName, query });
+      const body = JSON.stringify({ index, timeFieldName, query, runtimeMappings, indicesOptions });
 
       return httpService.http<GetTimeFieldRangeResponse>({
         path: `${basePath()}/fields_service/time_field_range`,
@@ -765,5 +778,6 @@ export function mlApiServicesProvider(httpService: HttpService) {
     results: resultsApiProvider(httpService),
     jobs: jobsApiProvider(httpService),
     fileDatavisualizer,
+    savedObjects: savedObjectsApiProvider(httpService),
   };
 }

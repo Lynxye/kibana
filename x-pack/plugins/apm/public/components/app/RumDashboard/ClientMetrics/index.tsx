@@ -1,76 +1,41 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
-import * as React from 'react';
-import numeral from '@elastic/numeral';
-import styled from 'styled-components';
-import { EuiFlexGroup, EuiFlexItem, EuiStat, EuiToolTip } from '@elastic/eui';
-import { useFetcher } from '../../../../hooks/useFetcher';
-import { useUrlParams } from '../../../../hooks/useUrlParams';
-import { I18LABELS } from '../translations';
 
-const ClFlexGroup = styled(EuiFlexGroup)`
-  flex-direction: row;
-  @media only screen and (max-width: 768px) {
-    flex-direction: row;
-    justify-content: space-between;
-  }
-`;
+import * as React from 'react';
+import {
+  EuiFlexGroup,
+  EuiFlexItem,
+  EuiPanel,
+  EuiTitle,
+  EuiSpacer,
+} from '@elastic/eui';
+import { I18LABELS } from '../translations';
+import { getPercentileLabel } from '../UXMetrics/translations';
+import { useUrlParams } from '../../../../context/url_params_context/use_url_params';
+import { Metrics } from './Metrics';
 
 export function ClientMetrics() {
-  const { urlParams, uiFilters } = useUrlParams();
-
-  const { start, end, serviceName } = urlParams;
-
-  const { data, status } = useFetcher(
-    (callApmApi) => {
-      if (start && end && serviceName) {
-        return callApmApi({
-          pathname: '/api/apm/rum/client-metrics',
-          params: {
-            query: { start, end, uiFilters: JSON.stringify(uiFilters) },
-          },
-        });
-      }
-      return Promise.resolve(null);
-    },
-    [start, end, serviceName, uiFilters]
-  );
-
-  const STAT_STYLE = { width: '240px' };
+  const {
+    urlParams: { percentile },
+  } = useUrlParams();
 
   return (
-    <ClFlexGroup responsive={false}>
-      <EuiFlexItem grow={false} style={STAT_STYLE}>
-        <EuiStat
-          titleSize="s"
-          title={(data?.backEnd?.value?.toFixed(2) ?? '-') + ' sec'}
-          description={I18LABELS.backEnd}
-          isLoading={status !== 'success'}
-        />
-      </EuiFlexItem>
-      <EuiFlexItem grow={false} style={STAT_STYLE}>
-        <EuiStat
-          titleSize="s"
-          title={(data?.frontEnd?.value?.toFixed(2) ?? '-') + ' sec'}
-          description={I18LABELS.frontEnd}
-          isLoading={status !== 'success'}
-        />
-      </EuiFlexItem>
-      <EuiFlexItem grow={false} style={STAT_STYLE}>
-        <EuiStat
-          titleSize="s"
-          title={
-            <EuiToolTip content={data?.pageViews?.value}>
-              <>{numeral(data?.pageViews?.value).format('0 a') ?? '-'}</>
-            </EuiToolTip>
-          }
-          description={I18LABELS.pageViews}
-          isLoading={status !== 'success'}
-        />
-      </EuiFlexItem>
-    </ClFlexGroup>
+    <EuiPanel>
+      <EuiFlexGroup justifyContent="spaceBetween">
+        <EuiFlexItem grow={1} data-cy={`client-metrics`}>
+          <EuiTitle size="xs">
+            <h3>
+              {I18LABELS.pageLoad} ({getPercentileLabel(percentile!)})
+            </h3>
+          </EuiTitle>
+          <EuiSpacer size="s" />
+          <Metrics />
+        </EuiFlexItem>
+      </EuiFlexGroup>
+    </EuiPanel>
   );
 }

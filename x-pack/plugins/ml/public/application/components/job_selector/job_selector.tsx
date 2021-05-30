@@ -1,20 +1,27 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
-import { EuiButtonEmpty, EuiFlexItem, EuiFlexGroup } from '@elastic/eui';
+import { EuiButtonEmpty, EuiFlexItem, EuiFlexGroup, EuiFlyout } from '@elastic/eui';
 import { i18n } from '@kbn/i18n';
 
 import { Dictionary } from '../../../../common/types/common';
 import { useUrlState } from '../../util/url_state';
 // @ts-ignore
 import { IdBadges } from './id_badges/index';
-import { BADGE_LIMIT, JobSelectorFlyout, JobSelectorFlyoutProps } from './job_selector_flyout';
+import {
+  BADGE_LIMIT,
+  JobSelectorFlyoutContent,
+  JobSelectorFlyoutProps,
+} from './job_selector_flyout';
 import { MlJobWithTimeRange } from '../../../../common/types/anomaly_detection_jobs';
+import { useStorage } from '../../contexts/ml/use_storage';
+import { ApplyTimeRangeConfig, ML_APPLY_TIME_RANGE_CONFIG } from '../../../../common/types/storage';
 
 interface GroupObj {
   groupId: string;
@@ -74,6 +81,10 @@ export interface JobSelectionMaps {
 
 export function JobSelector({ dateFormatTz, singleSelection, timeseriesOnly }: JobSelectorProps) {
   const [globalState, setGlobalState] = useUrlState('_g');
+  const [applyTimeRangeConfig, setApplyTimeRangeConfig] = useStorage<ApplyTimeRangeConfig>(
+    ML_APPLY_TIME_RANGE_CONFIG,
+    true
+  );
 
   const selectedJobIds = globalState?.ml?.jobIds ?? [];
   const selectedGroups = globalState?.ml?.groups ?? [];
@@ -105,24 +116,22 @@ export function JobSelector({ dateFormatTz, singleSelection, timeseriesOnly }: J
     showFlyout();
   }
 
-  const applySelection: JobSelectorFlyoutProps['onSelectionConfirmed'] = ({
-    newSelection,
-    jobIds,
-    groups: newGroups,
-    time,
-  }) => {
-    setSelectedIds(newSelection);
+  const applySelection: JobSelectorFlyoutProps['onSelectionConfirmed'] = useCallback(
+    ({ newSelection, jobIds, groups: newGroups, time }) => {
+      setSelectedIds(newSelection);
 
-    setGlobalState({
-      ml: {
-        jobIds,
-        groups: newGroups,
-      },
-      ...(time !== undefined ? { time } : {}),
-    });
+      setGlobalState({
+        ml: {
+          jobIds,
+          groups: newGroups,
+        },
+        ...(time !== undefined ? { time } : {}),
+      });
 
-    closeFlyout();
-  };
+      closeFlyout();
+    },
+    [setGlobalState, setSelectedIds]
+  );
 
   function renderJobSelectionBar() {
     return (
@@ -163,16 +172,24 @@ export function JobSelector({ dateFormatTz, singleSelection, timeseriesOnly }: J
   function renderFlyout() {
     if (isFlyoutVisible) {
       return (
-        <JobSelectorFlyout
-          dateFormatTz={dateFormatTz}
-          timeseriesOnly={timeseriesOnly}
-          singleSelection={singleSelection}
-          selectedIds={selectedIds}
-          onSelectionConfirmed={applySelection}
-          onJobsFetched={setMaps}
-          onFlyoutClose={closeFlyout}
-          maps={maps}
-        />
+        <EuiFlyout
+          onClose={closeFlyout}
+          data-test-subj="mlFlyoutJobSelector"
+          aria-labelledby="jobSelectorFlyout"
+        >
+          <JobSelectorFlyoutContent
+            dateFormatTz={dateFormatTz}
+            timeseriesOnly={timeseriesOnly}
+            singleSelection={singleSelection}
+            selectedIds={selectedIds}
+            onSelectionConfirmed={applySelection}
+            onJobsFetched={setMaps}
+            onFlyoutClose={closeFlyout}
+            maps={maps}
+            applyTimeRangeConfig={applyTimeRangeConfig}
+            onTimeRangeConfigChange={setApplyTimeRangeConfig}
+          />
+        </EuiFlyout>
       );
     }
   }

@@ -1,16 +1,19 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { FtrProviderContext } from '../../ftr_provider_context';
 
-export function UptimeCommonProvider({ getService }: FtrProviderContext) {
+export function UptimeCommonProvider({ getService, getPageObjects }: FtrProviderContext) {
   const testSubjects = getService('testSubjects');
   const browser = getService('browser');
   const retry = getService('retry');
   const find = getService('find');
+
+  const { header } = getPageObjects(['header']);
 
   return {
     async assertExists(key: string) {
@@ -39,7 +42,7 @@ export function UptimeCommonProvider({ getService }: FtrProviderContext) {
       await browser.pressKeys(browser.keys.ENTER);
     },
     async setFilterText(filterQuery: string) {
-      await this.setKueryBarText('xpack.uptime.filterBar', filterQuery);
+      await this.setKueryBarText('queryInput', filterQuery);
     },
     async goToNextPage() {
       await testSubjects.click('xpack.uptime.monitorList.nextButton', 5000);
@@ -92,9 +95,11 @@ export function UptimeCommonProvider({ getService }: FtrProviderContext) {
       );
     },
     async waitUntilDataIsLoaded() {
+      await header.waitUntilLoadingHasFinished();
       return retry.tryForTime(60 * 1000, async () => {
         if (await testSubjects.exists('data-missing')) {
           await testSubjects.click('superDatePickerApplyTimeButton');
+          await header.waitUntilLoadingHasFinished();
         }
         await testSubjects.missingOrFail('data-missing');
       });

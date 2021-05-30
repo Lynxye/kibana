@@ -1,20 +1,25 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { useEffect, useState } from 'react';
+import { XJsonMode } from '@kbn/ace';
 
-import { useXJsonMode } from '../../../../../../../../../../src/plugins/es_ui_shared/static/ace_x_json/hooks';
+import { XJson } from '../../../../../../../../../../src/plugins/es_ui_shared/public';
 
-import { PreviewRequestBody } from '../../../../../common';
+import { PostTransformsPreviewRequestSchema } from '../../../../../../../common/api_schemas/transforms';
 
 import { StepDefineExposedState } from '../common';
 
+const { useXJsonMode } = XJson;
+const xJsonMode = new XJsonMode();
+
 export const useAdvancedPivotEditor = (
   defaults: StepDefineExposedState,
-  previewRequest: PreviewRequestBody
+  previewRequest: PostTransformsPreviewRequestSchema
 ) => {
   const stringifiedPivotConfig = JSON.stringify(previewRequest.pivot, null, 2);
 
@@ -38,7 +43,6 @@ export const useAdvancedPivotEditor = (
     convertToJson,
     setXJson: setAdvancedEditorConfig,
     xJson: advancedEditorConfig,
-    xJsonMode,
   } = useXJsonMode(stringifiedPivotConfig);
 
   useEffect(() => {

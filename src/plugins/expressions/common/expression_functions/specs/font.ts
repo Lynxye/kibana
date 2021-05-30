@@ -1,20 +1,9 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import { i18n } from '@kbn/i18n';
@@ -64,7 +53,7 @@ export const font: ExpressionFunctionFont = {
   inputTypes: ['null'],
   args: {
     align: {
-      default: 'left',
+      default: '{ theme "font.align" default="left" }',
       help: i18n.translate('expressions.functions.font.args.alignHelpText', {
         defaultMessage: 'The horizontal text alignment.',
       }),
@@ -72,13 +61,14 @@ export const font: ExpressionFunctionFont = {
       types: ['string'],
     },
     color: {
+      default: `{ theme "font.color" }`,
       help: i18n.translate('expressions.functions.font.args.colorHelpText', {
         defaultMessage: 'The text color.',
       }),
       types: ['string'],
     },
     family: {
-      default: `"${openSans.value}"`,
+      default: `{ theme "font.family" default="${openSans.value}" }`,
       help: i18n.translate('expressions.functions.font.args.familyHelpText', {
         defaultMessage: 'An acceptable {css} web font string',
         values: {
@@ -88,7 +78,7 @@ export const font: ExpressionFunctionFont = {
       types: ['string'],
     },
     italic: {
-      default: false,
+      default: `{ theme "font.italic" default=false }`,
       help: i18n.translate('expressions.functions.font.args.italicHelpText', {
         defaultMessage: 'Italicize the text?',
       }),
@@ -96,7 +86,7 @@ export const font: ExpressionFunctionFont = {
       types: ['boolean'],
     },
     lHeight: {
-      default: null,
+      default: `{ theme "font.lHeight" }`,
       aliases: ['lineHeight'],
       help: i18n.translate('expressions.functions.font.args.lHeightHelpText', {
         defaultMessage: 'The line height in pixels',
@@ -104,14 +94,14 @@ export const font: ExpressionFunctionFont = {
       types: ['number', 'null'],
     },
     size: {
-      default: 14,
+      default: `{ theme "font.size" default=14 }`,
       help: i18n.translate('expressions.functions.font.args.sizeHelpText', {
         defaultMessage: 'The font size in pixels',
       }),
       types: ['number'],
     },
     underline: {
-      default: false,
+      default: `{ theme "font.underline" default=false }`,
       help: i18n.translate('expressions.functions.font.args.underlineHelpText', {
         defaultMessage: 'Underline the text?',
       }),
@@ -119,7 +109,7 @@ export const font: ExpressionFunctionFont = {
       types: ['boolean'],
     },
     weight: {
-      default: 'normal',
+      default: `{ theme "font.weight" default="normal" }`,
       help: i18n.translate('expressions.functions.font.args.weightHelpText', {
         defaultMessage: 'The font weight. For example, {list}, or {end}.',
         values: {

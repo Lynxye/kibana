@@ -1,17 +1,19 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
+import type { estypes } from '@elastic/elasticsearch';
 import * as rt from 'io-ts';
-
+import { partitionField } from '../../../../common/log_analysis';
 import { commonSearchSuccessResponseFieldsRT } from '../../../utils/elasticsearch_runtime_types';
 import { defaultRequestParameters } from './common';
-import { partitionField } from '../../../../common/log_analysis';
 
 export const createLogEntryExamplesQuery = (
   indices: string,
+  runtimeMappings: estypes.RuntimeFields,
   timestampField: string,
   tiebreakerField: string,
   startTime: number,
@@ -19,7 +21,7 @@ export const createLogEntryExamplesQuery = (
   dataset: string,
   exampleCount: number,
   categoryQuery?: string
-) => ({
+): estypes.SearchRequest => ({
   ...defaultRequestParameters,
   body: {
     query: {
@@ -33,7 +35,7 @@ export const createLogEntryExamplesQuery = (
               },
             },
           },
-          ...(!!dataset
+          ...(dataset !== ''
             ? [
                 {
                   term: {
@@ -41,14 +43,26 @@ export const createLogEntryExamplesQuery = (
                   },
                 },
               ]
-            : []),
+            : [
+                {
+                  bool: {
+                    must_not: [
+                      {
+                        exists: {
+                          field: partitionField,
+                        },
+                      },
+                    ],
+                  },
+                },
+              ]),
           ...(categoryQuery
             ? [
                 {
                   match: {
                     message: {
                       query: categoryQuery,
-                      operator: 'AND',
+                      operator: 'AND' as const,
                     },
                   },
                 },
@@ -57,20 +71,20 @@ export const createLogEntryExamplesQuery = (
         ],
       },
     },
+    runtime_mappings: runtimeMappings,
     sort: [{ [timestampField]: 'asc' }, { [tiebreakerField]: 'asc' }],
+    _source: false,
+    fields: ['event.dataset', 'message'],
   },
-  _source: ['event.dataset', 'message'],
   index: indices,
   size: exampleCount,
 });
 
 export const logEntryExampleHitRT = rt.type({
   _id: rt.string,
-  _source: rt.partial({
-    event: rt.partial({
-      dataset: rt.string,
-    }),
-    message: rt.string,
+  fields: rt.partial({
+    'event.dataset': rt.array(rt.string),
+    message: rt.array(rt.string),
   }),
   sort: rt.tuple([rt.number, rt.number]),
 });

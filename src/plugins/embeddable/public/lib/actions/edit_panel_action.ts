@@ -1,20 +1,9 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import { i18n } from '@kbn/i18n';
@@ -24,7 +13,14 @@ import { take } from 'rxjs/operators';
 import { ViewMode } from '../types';
 import { EmbeddableFactoryNotFoundError } from '../errors';
 import { EmbeddableStart } from '../../plugin';
-import { IEmbeddable, EmbeddableEditorState, EmbeddableStateTransfer } from '../..';
+import {
+  IEmbeddable,
+  EmbeddableEditorState,
+  EmbeddableStateTransfer,
+  SavedObjectEmbeddableInput,
+  EmbeddableInput,
+  Container,
+} from '../..';
 
 export const ACTION_EDIT_PANEL = 'editPanel';
 
@@ -109,13 +105,28 @@ export class EditPanelAction implements Action<ActionContext> {
     const app = embeddable ? embeddable.getOutput().editApp : undefined;
     const path = embeddable ? embeddable.getOutput().editPath : undefined;
     if (app && path) {
-      const state = this.currentAppId ? { originatingApp: this.currentAppId } : undefined;
-      return { app, path, state };
+      if (this.currentAppId) {
+        const byValueMode = !(embeddable.getInput() as SavedObjectEmbeddableInput).savedObjectId;
+        const state: EmbeddableEditorState = {
+          originatingApp: this.currentAppId,
+          valueInput: byValueMode ? this.getExplicitInput({ embeddable }) : undefined,
+          embeddableId: embeddable.id,
+        };
+        return { app, path, state };
+      }
+      return { app, path };
     }
   }
 
   public async getHref({ embeddable }: ActionContext): Promise<string> {
     const editUrl = embeddable ? embeddable.getOutput().editUrl : undefined;
     return editUrl ? editUrl : '';
+  }
+
+  private getExplicitInput({ embeddable }: ActionContext): EmbeddableInput {
+    return (
+      (embeddable.getRoot() as Container)?.getInput()?.panels?.[embeddable.id]?.explicitInput ??
+      embeddable.getInput()
+    );
   }
 }

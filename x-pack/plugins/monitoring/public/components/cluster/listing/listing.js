@@ -1,8 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import React, { Fragment, Component } from 'react';
 import { Legacy } from '../../../legacy_shims';
 import moment from 'moment';
@@ -25,6 +27,7 @@ import { i18n } from '@kbn/i18n';
 import { toMountPoint } from '../../../../../../../src/plugins/kibana_react/public';
 import { AlertsStatus } from '../../../alerts/status';
 import { STANDALONE_CLUSTER_CLUSTER_UUID } from '../../../../common/constants';
+import { getSafeForExternalLink } from '../../../lib/get_safe_for_external_link';
 import './listing.scss';
 
 const IsClusterSupported = ({ isSupported, children }) => {
@@ -38,17 +41,14 @@ const IsClusterSupported = ({ isSupported, children }) => {
  * completely
  */
 const IsAlertsSupported = (props) => {
-  const { alertsMeta = { enabled: true }, clusterMeta = { enabled: true } } = props.cluster.alerts;
-  if (alertsMeta.enabled && clusterMeta.enabled) {
+  const { alertsMeta = { enabled: true } } = props.cluster.alerts;
+  if (alertsMeta.enabled) {
     return <span>{props.children}</span>;
   }
 
-  const message =
-    alertsMeta.message ||
-    clusterMeta.message ||
-    i18n.translate('xpack.monitoring.cluster.listing.unknownHealthMessage', {
-      defaultMessage: 'Unknown',
-    });
+  const message = i18n.translate('xpack.monitoring.cluster.listing.unknownHealthMessage', {
+    defaultMessage: 'Unknown',
+  });
 
   return (
     <EuiToolTip content={message} position="bottom">
@@ -78,7 +78,7 @@ const getColumns = (
         if (cluster.isSupported) {
           return (
             <EuiLink
-              onClick={() => changeCluster(cluster.cluster_uuid, cluster.ccs)}
+              href={getSafeForExternalLink(`#/overview`, { cluster_uuid: cluster.cluster_uuid })}
               data-test-subj="clusterLink"
             >
               {value}
@@ -111,7 +111,7 @@ const getColumns = (
     },
     {
       name: i18n.translate('xpack.monitoring.cluster.listing.statusColumnTitle', {
-        defaultMessage: 'Status',
+        defaultMessage: 'Alerts Status',
       }),
       field: 'status',
       'data-test-subj': 'alertsStatus',

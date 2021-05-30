@@ -15,15 +15,15 @@ exports[`Storyshots components/Toolbar element selected 1`] = `
       >
         <button
           className="euiButtonEmpty euiButtonEmpty--text"
+          disabled={false}
           onClick={[Function]}
           type="button"
         >
           <span
-            className="euiButtonEmpty__content"
+            className="euiButtonContent euiButtonEmpty__content"
           >
-            <div
-              aria-hidden="true"
-              className="euiButtonEmpty__icon"
+            <span
+              className="euiButtonContent__icon"
               data-euiicon-type="grid"
               size="m"
             />
@@ -43,12 +43,12 @@ exports[`Storyshots components/Toolbar element selected 1`] = `
       >
         <button
           aria-label="Previous Page"
-          className="euiButtonIcon euiButtonIcon--text"
+          className="euiButtonIcon euiButtonIcon--text euiButtonIcon--empty euiButtonIcon--xSmall"
           disabled={true}
           onClick={[Function]}
           type="button"
         >
-          <div
+          <span
             aria-hidden="true"
             className="euiButtonIcon__icon"
             data-euiicon-type="arrowLeft"
@@ -61,11 +61,12 @@ exports[`Storyshots components/Toolbar element selected 1`] = `
       >
         <button
           className="euiButtonEmpty euiButtonEmpty--text"
+          disabled={false}
           onClick={[Function]}
           type="button"
         >
           <span
-            className="euiButtonEmpty__content"
+            className="euiButtonContent euiButtonEmpty__content"
           >
             <span
               className="euiButtonEmpty__text"
@@ -80,12 +81,12 @@ exports[`Storyshots components/Toolbar element selected 1`] = `
       >
         <button
           aria-label="Next Page"
-          className="euiButtonIcon euiButtonIcon--text"
+          className="euiButtonIcon euiButtonIcon--text euiButtonIcon--empty euiButtonIcon--xSmall"
           disabled={true}
           onClick={[Function]}
           type="button"
         >
-          <div
+          <span
             aria-hidden="true"
             className="euiButtonIcon__icon"
             data-euiicon-type="arrowRight"
@@ -102,15 +103,15 @@ exports[`Storyshots components/Toolbar element selected 1`] = `
         <button
           className="euiButtonEmpty euiButtonEmpty--text"
           data-test-subj="canvasExpressionEditorButton"
+          disabled={false}
           onClick={[Function]}
           type="button"
         >
           <span
-            className="euiButtonEmpty__content"
+            className="euiButtonContent euiButtonEmpty__content"
           >
-            <div
-              aria-hidden="true"
-              className="euiButtonEmpty__icon"
+            <span
+              className="euiButtonContent__icon"
               data-euiicon-type="editorCodeBlock"
               size="m"
             />
@@ -142,15 +143,15 @@ exports[`Storyshots components/Toolbar no element selected 1`] = `
       >
         <button
           className="euiButtonEmpty euiButtonEmpty--text"
+          disabled={false}
           onClick={[Function]}
           type="button"
         >
           <span
-            className="euiButtonEmpty__content"
+            className="euiButtonContent euiButtonEmpty__content"
           >
-            <div
-              aria-hidden="true"
-              className="euiButtonEmpty__icon"
+            <span
+              className="euiButtonContent__icon"
               data-euiicon-type="grid"
               size="m"
             />
@@ -170,12 +171,12 @@ exports[`Storyshots components/Toolbar no element selected 1`] = `
       >
         <button
           aria-label="Previous Page"
-          className="euiButtonIcon euiButtonIcon--text"
+          className="euiButtonIcon euiButtonIcon--text euiButtonIcon--empty euiButtonIcon--xSmall"
           disabled={true}
           onClick={[Function]}
           type="button"
         >
-          <div
+          <span
             aria-hidden="true"
             className="euiButtonIcon__icon"
             data-euiicon-type="arrowLeft"
@@ -188,11 +189,12 @@ exports[`Storyshots components/Toolbar no element selected 1`] = `
       >
         <button
           className="euiButtonEmpty euiButtonEmpty--text"
+          disabled={false}
           onClick={[Function]}
           type="button"
         >
           <span
-            className="euiButtonEmpty__content"
+            className="euiButtonContent euiButtonEmpty__content"
           >
             <span
               className="euiButtonEmpty__text"
@@ -207,12 +209,12 @@ exports[`Storyshots components/Toolbar no element selected 1`] = `
       >
         <button
           aria-label="Next Page"
-          className="euiButtonIcon euiButtonIcon--text"
+          className="euiButtonIcon euiButtonIcon--text euiButtonIcon--empty euiButtonIcon--xSmall"
           disabled={true}
           onClick={[Function]}
           type="button"
         >
-          <div
+          <span
             aria-hidden="true"
             className="euiButtonIcon__icon"
             data-euiicon-type="arrowRight"

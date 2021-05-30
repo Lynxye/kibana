@@ -1,11 +1,13 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { schema } from '@kbn/config-schema';
-import Boom from 'boom';
+import Boom from '@hapi/boom';
+import { ROUTE_TAG_CAN_REDIRECT } from '../../../security/server';
 import { ReportingCore } from '../';
 import { API_BASE_URL } from '../../common/constants';
 import { authorizedUserPreRoutingFactory } from './lib/authorized_user_pre_routing';
@@ -15,11 +17,6 @@ import {
   downloadJobResponseHandlerFactory,
 } from './lib/job_response_handler';
 
-interface ListQuery {
-  page: string;
-  size: string;
-  ids?: string; // optional field forbids us from extending RequestQuery
-}
 const MAIN_ENTRY = `${API_BASE_URL}/jobs`;
 
 const handleUnavailable = (res: any) => {
@@ -35,7 +32,13 @@ export function registerJobInfoRoutes(reporting: ReportingCore) {
   router.get(
     {
       path: `${MAIN_ENTRY}/list`,
-      validate: false,
+      validate: {
+        query: schema.object({
+          page: schema.string({ defaultValue: '0' }),
+          size: schema.string({ defaultValue: '10' }),
+          ids: schema.maybe(schema.string()),
+        }),
+      },
     },
     userHandler(async (user, context, req, res) => {
       // ensure the async dependencies are loaded
@@ -46,11 +49,7 @@ export function registerJobInfoRoutes(reporting: ReportingCore) {
       const {
         management: { jobTypes = [] },
       } = await reporting.getLicenseInfo();
-      const {
-        page: queryPage = '0',
-        size: querySize = '10',
-        ids: queryIds = null,
-      } = req.query as ListQuery;
+      const { page: queryPage = '0', size: querySize = '10', ids: queryIds = null } = req.query;
       const page = parseInt(queryPage, 10) || 0;
       const size = Math.min(100, parseInt(querySize, 10) || 10);
       const jobIds = queryIds ? queryIds.split(',') : null;
@@ -110,7 +109,7 @@ export function registerJobInfoRoutes(reporting: ReportingCore) {
         return handleUnavailable(res);
       }
 
-      const { docId } = req.params as { docId: string };
+      const { docId } = req.params;
       const {
         management: { jobTypes = [] },
       } = await reporting.getLicenseInfo();
@@ -131,7 +130,7 @@ export function registerJobInfoRoutes(reporting: ReportingCore) {
       }
 
       return res.ok({
-        body: jobOutput,
+        body: jobOutput || {},
         headers: {
           'content-type': 'application/json',
         },
@@ -155,7 +154,7 @@ export function registerJobInfoRoutes(reporting: ReportingCore) {
         return res.custom({ statusCode: 503 });
       }
 
-      const { docId } = req.params as { docId: string };
+      const { docId } = req.params;
       const {
         management: { jobTypes = [] },
       } = await reporting.getLicenseInfo();
@@ -200,6 +199,7 @@ export function registerJobInfoRoutes(reporting: ReportingCore) {
           docId: schema.string({ minLength: 3 }),
         }),
       },
+      options: { tags: [ROUTE_TAG_CAN_REDIRECT] },
     },
     userHandler(async (user, context, req, res) => {
       // ensure the async dependencies are loaded
@@ -207,7 +207,7 @@ export function registerJobInfoRoutes(reporting: ReportingCore) {
         return handleUnavailable(res);
       }
 
-      const { docId } = req.params as { docId: string };
+      const { docId } = req.params;
       const {
         management: { jobTypes = [] },
       } = await reporting.getLicenseInfo();
@@ -233,7 +233,7 @@ export function registerJobInfoRoutes(reporting: ReportingCore) {
         return handleUnavailable(res);
       }
 
-      const { docId } = req.params as { docId: string };
+      const { docId } = req.params;
       const {
         management: { jobTypes = [] },
       } = await reporting.getLicenseInfo();

@@ -1,11 +1,12 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { merge } from 'lodash';
-import { Server } from 'hapi';
+
 import { SavedObjectsClient } from 'src/core/server';
 import { PromiseReturnType } from '../../../../../observability/typings/common';
 import {
@@ -13,7 +14,8 @@ import {
   APM_INDICES_SAVED_OBJECT_ID,
 } from '../../../../common/apm_saved_object_constants';
 import { APMConfig } from '../../..';
-import { APMRequestHandlerContext } from '../../../routes/typings';
+import { APMRouteHandlerResources } from '../../../routes/typings';
+import { withApmSpan } from '../../../utils/with_apm_span';
 
 type ISavedObjectsClient = Pick<SavedObjectsClient, 'get'>;
 
@@ -32,16 +34,14 @@ export interface ApmIndicesConfig {
 
 export type ApmIndicesName = keyof ApmIndicesConfig;
 
-export type ScopedSavedObjectsClient = ReturnType<
-  Server['savedObjects']['getScopedSavedObjectsClient']
->;
-
 async function getApmIndicesSavedObject(
   savedObjectsClient: ISavedObjectsClient
 ) {
-  const apmIndices = await savedObjectsClient.get<Partial<ApmIndicesConfig>>(
-    APM_INDICES_SAVED_OBJECT_TYPE,
-    APM_INDICES_SAVED_OBJECT_ID
+  const apmIndices = await withApmSpan('get_apm_indices_saved_object', () =>
+    savedObjectsClient.get<Partial<ApmIndicesConfig>>(
+      APM_INDICES_SAVED_OBJECT_TYPE,
+      APM_INDICES_SAVED_OBJECT_ID
+    )
   );
   return apmIndices.attributes;
 }
@@ -91,9 +91,8 @@ const APM_UI_INDICES: ApmIndicesName[] = [
 
 export async function getApmIndexSettings({
   context,
-}: {
-  context: APMRequestHandlerContext;
-}) {
+  config,
+}: Pick<APMRouteHandlerResources, 'context' | 'config'>) {
   let apmIndicesSavedObject: PromiseReturnType<typeof getApmIndicesSavedObject>;
   try {
     apmIndicesSavedObject = await getApmIndicesSavedObject(
@@ -106,7 +105,7 @@ export async function getApmIndexSettings({
       throw error;
     }
   }
-  const apmIndicesConfig = getApmIndicesConfig(context.config);
+  const apmIndicesConfig = getApmIndicesConfig(config);
 
   return APM_UI_INDICES.map((configurationName) => ({
     configurationName,

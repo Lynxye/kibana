@@ -1,25 +1,33 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { EuiPanel, EuiSpacer, EuiFlexGroup, EuiFlexItem } from '@elastic/eui';
+import {
+  EuiFlexGroup,
+  EuiFlexItem,
+  EuiPanel,
+  EuiTitle,
+  EuiText,
+  EuiSpacer,
+} from '@elastic/eui';
+import { i18n } from '@kbn/i18n';
 import { isEmpty } from 'lodash';
 import React, { useEffect, useState } from 'react';
-import { i18n } from '@kbn/i18n';
+import { INVALID_LICENSE } from '../../../../../../common/custom_link';
 import { CustomLink } from '../../../../../../common/custom_link/custom_link_types';
-import { useLicense } from '../../../../../hooks/useLicense';
-import { useFetcher, FETCH_STATUS } from '../../../../../hooks/useFetcher';
-import { CustomLinkFlyout } from './CustomLinkFlyout';
+import { FETCH_STATUS, useFetcher } from '../../../../../hooks/use_fetcher';
+import { useLicenseContext } from '../../../../../context/license/use_license_context';
+import { LicensePrompt } from '../../../../shared/license_prompt';
+import { CreateCustomLinkButton } from './CreateCustomLinkButton';
+import { CreateEditCustomLinkFlyout } from './CreateEditCustomLinkFlyout';
 import { CustomLinkTable } from './CustomLinkTable';
 import { EmptyPrompt } from './EmptyPrompt';
-import { Title } from './Title';
-import { CreateCustomLinkButton } from './CreateCustomLinkButton';
-import { LicensePrompt } from '../../../../shared/LicensePrompt';
 
 export function CustomLinkOverview() {
-  const license = useLicense();
+  const license = useLicenseContext();
   const hasValidLicense = license?.isActive && license?.hasAtLeast('gold');
 
   const [isFlyoutOpen, setIsFlyoutOpen] = useState(false);
@@ -27,10 +35,18 @@ export function CustomLinkOverview() {
     CustomLink | undefined
   >();
 
-  const { data: customLinks, status, refetch } = useFetcher(
-    (callApmApi) => callApmApi({ pathname: '/api/apm/settings/custom_links' }),
-    []
+  const { data, status, refetch } = useFetcher(
+    async (callApmApi) => {
+      if (hasValidLicense) {
+        return callApmApi({
+          endpoint: 'GET /api/apm/settings/custom_links',
+        });
+      }
+    },
+    [hasValidLicense]
   );
+
+  const customLinks = data?.customLinks ?? [];
 
   useEffect(() => {
     if (customLinkSelected) {
@@ -53,7 +69,7 @@ export function CustomLinkOverview() {
   return (
     <>
       {isFlyoutOpen && (
-        <CustomLinkFlyout
+        <CreateEditCustomLinkFlyout
           onClose={onCloseFlyout}
           defaults={customLinkSelected}
           customLinkId={customLinkSelected?.id}
@@ -68,9 +84,30 @@ export function CustomLinkOverview() {
         />
       )}
       <EuiPanel>
-        <EuiFlexGroup alignItems="center">
+        <EuiFlexGroup gutterSize="none" alignItems="center">
           <EuiFlexItem grow={false}>
-            <Title />
+            <EuiFlexGroup alignItems="center" gutterSize="none">
+              <EuiFlexItem grow={false}>
+                <EuiTitle size="s">
+                  <EuiFlexGroup
+                    alignItems="center"
+                    gutterSize="none"
+                    responsive={false}
+                  >
+                    <EuiFlexItem grow={false}>
+                      <h2>
+                        {i18n.translate(
+                          'xpack.apm.settings.customizeUI.customLink',
+                          {
+                            defaultMessage: 'Custom Links',
+                          }
+                        )}
+                      </h2>
+                    </EuiFlexItem>
+                  </EuiFlexGroup>
+                </EuiTitle>
+              </EuiFlexItem>
+            </EuiFlexGroup>
           </EuiFlexItem>
           {hasValidLicense && !showEmptyPrompt && (
             <EuiFlexItem>
@@ -82,8 +119,13 @@ export function CustomLinkOverview() {
             </EuiFlexItem>
           )}
         </EuiFlexGroup>
-
-        <EuiSpacer size="m" />
+        <EuiSpacer size="xs" />
+        <EuiText color="subdued" size="s">
+          {i18n.translate('xpack.apm.settings.customizeUI.customLink.info', {
+            defaultMessage:
+              'These links will be shown in the Actions context menu in selected areas of the app, e.g. by the transactions detail.',
+          })}
+        </EuiText>
         {hasValidLicense ? (
           showEmptyPrompt ? (
             <EmptyPrompt onCreateCustomLinkClick={onCreateCustomLinkClick} />
@@ -94,15 +136,7 @@ export function CustomLinkOverview() {
             />
           )
         ) : (
-          <LicensePrompt
-            text={i18n.translate(
-              'xpack.apm.settings.customizeUI.customLink.license.text',
-              {
-                defaultMessage:
-                  "To create custom links, you must be subscribed to an Elastic Gold license or above. With it, you'll have the ability to create custom links to improve your workflow when analyzing your services.",
-              }
-            )}
-          />
+          <LicensePrompt text={INVALID_LICENSE} />
         )}
       </EuiPanel>
     </>

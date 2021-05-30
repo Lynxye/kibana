@@ -1,11 +1,16 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
 import { IUiSettingsClient } from 'kibana/server';
+import {
+  UI_SETTINGS_CSV_QUOTE_VALUES,
+  UI_SETTINGS_CSV_SEPARATOR,
+} from '../../../../common/constants';
 import { ReportingConfig } from '../../../';
 import { LevelLogger } from '../../../lib';
 
@@ -38,8 +43,8 @@ export const getUiSettings = async (
 
   // Separator, QuoteValues
   const [separator, quoteValues] = await Promise.all([
-    client.get('csv:separator'),
-    client.get('csv:quoteValues'),
+    client.get(UI_SETTINGS_CSV_SEPARATOR),
+    client.get(UI_SETTINGS_CSV_QUOTE_VALUES),
   ]);
 
   return {

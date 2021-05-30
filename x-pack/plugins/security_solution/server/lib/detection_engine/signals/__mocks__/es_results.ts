@@ -1,60 +1,106 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { SignalSourceHit, SignalSearchResponse, BulkResponse, BulkItem } from '../types';
-import {
-  Logger,
-  SavedObject,
-  SavedObjectsFindResponse,
-} from '../../../../../../../../src/core/server';
+import { set } from '@elastic/safer-lodash-set';
+import type {
+  SignalSourceHit,
+  SignalSearchResponse,
+  BulkResponse,
+  BulkItem,
+  SignalHit,
+  WrappedSignalHit,
+  AlertAttributes,
+} from '../types';
+import { SavedObject, SavedObjectsFindResponse } from '../../../../../../../../src/core/server';
 import { loggingSystemMock } from '../../../../../../../../src/core/server/mocks';
-import { RuleTypeParams } from '../../types';
-import { IRuleStatusAttributes } from '../../rules/types';
+import { IRuleStatusSOAttributes } from '../../rules/types';
 import { ruleStatusSavedObjectType } from '../../rules/saved_object_mappings';
 import { getListArrayMock } from '../../../../../common/detection_engine/schemas/types/lists.mock';
+import { RulesSchema } from '../../../../../common/detection_engine/schemas/response';
+import { RuleParams } from '../../schemas/rule_schemas';
+import { getThreatMock } from '../../../../../common/detection_engine/schemas/types/threat.mock';
 
-export const sampleRuleAlertParams = (
-  maxSignals?: number | undefined,
-  riskScore?: number | undefined
-): RuleTypeParams => ({
-  author: ['Elastic'],
-  buildingBlockType: 'default',
-  ruleId: 'rule-1',
-  description: 'Detecting root and admin users',
-  falsePositives: [],
-  immutable: false,
-  index: ['auditbeat-*', 'filebeat-*', 'packetbeat-*', 'winlogbeat-*'],
-  type: 'query',
-  from: 'now-6m',
-  to: 'now',
-  severity: 'high',
-  severityMapping: [],
-  query: 'user.name: root or user.name: admin',
-  language: 'kuery',
-  license: 'Elastic License',
-  outputIndex: '.siem-signals',
-  references: ['http://google.com'],
-  riskScore: riskScore ? riskScore : 50,
-  riskScoreMapping: [],
-  ruleNameOverride: undefined,
-  maxSignals: maxSignals ? maxSignals : 10000,
-  note: '',
-  anomalyThreshold: undefined,
-  machineLearningJobId: undefined,
-  filters: undefined,
-  savedId: undefined,
-  threshold: undefined,
-  timelineId: undefined,
-  timelineTitle: undefined,
-  timestampOverride: undefined,
-  meta: undefined,
-  threat: undefined,
-  version: 1,
-  exceptionsList: getListArrayMock(),
-});
+export const sampleRuleSO = <T extends RuleParams>(params: T): SavedObject<AlertAttributes<T>> => {
+  return {
+    id: '04128c15-0d1b-4716-a4c5-46997ac7f3bd',
+    type: 'alert',
+    version: '1',
+    updated_at: '2020-03-27T22:55:59.577Z',
+    attributes: {
+      actions: [],
+      enabled: true,
+      name: 'rule-name',
+      tags: ['some fake tag 1', 'some fake tag 2'],
+      createdBy: 'sample user',
+      createdAt: '2020-03-27T22:55:59.577Z',
+      updatedBy: 'sample user',
+      schedule: {
+        interval: '5m',
+      },
+      throttle: 'no_actions',
+      params,
+    },
+    references: [],
+  };
+};
+
+export const expectedRule = (): RulesSchema => {
+  return {
+    actions: [],
+    author: ['Elastic'],
+    building_block_type: 'default',
+    id: '04128c15-0d1b-4716-a4c5-46997ac7f3bd',
+    rule_id: 'rule-1',
+    false_positives: [],
+    max_signals: 10000,
+    risk_score: 50,
+    risk_score_mapping: [],
+    output_index: '.siem-signals',
+    description: 'Detecting root and admin users',
+    from: 'now-6m',
+    filters: [
+      {
+        query: {
+          match_phrase: {
+            'host.name': 'some-host',
+          },
+        },
+      },
+    ],
+    immutable: false,
+    index: ['auditbeat-*', 'filebeat-*', 'packetbeat-*', 'winlogbeat-*'],
+    interval: '5m',
+    language: 'kuery',
+    license: 'Elastic License',
+    meta: {
+      someMeta: 'someField',
+    },
+    name: 'rule-name',
+    query: 'user.name: root or user.name: admin',
+    references: ['http://example.com', 'https://example.com'],
+    severity: 'high',
+    severity_mapping: [],
+    tags: ['some fake tag 1', 'some fake tag 2'],
+    threat: getThreatMock(),
+    type: 'query',
+    to: 'now',
+    note: '# Investigative notes',
+    enabled: true,
+    created_by: 'sample user',
+    updated_by: 'sample user',
+    version: 1,
+    updated_at: '2020-03-27T22:55:59.577Z',
+    created_at: '2020-03-27T22:55:59.577Z',
+    throttle: 'no_actions',
+    timeline_id: 'some-timeline-id',
+    timeline_title: 'some-timeline-title',
+    exceptions_list: getListArrayMock(),
+  };
+};
 
 export const sampleDocNoSortIdNoVersion = (someUuid: string = sampleIdGuid): SignalSourceHit => ({
   _index: 'myFakeSignalIndex',
@@ -69,8 +115,9 @@ export const sampleDocNoSortIdNoVersion = (someUuid: string = sampleIdGuid): Sig
 
 export const sampleDocWithSortId = (
   someUuid: string = sampleIdGuid,
-  ip?: string,
-  destIp?: string
+  sortIds: string[] = ['1234567891111', '2233447556677'],
+  ip?: string | string[],
+  destIp?: string | string[]
 ): SignalSourceHit => ({
   _index: 'myFakeSignalIndex',
   _type: 'doc',
@@ -87,7 +134,13 @@ export const sampleDocWithSortId = (
       ip: destIp ?? '127.0.0.1',
     },
   },
-  sort: ['1234567891111'],
+  fields: {
+    someKey: ['someValue'],
+    '@timestamp': ['2020-04-20T21:27:45+0000'],
+    'source.ip': ip ? (Array.isArray(ip) ? ip : [ip]) : ['127.0.0.1'],
+    'destination.ip': destIp ? (Array.isArray(destIp) ? destIp : [destIp]) : ['127.0.0.1'],
+  },
+  sort: sortIds,
 });
 
 export const sampleDocNoSortId = (
@@ -106,12 +159,33 @@ export const sampleDocNoSortId = (
       ip: ip ?? '127.0.0.1',
     },
   },
+  fields: {
+    someKey: ['someValue'],
+    '@timestamp': ['2020-04-20T21:27:45+0000'],
+    'source.ip': [ip ?? '127.0.0.1'],
+  },
   sort: [],
 });
 
-export const sampleDocSeverity = (
-  severity?: Array<string | number | null> | string | number | null
-): SignalSourceHit => ({
+export const sampleDocSeverity = (severity?: unknown, fieldName?: string): SignalSourceHit => {
+  const doc = {
+    _index: 'myFakeSignalIndex',
+    _type: 'doc',
+    _score: 100,
+    _version: 1,
+    _id: sampleIdGuid,
+    _source: {
+      someKey: 'someValue',
+      '@timestamp': '2020-04-20T21:27:45+0000',
+    },
+    sort: [],
+  };
+
+  set(doc._source, fieldName ?? 'event.severity', severity);
+  return doc;
+};
+
+export const sampleDocRiskScore = (riskScore?: unknown): SignalSourceHit => ({
   _index: 'myFakeSignalIndex',
   _type: 'doc',
   _score: 100,
@@ -121,7 +195,7 @@ export const sampleDocSeverity = (
     someKey: 'someValue',
     '@timestamp': '2020-04-20T21:27:45+0000',
     event: {
-      severity: severity ?? 100,
+      risk: riskScore,
     },
   },
   sort: [],
@@ -143,27 +217,39 @@ export const sampleEmptyDocSearchResults = (): SignalSearchResponse => ({
   },
 });
 
+export const sampleWrappedSignalHit = (): WrappedSignalHit => {
+  return {
+    _index: 'myFakeSignalIndex',
+    _id: sampleIdGuid,
+    _source: sampleSignalHit(),
+  };
+};
+
 export const sampleDocWithAncestors = (): SignalSearchResponse => {
   const sampleDoc = sampleDocNoSortId();
   delete sampleDoc.sort;
+  // @ts-expect-error @elastic/elasticsearch _source is optional
   delete sampleDoc._source.source;
+  // @ts-expect-error @elastic/elasticsearch _source is optional
   sampleDoc._source.signal = {
     parent: {
-      rule: '04128c15-0d1b-4716-a4c5-46997ac7f3bd',
       id: 'd5e8eb51-a6a0-456d-8a15-4b79bfec3d71',
       type: 'event',
       index: 'myFakeSignalIndex',
-      depth: 1,
+      depth: 0,
     },
     ancestors: [
       {
-        rule: '04128c15-0d1b-4716-a4c5-46997ac7f3bd',
         id: 'd5e8eb51-a6a0-456d-8a15-4b79bfec3d71',
         type: 'event',
         index: 'myFakeSignalIndex',
-        depth: 1,
+        depth: 0,
       },
     ],
+    rule: {
+      id: '04128c15-0d1b-4716-a4c5-46997ac7f3bd',
+    },
+    depth: 1,
   };
 
   return {
@@ -180,6 +266,221 @@ export const sampleDocWithAncestors = (): SignalSearchResponse => {
       max_score: 100,
       hits: [sampleDoc],
     },
+  };
+};
+
+export const sampleSignalHit = (): SignalHit => ({
+  '@timestamp': '2020-04-20T21:27:45+0000',
+  event: {
+    kind: 'signal',
+  },
+  signal: {
+    parents: [
+      {
+        id: 'd5e8eb51-a6a0-456d-8a15-4b79bfec3d71',
+        type: 'event',
+        index: 'myFakeSignalIndex',
+        depth: 0,
+      },
+      {
+        id: '730ddf9e-5a00-4f85-9ddf-5878ca511a87',
+        type: 'event',
+        index: 'myFakeSignalIndex',
+        depth: 0,
+      },
+    ],
+    ancestors: [
+      {
+        id: 'd5e8eb51-a6a0-456d-8a15-4b79bfec3d71',
+        type: 'event',
+        index: 'myFakeSignalIndex',
+        depth: 0,
+      },
+      {
+        id: '730ddf9e-5a00-4f85-9ddf-5878ca511a87',
+        type: 'event',
+        index: 'myFakeSignalIndex',
+        depth: 0,
+      },
+    ],
+    status: 'open',
+    rule: {
+      author: [],
+      id: '7a7065d7-6e8b-4aae-8d20-c93613dec9f9',
+      created_at: '2020-04-20T21:27:45+0000',
+      updated_at: '2020-04-20T21:27:45+0000',
+      created_by: 'elastic',
+      description: 'some description',
+      enabled: true,
+      false_positives: ['false positive 1', 'false positive 2'],
+      from: 'now-6m',
+      immutable: false,
+      name: 'Query with a rule id',
+      query: 'user.name: root or user.name: admin',
+      references: ['test 1', 'test 2'],
+      severity: 'high',
+      severity_mapping: [],
+      updated_by: 'elastic_kibana',
+      tags: ['some fake tag 1', 'some fake tag 2'],
+      to: 'now',
+      type: 'query',
+      threat: [],
+      version: 1,
+      status: 'succeeded',
+      status_date: '2020-02-22T16:47:50.047Z',
+      last_success_at: '2020-02-22T16:47:50.047Z',
+      last_success_message: 'succeeded',
+      output_index: '.siem-signals-default',
+      max_signals: 100,
+      risk_score: 55,
+      risk_score_mapping: [],
+      language: 'kuery',
+      rule_id: 'query-rule-id',
+      interval: '5m',
+      exceptions_list: getListArrayMock(),
+    },
+    depth: 1,
+  },
+});
+
+export const sampleThresholdSignalHit = (): SignalHit => ({
+  '@timestamp': '2020-04-20T21:27:45+0000',
+  event: {
+    kind: 'signal',
+  },
+  signal: {
+    parents: [],
+    ancestors: [],
+    original_time: '2021-02-16T17:37:34.275Z',
+    status: 'open',
+    threshold_result: {
+      count: 72,
+      terms: [{ field: 'host.name', value: 'a hostname' }],
+      cardinality: [{ field: 'process.name', value: 6 }],
+      from: '2021-02-16T17:31:34.275Z',
+    },
+    rule: {
+      author: [],
+      id: '7a7065d7-6e8b-4aae-8d20-c93613dec9f9',
+      created_at: '2020-04-20T21:27:45+0000',
+      updated_at: '2020-04-20T21:27:45+0000',
+      created_by: 'elastic',
+      description: 'some description',
+      enabled: true,
+      false_positives: ['false positive 1', 'false positive 2'],
+      from: 'now-6m',
+      immutable: false,
+      name: 'Query with a rule id',
+      query: 'user.name: root or user.name: admin',
+      references: ['test 1', 'test 2'],
+      severity: 'high',
+      severity_mapping: [],
+      threshold: {
+        field: ['host.name'],
+        value: 5,
+        cardinality: [
+          {
+            field: 'process.name',
+            value: 2,
+          },
+        ],
+      },
+      updated_by: 'elastic_kibana',
+      tags: ['some fake tag 1', 'some fake tag 2'],
+      to: 'now',
+      type: 'query',
+      threat: [],
+      version: 1,
+      status: 'succeeded',
+      status_date: '2020-02-22T16:47:50.047Z',
+      last_success_at: '2020-02-22T16:47:50.047Z',
+      last_success_message: 'succeeded',
+      output_index: '.siem-signals-default',
+      max_signals: 100,
+      risk_score: 55,
+      risk_score_mapping: [],
+      language: 'kuery',
+      rule_id: 'query-rule-id',
+      interval: '5m',
+      exceptions_list: getListArrayMock(),
+    },
+    depth: 1,
+  },
+});
+
+const sampleThresholdHit = sampleThresholdSignalHit();
+export const sampleLegacyThresholdSignalHit = (): unknown => ({
+  ...sampleThresholdHit,
+  signal: {
+    ...sampleThresholdHit.signal,
+    rule: {
+      ...sampleThresholdHit.signal.rule,
+      threshold: {
+        field: 'host.name',
+        value: 5,
+      },
+    },
+    threshold_result: {
+      count: 72,
+      value: 'a hostname',
+    },
+  },
+});
+
+export const sampleThresholdSignalHitWithMitigatedDupes = (): unknown => ({
+  ...sampleThresholdHit,
+  signal: {
+    ...sampleThresholdHit.signal,
+    threshold_result: {
+      ...sampleThresholdHit.signal.threshold_result,
+      from: '2021-02-16T17:34:34.275Z',
+    },
+  },
+});
+
+export const sampleThresholdSignalHitWithEverything = (): unknown => ({
+  ...sampleThresholdHit,
+  signal: {
+    ...sampleThresholdHit.signal,
+    rule: {
+      ...sampleThresholdHit.signal.rule,
+      threshold: {
+        field: ['host.name', 'event.category', 'source.ip'],
+        value: 5,
+        cardinality: [
+          {
+            field: 'process.name',
+            value: 2,
+          },
+        ],
+      },
+    },
+    threshold_result: {
+      count: 22,
+      terms: [
+        { field: 'host.name', value: 'a hostname' },
+        { field: 'event.category', value: 'network' },
+        { field: 'source.ip', value: '192.168.0.1' },
+      ],
+      cardinality: [{ field: 'process.name', value: 3 }],
+      from: '2021-02-16T17:34:34.275Z',
+    },
+  },
+});
+
+export const sampleWrappedThresholdSignalHit = (): WrappedSignalHit => {
+  return {
+    _index: 'myFakeSignalIndex',
+    _id: sampleIdGuid,
+    _source: sampleThresholdSignalHit(),
+  };
+};
+
+export const sampleWrappedLegacyThresholdSignalHit = (): WrappedSignalHit => {
+  return {
+    _index: 'myFakeSignalIndex',
+    _id: 'adb9d636-fbbe-4962-ac1c-e282f3ec5879',
+    _source: sampleLegacyThresholdSignalHit() as SignalHit,
   };
 };
 
@@ -329,9 +630,10 @@ export const repeatedSearchResultsWithSortId = (
   total: number,
   pageSize: number,
   guids: string[],
-  ips?: string[],
-  destIps?: string[]
-) => ({
+  ips?: Array<string | string[]>,
+  destIps?: Array<string | string[]>,
+  sortIds?: string[]
+): SignalSearchResponse => ({
   took: 10,
   timed_out: false,
   _shards: {
@@ -346,6 +648,7 @@ export const repeatedSearchResultsWithSortId = (
     hits: Array.from({ length: pageSize }).map((x, index) => ({
       ...sampleDocWithSortId(
         guids[index],
+        sortIds,
         ips ? ips[index] : '127.0.0.1',
         destIps ? destIps[index] : '127.0.0.1'
       ),
@@ -358,7 +661,7 @@ export const repeatedSearchResultsWithNoSortId = (
   pageSize: number,
   guids: string[],
   ips?: string[]
-) => ({
+): SignalSearchResponse => ({
   took: 10,
   timed_out: false,
   _shards: {
@@ -401,7 +704,7 @@ export const sampleDocSearchResultsWithSortId = (
 export const sampleRuleGuid = '04128c15-0d1b-4716-a4c5-46997ac7f3bd';
 export const sampleIdGuid = 'e1e08ddc-5e37-49ff-a258-5393aa44435a';
 
-export const exampleRuleStatus: () => SavedObject<IRuleStatusAttributes> = () => ({
+export const exampleRuleStatus: () => SavedObject<IRuleStatusSOAttributes> = () => ({
   type: ruleStatusSavedObjectType,
   id: '042e6d90-7069-11ea-af8b-0f8ae4fa817e',
   attributes: {
@@ -423,15 +726,17 @@ export const exampleRuleStatus: () => SavedObject<IRuleStatusAttributes> = () =>
 });
 
 export const exampleFindRuleStatusResponse: (
-  mockStatuses: Array<SavedObject<IRuleStatusAttributes>>
-) => SavedObjectsFindResponse<IRuleStatusAttributes> = (mockStatuses = [exampleRuleStatus()]) => ({
+  mockStatuses: Array<SavedObject<IRuleStatusSOAttributes>>
+) => SavedObjectsFindResponse<IRuleStatusSOAttributes> = (
+  mockStatuses = [exampleRuleStatus()]
+) => ({
   total: 1,
   per_page: 6,
   page: 1,
   saved_objects: mockStatuses.map((obj) => ({ ...obj, score: 1 })),
 });
 
-export const mockLogger: Logger = loggingSystemMock.createLogger();
+export const mockLogger = loggingSystemMock.createLogger();
 
 export const sampleBulkErrorItem = (
   {

@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { useState, Fragment } from 'react';
@@ -17,7 +18,7 @@ import {
 
 import { REPOSITORY_TYPES } from '../../../../../../common';
 import { Repository, RepositoryType } from '../../../../../../common/types';
-import { Error, SendRequestResponse } from '../../../../../shared_imports';
+import { UseRequestResponse } from '../../../../../shared_imports';
 import { RepositoryDeleteProvider } from '../../../../components';
 import { UIM_REPOSITORY_SHOW_DETAILS_CLICK } from '../../../../constants';
 import { useServices } from '../../../../app_context';
@@ -29,7 +30,7 @@ import { reactRouterNavigate } from '../../../../../../../../../src/plugins/kiba
 interface Props {
   repositories: Repository[];
   managedRepository?: string;
-  reload: () => Promise<SendRequestResponse<any, Error>>;
+  reload: UseRequestResponse['resendRequest'];
   openRepositoryDetailsUrl: (name: Repository['name']) => string;
   onRepositoryDeleted: (repositoriesDeleted: Array<Repository['name']>) => void;
 }
@@ -249,14 +250,18 @@ export const RepositoryTable: React.FunctionComponent<Props> = ({
       </EuiButton>,
       <EuiButton
         key="registerRepo"
-        {...reactRouterNavigate(history, linkToAddRepository(name))}
+        {...reactRouterNavigate(
+          history,
+          // @ts-expect-error
+          linkToAddRepository(name)
+        )}
         fill
         iconType="plusInCircle"
         data-test-subj="registerRepositoryButton"
       >
         <FormattedMessage
           id="xpack.snapshotRestore.repositoryList.addRepositoryButtonLabel"
-          defaultMessage="Register a repository"
+          defaultMessage="Register repository"
         />
       </EuiButton>,
     ],

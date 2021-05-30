@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { ActionCreator } from 'typescript-fsa';
@@ -58,6 +59,7 @@ export type HostDetailsNavTab = Record<KeyHostDetailsNavTab, NavTab>;
 export type HostDetailsTabsProps = HostBodyComponentDispatchProps &
   HostsQueryProps & {
     docValueFields?: DocValueFields[];
+    indexNames: string[];
     pageFilters?: Filter[];
     filterQuery: string;
     indexPattern: IIndexPattern;

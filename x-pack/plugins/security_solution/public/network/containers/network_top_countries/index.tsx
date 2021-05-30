@@ -1,164 +1,226 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { getOr } from 'lodash/fp';
-import React from 'react';
-import { Query } from 'react-apollo';
-import { connect } from 'react-redux';
-import { compose } from 'redux';
+import { noop } from 'lodash/fp';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import deepEqual from 'fast-deep-equal';
+import { Subscription } from 'rxjs';
 
-import { DEFAULT_INDEX_KEY } from '../../../../common/constants';
+import { ESTermQuery } from '../../../../common/typed_json';
+import { inputsModel } from '../../../common/store';
+import { useDeepEqualSelector } from '../../../common/hooks/use_selector';
+import { useKibana } from '../../../common/lib/kibana';
+import { createFilter } from '../../../common/containers/helpers';
+import { generateTablePaginationOptions } from '../../../common/components/paginated_table/helpers';
+import { networkModel, networkSelectors } from '../../store';
 import {
   FlowTargetSourceDest,
-  GetNetworkTopCountriesQuery,
+  NetworkQueries,
   NetworkTopCountriesEdges,
-  NetworkTopTablesSortField,
+  NetworkTopCountriesRequestOptions,
+  NetworkTopCountriesStrategyResponse,
   PageInfoPaginated,
-} from '../../../graphql/types';
-import { inputsModel, inputsSelectors, State } from '../../../common/store';
-import { withKibana, WithKibanaProps } from '../../../common/lib/kibana';
-import { generateTablePaginationOptions } from '../../../common/components/paginated_table/helpers';
-import { createFilter, getDefaultFetchPolicy } from '../../../common/containers/helpers';
-import {
-  QueryTemplatePaginated,
-  QueryTemplatePaginatedProps,
-} from '../../../common/containers/query_template_paginated';
-import { networkTopCountriesQuery } from './index.gql_query';
-import { networkModel, networkSelectors } from '../../store';
+} from '../../../../common/search_strategy';
+import { isCompleteResponse, isErrorResponse } from '../../../../../../../src/plugins/data/common';
+import { getInspectResponse } from '../../../helpers';
+import { InspectResponse } from '../../../types';
+import * as i18n from './translations';
+import { useTransforms } from '../../../transforms/containers/use_transforms';
+import { useAppToasts } from '../../../common/hooks/use_app_toasts';
 
 const ID = 'networkTopCountriesQuery';
 
 export interface NetworkTopCountriesArgs {
   id: string;
-  ip?: string;
-  inspect: inputsModel.InspectQuery;
+  inspect: InspectResponse;
   isInspected: boolean;
-  loading: boolean;
   loadPage: (newActivePage: number) => void;
-  networkTopCountries: NetworkTopCountriesEdges[];
   pageInfo: PageInfoPaginated;
   refetch: inputsModel.Refetch;
+  networkTopCountries: NetworkTopCountriesEdges[];
   totalCount: number;
 }
 
-export interface OwnProps extends QueryTemplatePaginatedProps {
-  children: (args: NetworkTopCountriesArgs) => React.ReactNode;
+interface UseNetworkTopCountries {
   flowTarget: FlowTargetSourceDest;
   ip?: string;
+  indexNames: string[];
   type: networkModel.NetworkType;
+  filterQuery?: ESTermQuery | string;
+  endDate: string;
+  startDate: string;
+  skip: boolean;
 }
 
-export interface NetworkTopCountriesComponentReduxProps {
-  activePage: number;
-  isInspected: boolean;
-  limit: number;
-  sort: NetworkTopTablesSortField;
-}
+export const useNetworkTopCountries = ({
+  endDate,
+  filterQuery,
+  flowTarget,
+  indexNames,
+  ip,
+  skip,
+  startDate,
+  type,
+}: UseNetworkTopCountries): [boolean, NetworkTopCountriesArgs] => {
+  const getTopCountriesSelector = useMemo(() => networkSelectors.topCountriesSelector(), []);
+  const { activePage, limit, sort } = useDeepEqualSelector((state) =>
+    getTopCountriesSelector(state, type, flowTarget)
+  );
+  const { data } = useKibana().services;
+  const refetch = useRef<inputsModel.Refetch>(noop);
+  const abortCtrl = useRef(new AbortController());
+  const searchSubscription$ = useRef(new Subscription());
+  const [loading, setLoading] = useState(false);
+  const queryId = useMemo(() => `${ID}-${flowTarget}`, [flowTarget]);
+  const { getTransformChangesIfTheyExist } = useTransforms();
 
-type NetworkTopCountriesProps = OwnProps & NetworkTopCountriesComponentReduxProps & WithKibanaProps;
+  const [
+    networkTopCountriesRequest,
+    setHostRequest,
+  ] = useState<NetworkTopCountriesRequestOptions | null>(null);
 
-class NetworkTopCountriesComponentQuery extends QueryTemplatePaginated<
-  NetworkTopCountriesProps,
-  GetNetworkTopCountriesQuery.Query,
-  GetNetworkTopCountriesQuery.Variables
-> {
-  public render() {
-    const {
-      activePage,
-      children,
-      endDate,
-      flowTarget,
-      filterQuery,
-      kibana,
-      id = `${ID}-${flowTarget}`,
-      ip,
-      isInspected,
-      limit,
-      skip,
-      sourceId,
-      startDate,
-      sort,
-    } = this.props;
-    const variables: GetNetworkTopCountriesQuery.Variables = {
-      defaultIndex: kibana.services.uiSettings.get<string[]>(DEFAULT_INDEX_KEY),
-      filterQuery: createFilter(filterQuery),
-      flowTarget,
-      inspect: isInspected,
-      ip,
-      pagination: generateTablePaginationOptions(activePage, limit),
-      sort,
-      sourceId,
-      timerange: {
-        interval: '12h',
-        from: startDate!,
-        to: endDate!,
-      },
-    };
-    return (
-      <Query<GetNetworkTopCountriesQuery.Query, GetNetworkTopCountriesQuery.Variables>
-        fetchPolicy={getDefaultFetchPolicy()}
-        notifyOnNetworkStatusChange
-        query={networkTopCountriesQuery}
-        skip={skip}
-        variables={variables}
-      >
-        {({ data, loading, fetchMore, networkStatus, refetch }) => {
-          const networkTopCountries = getOr([], `source.NetworkTopCountries.edges`, data);
-          this.setFetchMore(fetchMore);
-          this.setFetchMoreOptions((newActivePage: number) => ({
-            variables: {
-              pagination: generateTablePaginationOptions(newActivePage, limit),
-            },
-            updateQuery: (prev, { fetchMoreResult }) => {
-              if (!fetchMoreResult) {
-                return prev;
+  const wrappedLoadMore = useCallback(
+    (newActivePage: number) => {
+      setHostRequest((prevRequest) => {
+        if (!prevRequest) {
+          return prevRequest;
+        }
+
+        return {
+          ...prevRequest,
+          pagination: generateTablePaginationOptions(newActivePage, limit),
+        };
+      });
+    },
+    [limit]
+  );
+  const { addError, addWarning } = useAppToasts();
+
+  const [
+    networkTopCountriesResponse,
+    setNetworkTopCountriesResponse,
+  ] = useState<NetworkTopCountriesArgs>({
+    networkTopCountries: [],
+    id: queryId,
+    inspect: {
+      dsl: [],
+      response: [],
+    },
+    isInspected: false,
+    loadPage: wrappedLoadMore,
+    pageInfo: {
+      activePage: 0,
+      fakeTotalCount: 0,
+      showMorePagesIndicator: false,
+    },
+    refetch: refetch.current,
+    totalCount: -1,
+  });
+
+  const networkTopCountriesSearch = useCallback(
+    (request: NetworkTopCountriesRequestOptions | null) => {
+      if (request == null || skip) {
+        return;
+      }
+
+      const asyncSearch = async () => {
+        abortCtrl.current = new AbortController();
+        setLoading(true);
+
+        searchSubscription$.current = data.search
+          .search<NetworkTopCountriesRequestOptions, NetworkTopCountriesStrategyResponse>(request, {
+            strategy: 'securitySolutionSearchStrategy',
+            abortSignal: abortCtrl.current.signal,
+          })
+          .subscribe({
+            next: (response) => {
+              if (isCompleteResponse(response)) {
+                setLoading(false);
+                setNetworkTopCountriesResponse((prevResponse) => ({
+                  ...prevResponse,
+                  networkTopCountries: response.edges,
+                  inspect: getInspectResponse(response, prevResponse.inspect),
+                  pageInfo: response.pageInfo,
+                  refetch: refetch.current,
+                  totalCount: response.totalCount,
+                }));
+                searchSubscription$.current.unsubscribe();
+              } else if (isErrorResponse(response)) {
+                setLoading(false);
+                addWarning(i18n.ERROR_NETWORK_TOP_COUNTRIES);
+                searchSubscription$.current.unsubscribe();
               }
-              return {
-                ...fetchMoreResult,
-                source: {
-                  ...fetchMoreResult.source,
-                  NetworkTopCountries: {
-                    ...fetchMoreResult.source.NetworkTopCountries,
-                    edges: [...fetchMoreResult.source.NetworkTopCountries.edges],
-                  },
-                },
-              };
             },
-          }));
-          const isLoading = this.isItAValidLoading(loading, variables, networkStatus);
-          return children({
-            id,
-            inspect: getOr(null, 'source.NetworkTopCountries.inspect', data),
-            isInspected,
-            loading: isLoading,
-            loadPage: this.wrappedLoadMore,
-            networkTopCountries,
-            pageInfo: getOr({}, 'source.NetworkTopCountries.pageInfo', data),
-            refetch: this.memoizedRefetchQuery(variables, limit, refetch),
-            totalCount: getOr(-1, 'source.NetworkTopCountries.totalCount', data),
+            error: (msg) => {
+              setLoading(false);
+              addError(msg, {
+                title: i18n.FAIL_NETWORK_TOP_COUNTRIES,
+              });
+              searchSubscription$.current.unsubscribe();
+            },
           });
-        }}
-      </Query>
-    );
-  }
-}
+      };
+      searchSubscription$.current.unsubscribe();
+      abortCtrl.current.abort();
+      asyncSearch();
+      refetch.current = asyncSearch;
+    },
+    [data.search, addWarning, addError, skip]
+  );
 
-const makeMapStateToProps = () => {
-  const getTopCountriesSelector = networkSelectors.topCountriesSelector();
-  const getQuery = inputsSelectors.globalQueryByIdSelector();
-  return (state: State, { flowTarget, id = `${ID}-${flowTarget}`, type }: OwnProps) => {
-    const { isInspected } = getQuery(state, id);
-    return {
-      ...getTopCountriesSelector(state, type, flowTarget),
-      isInspected,
+  useEffect(() => {
+    setHostRequest((prevRequest) => {
+      const { indices, factoryQueryType, timerange } = getTransformChangesIfTheyExist({
+        factoryQueryType: NetworkQueries.topCountries,
+        indices: indexNames,
+        filterQuery,
+        timerange: {
+          interval: '12h',
+          from: startDate,
+          to: endDate,
+        },
+      });
+
+      const myRequest = {
+        ...(prevRequest ?? {}),
+        defaultIndex: indices,
+        factoryQueryType,
+        filterQuery: createFilter(filterQuery),
+        flowTarget,
+        ip,
+        pagination: generateTablePaginationOptions(activePage, limit),
+        sort,
+        timerange,
+      };
+      if (!deepEqual(prevRequest, myRequest)) {
+        return myRequest;
+      }
+      return prevRequest;
+    });
+  }, [
+    activePage,
+    indexNames,
+    endDate,
+    filterQuery,
+    ip,
+    limit,
+    startDate,
+    sort,
+    flowTarget,
+    getTransformChangesIfTheyExist,
+  ]);
+
+  useEffect(() => {
+    networkTopCountriesSearch(networkTopCountriesRequest);
+    return () => {
+      searchSubscription$.current.unsubscribe();
+      abortCtrl.current.abort();
     };
-  };
-};
+  }, [networkTopCountriesRequest, networkTopCountriesSearch]);
 
-export const NetworkTopCountriesQuery = compose<React.ComponentClass<OwnProps>>(
-  connect(makeMapStateToProps),
-  withKibana
-)(NetworkTopCountriesComponentQuery);
+  return [loading, networkTopCountriesResponse];
+};

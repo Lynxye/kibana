@@ -1,33 +1,25 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
-import { mockPackage } from './plugins_discovery.test.mocks';
+// must be before mocks imports to avoid conflicting with `REPO_ROOT` accessor.
+import { REPO_ROOT } from '@kbn/dev-utils';
+import { mockPackage, scanPluginSearchPathsMock } from './plugins_discovery.test.mocks';
 import mockFs from 'mock-fs';
 import { loggingSystemMock } from '../../logging/logging_system.mock';
+import { getEnvOptions, rawConfigServiceMock } from '../../config/mocks';
 
+import { from } from 'rxjs';
 import { first, map, toArray } from 'rxjs/operators';
 import { resolve } from 'path';
 import { ConfigService, Env } from '../../config';
-import { getEnvOptions } from '../../config/__mocks__/env';
 import { PluginsConfig, PluginsConfigType, config } from '../plugins_config';
+import type { InstanceInfo } from '../plugin_context';
 import { discover } from './plugins_discovery';
-import { rawConfigServiceMock } from '../../config/raw_config_service.mock';
 import { CoreContext } from '../../core_context';
 
 const KIBANA_ROOT = process.cwd();
@@ -77,6 +69,7 @@ const manifestPath = (...pluginPath: string[]) =>
 
 describe('plugins discovery system', () => {
   let logger: ReturnType<typeof loggingSystemMock.create>;
+  let instanceInfo: InstanceInfo;
   let env: Env;
   let configService: ConfigService;
   let pluginConfig: PluginsConfigType;
@@ -87,7 +80,12 @@ describe('plugins discovery system', () => {
 
     mockPackage.raw = packageMock;
 
+    instanceInfo = {
+      uuid: 'instance-uuid',
+    };
+
     env = Env.createDefault(
+      REPO_ROOT,
       getEnvOptions({
         cliArgs: { envName: 'development' },
       })
@@ -127,7 +125,7 @@ describe('plugins discovery system', () => {
   });
 
   it('discovers plugins in the search locations', async () => {
-    const { plugin$ } = discover(new PluginsConfig(pluginConfig, env), coreContext);
+    const { plugin$ } = discover(new PluginsConfig(pluginConfig, env), coreContext, instanceInfo);
 
     mockFs(
       {
@@ -146,7 +144,11 @@ describe('plugins discovery system', () => {
   });
 
   it('return errors when the manifest is invalid or incompatible', async () => {
-    const { plugin$, error$ } = discover(new PluginsConfig(pluginConfig, env), coreContext);
+    const { plugin$, error$ } = discover(
+      new PluginsConfig(pluginConfig, env),
+      coreContext,
+      instanceInfo
+    );
 
     mockFs(
       {
@@ -184,7 +186,11 @@ describe('plugins discovery system', () => {
   });
 
   it('return errors when the plugin search path is not accessible', async () => {
-    const { plugin$, error$ } = discover(new PluginsConfig(pluginConfig, env), coreContext);
+    const { plugin$, error$ } = discover(
+      new PluginsConfig(pluginConfig, env),
+      coreContext,
+      instanceInfo
+    );
 
     mockFs(
       {
@@ -219,7 +225,11 @@ describe('plugins discovery system', () => {
   });
 
   it('return an error when the manifest file is not accessible', async () => {
-    const { plugin$, error$ } = discover(new PluginsConfig(pluginConfig, env), coreContext);
+    const { plugin$, error$ } = discover(
+      new PluginsConfig(pluginConfig, env),
+      coreContext,
+      instanceInfo
+    );
 
     mockFs(
       {
@@ -250,7 +260,11 @@ describe('plugins discovery system', () => {
   });
 
   it('discovers plugins in nested directories', async () => {
-    const { plugin$, error$ } = discover(new PluginsConfig(pluginConfig, env), coreContext);
+    const { plugin$, error$ } = discover(
+      new PluginsConfig(pluginConfig, env),
+      coreContext,
+      instanceInfo
+    );
 
     mockFs(
       {
@@ -287,7 +301,7 @@ describe('plugins discovery system', () => {
   });
 
   it('does not discover plugins nested inside another plugin', async () => {
-    const { plugin$ } = discover(new PluginsConfig(pluginConfig, env), coreContext);
+    const { plugin$ } = discover(new PluginsConfig(pluginConfig, env), coreContext, instanceInfo);
 
     mockFs(
       {
@@ -306,7 +320,7 @@ describe('plugins discovery system', () => {
   });
 
   it('stops scanning when reaching `maxDepth`', async () => {
-    const { plugin$ } = discover(new PluginsConfig(pluginConfig, env), coreContext);
+    const { plugin$ } = discover(new PluginsConfig(pluginConfig, env), coreContext, instanceInfo);
 
     mockFs(
       {
@@ -332,7 +346,7 @@ describe('plugins discovery system', () => {
   });
 
   it('works with symlinks', async () => {
-    const { plugin$ } = discover(new PluginsConfig(pluginConfig, env), coreContext);
+    const { plugin$ } = discover(new PluginsConfig(pluginConfig, env), coreContext, instanceInfo);
 
     const pluginFolder = resolve(KIBANA_ROOT, '..', 'ext-plugins');
 
@@ -360,17 +374,22 @@ describe('plugins discovery system', () => {
     const extraPluginTestPath = resolve(process.cwd(), 'my-extra-plugin');
 
     env = Env.createDefault(
+      REPO_ROOT,
       getEnvOptions({
         cliArgs: { dev: false, envName: 'development' },
       })
     );
 
-    discover(new PluginsConfig({ ...pluginConfig, paths: [extraPluginTestPath] }, env), {
-      coreId: Symbol(),
-      configService,
-      env,
-      logger,
-    });
+    discover(
+      new PluginsConfig({ ...pluginConfig, paths: [extraPluginTestPath] }, env),
+      {
+        coreId: Symbol(),
+        configService,
+        env,
+        logger,
+      },
+      instanceInfo
+    );
 
     expect(loggingSystemMock.collect(logger).warn).toEqual([
       [
@@ -383,18 +402,77 @@ describe('plugins discovery system', () => {
     const extraPluginTestPath = resolve(process.cwd(), 'my-extra-plugin');
 
     env = Env.createDefault(
+      REPO_ROOT,
       getEnvOptions({
         cliArgs: { dev: false, envName: 'production' },
       })
     );
 
-    discover(new PluginsConfig({ ...pluginConfig, paths: [extraPluginTestPath] }, env), {
-      coreId: Symbol(),
-      configService,
-      env,
-      logger,
-    });
+    discover(
+      new PluginsConfig({ ...pluginConfig, paths: [extraPluginTestPath] }, env),
+      {
+        coreId: Symbol(),
+        configService,
+        env,
+        logger,
+      },
+      instanceInfo
+    );
 
     expect(loggingSystemMock.collect(logger).warn).toEqual([]);
+  });
+
+  describe('discovery order', () => {
+    beforeEach(() => {
+      scanPluginSearchPathsMock.mockClear();
+    });
+
+    it('returns the plugins in a deterministic order', async () => {
+      mockFs(
+        {
+          [`${KIBANA_ROOT}/src/plugins/plugin_a`]: Plugins.valid('pluginA'),
+          [`${KIBANA_ROOT}/plugins/plugin_b`]: Plugins.valid('pluginB'),
+          [`${KIBANA_ROOT}/x-pack/plugins/plugin_c`]: Plugins.valid('pluginC'),
+        },
+        { createCwd: false }
+      );
+
+      scanPluginSearchPathsMock.mockReturnValue(
+        from([
+          `${KIBANA_ROOT}/src/plugins/plugin_a`,
+          `${KIBANA_ROOT}/plugins/plugin_b`,
+          `${KIBANA_ROOT}/x-pack/plugins/plugin_c`,
+        ])
+      );
+
+      let { plugin$ } = discover(new PluginsConfig(pluginConfig, env), coreContext, instanceInfo);
+
+      expect(scanPluginSearchPathsMock).toHaveBeenCalledTimes(1);
+      let plugins = await plugin$.pipe(toArray()).toPromise();
+      let pluginNames = plugins.map((plugin) => plugin.name);
+
+      expect(pluginNames).toHaveLength(3);
+      // order coming from `ROOT/plugin` -> `ROOT/src/plugins` -> // ROOT/x-pack
+      expect(pluginNames).toEqual(['pluginB', 'pluginA', 'pluginC']);
+
+      // second pass
+      scanPluginSearchPathsMock.mockReturnValue(
+        from([
+          `${KIBANA_ROOT}/plugins/plugin_b`,
+          `${KIBANA_ROOT}/x-pack/plugins/plugin_c`,
+          `${KIBANA_ROOT}/src/plugins/plugin_a`,
+        ])
+      );
+
+      plugin$ = discover(new PluginsConfig(pluginConfig, env), coreContext, instanceInfo).plugin$;
+
+      expect(scanPluginSearchPathsMock).toHaveBeenCalledTimes(2);
+      plugins = await plugin$.pipe(toArray()).toPromise();
+      pluginNames = plugins.map((plugin) => plugin.name);
+
+      expect(pluginNames).toHaveLength(3);
+      // order coming from `ROOT/plugin` -> `ROOT/src/plugins` -> // ROOT/x-pack
+      expect(pluginNames).toEqual(['pluginB', 'pluginA', 'pluginC']);
+    });
   });
 });

@@ -1,51 +1,44 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import { i18n } from '@kbn/i18n';
-
-// @ts-ignore
-import { metricsRequestHandler } from './request_handler';
-import { EditorController } from './application';
-// @ts-ignore
-import { PANEL_TYPES } from '../common/panel_types';
-import { VisEditor } from './application/components/vis_editor_lazy';
+import uuid from 'uuid/v4';
+import { TSVB_EDITOR_NAME } from './application/editor_controller';
+import { PANEL_TYPES, TOOLTIP_MODES } from '../common/enums';
+import { isStringTypeIndexPattern } from '../common/index_patterns_utils';
+import { toExpressionAst } from './to_ast';
+import { VIS_EVENT_TO_TRIGGER, VisGroups, VisParams } from '../../visualizations/public';
+import { getDataStart } from './services';
 
 export const metricsVisDefinition = {
   name: 'metrics',
   title: i18n.translate('visTypeTimeseries.kbnVisTypes.metricsTitle', { defaultMessage: 'TSVB' }),
   description: i18n.translate('visTypeTimeseries.kbnVisTypes.metricsDescription', {
-    defaultMessage: 'Build time-series using a visual pipeline interface',
+    defaultMessage: 'Perform advanced analysis of your time series data.',
   }),
   icon: 'visVisualBuilder',
+  group: VisGroups.PROMOTED,
   visConfig: {
     defaults: {
-      id: '61ca57f0-469d-11e7-af02-69e470af7417',
+      id: uuid(),
       type: PANEL_TYPES.TIMESERIES,
       series: [
         {
-          id: '61ca57f1-469d-11e7-af02-69e470af7417',
+          id: uuid(),
           color: '#68BC00',
           split_mode: 'everything',
-          split_color_mode: 'kibana',
+          palette: {
+            type: 'palette',
+            name: 'default',
+          },
           metrics: [
             {
-              id: '61ca57f2-469d-11e7-af02-69e470af7417',
+              id: uuid(),
               type: 'count',
             },
           ],
@@ -61,23 +54,49 @@ export const metricsVisDefinition = {
       ],
       time_field: '',
       index_pattern: '',
+      use_kibana_indexes: true,
       interval: '',
       axis_position: 'left',
       axis_formatter: 'number',
       axis_scale: 'normal',
       show_legend: 1,
       show_grid: 1,
-      tooltip_mode: 'show_all',
+      tooltip_mode: TOOLTIP_MODES.SHOW_ALL,
+      drop_last_bucket: 0,
     },
-    component: VisEditor,
   },
-  editor: EditorController,
+  editorConfig: {
+    editor: TSVB_EDITOR_NAME,
+  },
   options: {
     showQueryBar: false,
     showFilterBar: false,
     showIndexSelection: false,
   },
-  requestHandler: metricsRequestHandler,
+  toExpressionAst,
+  getSupportedTriggers: (params?: VisParams) => {
+    if (params?.type === PANEL_TYPES.TIMESERIES) {
+      return [VIS_EVENT_TO_TRIGGER.filter, VIS_EVENT_TO_TRIGGER.brush];
+    }
+    return [];
+  },
   inspectorAdapters: {},
-  responseHandler: 'none',
+  getUsedIndexPattern: async (params: VisParams) => {
+    const { indexPatterns } = getDataStart();
+    const indexPatternValue = params.index_pattern;
+
+    if (indexPatternValue) {
+      if (isStringTypeIndexPattern(indexPatternValue)) {
+        return await indexPatterns.find(indexPatternValue);
+      }
+
+      if (indexPatternValue.id) {
+        return [await indexPatterns.get(indexPatternValue.id)];
+      }
+    }
+
+    const defaultIndex = await indexPatterns.getDefault();
+
+    return defaultIndex ? [defaultIndex] : [];
+  },
 };

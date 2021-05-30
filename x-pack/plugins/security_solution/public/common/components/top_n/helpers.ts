@@ -1,16 +1,17 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { EventType } from '../../../timelines/store/timeline/model';
+import { TimelineEventsType } from '../../../../common/types/timeline';
 
 import * as i18n from './translations';
 
 export interface TopNOption {
   inputDisplay: string;
-  value: EventType;
+  value: TimelineEventsType;
   'data-test-subj': string;
 }
 
@@ -52,8 +53,8 @@ export const defaultOptions = [...rawEvents, ...alertEvents];
  * is always in sync with the `EventType` chosen by the user in
  * the active timeline.
  */
-export const getOptions = (activeTimelineEventType?: EventType): TopNOption[] => {
-  switch (activeTimelineEventType) {
+export const getOptions = (activeTimelineEventsType?: TimelineEventsType): TopNOption[] => {
+  switch (activeTimelineEventsType) {
     case 'all':
       return allEvents;
     case 'raw':

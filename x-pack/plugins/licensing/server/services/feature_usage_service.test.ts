@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { FeatureUsageService } from './feature_usage_service';
@@ -19,12 +20,22 @@ describe('FeatureUsageService', () => {
 
   describe('#setup', () => {
     describe('#register', () => {
-      it('throws when registering the same feature twice', () => {
+      it('does not throw when registering the same feature twice with the same license', () => {
         const setup = service.setup();
         setup.register('foo', 'basic');
         expect(() => {
           setup.register('foo', 'basic');
-        }).toThrowErrorMatchingInlineSnapshot(`"Feature 'foo' has already been registered."`);
+        }).not.toThrow();
+      });
+
+      it('throws when registering the same feature again with a different license', () => {
+        const setup = service.setup();
+        setup.register('foo', 'basic');
+        expect(() => {
+          setup.register('foo', 'enterprise');
+        }).toThrowErrorMatchingInlineSnapshot(
+          `"Feature 'foo' has already been registered with another license type. (current: basic, new: enterprise)"`
+        );
       });
     });
   });

@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { toExpression } from './map';
@@ -9,6 +10,7 @@ import { MapEmbeddableInput } from '../../../../../../plugins/maps/public/embedd
 import { fromExpression, Ast } from '@kbn/interpreter/common';
 
 const baseSavedMapInput = {
+  attributes: { title: '' },
   id: 'embeddableId',
   filters: [],
   isLayerTOCOpen: false,
@@ -68,5 +70,17 @@ describe('toExpression', () => {
     expect(timerangeExpression.chain[0].function).toBe('timerange');
     expect(timerangeExpression.chain[0].arguments.from[0]).toEqual(input.timeRange?.from);
     expect(timerangeExpression.chain[0].arguments.to[0]).toEqual(input.timeRange?.to);
+  });
+
+  it('includes empty panel title', () => {
+    const input: MapEmbeddableInput = {
+      ...baseSavedMapInput,
+      title: '',
+    };
+
+    const expression = toExpression(input);
+    const ast = fromExpression(expression);
+
+    expect(ast.chain[0].arguments).toHaveProperty('title', [input.title]);
   });
 });

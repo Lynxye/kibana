@@ -1,20 +1,9 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import { i18n } from '@kbn/i18n';
@@ -104,7 +93,27 @@ export function getUiSettings(): Record<string, UiSettingsParams<unknown>> {
       }),
       type: 'json',
       schema: schema.object({
+        default_field: schema.nullable(schema.string()),
+        allow_leading_wildcard: schema.nullable(schema.boolean()),
         analyze_wildcard: schema.boolean(),
+        analyzer: schema.nullable(schema.string()),
+        auto_generate_synonyms_phrase_query: schema.nullable(schema.boolean()),
+        boost: schema.nullable(schema.number()),
+        default_operator: schema.nullable(schema.string()),
+        enable_position_increments: schema.nullable(schema.boolean()),
+        fields: schema.nullable(schema.arrayOf<string>(schema.string())),
+        fuzziness: schema.nullable(schema.string()),
+        fuzzy_max_expansions: schema.nullable(schema.number()),
+        fuzzy_prefix_length: schema.nullable(schema.number()),
+        fuzzy_transpositions: schema.nullable(schema.boolean()),
+        lenient: schema.nullable(schema.boolean()),
+        max_determinized_states: schema.nullable(schema.number()),
+        minimum_should_match: schema.nullable(schema.string()),
+        quote_analyzer: schema.nullable(schema.string()),
+        phrase_slop: schema.nullable(schema.number()),
+        quote_field_suffix: schema.nullable(schema.string()),
+        rewrite: schema.nullable(schema.string()),
+        time_zone: schema.nullable(schema.string()),
       }),
     },
     [UI_SETTINGS.QUERY_ALLOW_LEADING_WILDCARDS]: {
@@ -267,14 +276,13 @@ export function getUiSettings(): Record<string, UiSettingsParams<unknown>> {
     },
     [UI_SETTINGS.COURIER_BATCH_SEARCHES]: {
       name: i18n.translate('data.advancedSettings.courier.batchSearchesTitle', {
-        defaultMessage: 'Batch concurrent searches',
+        defaultMessage: 'Use sync search',
       }),
       value: false,
       type: 'boolean',
       description: i18n.translate('data.advancedSettings.courier.batchSearchesText', {
-        defaultMessage: `When disabled, dashboard panels will load individually, and search requests will terminate when users navigate
-           away or update the query. When enabled, dashboard panels will load together when all of the data is loaded, and
-           searches will not terminate.`,
+        defaultMessage: `Kibana uses a new asynchronous search and infrastructure.
+           Enable this option if you prefer to fallback to the legacy synchronous behavior`,
       }),
       deprecation: {
         message: i18n.translate('data.advancedSettings.courier.batchSearchesTextDeprecation', {
@@ -296,23 +304,29 @@ export function getUiSettings(): Record<string, UiSettingsParams<unknown>> {
     },
     [UI_SETTINGS.HISTOGRAM_BAR_TARGET]: {
       name: i18n.translate('data.advancedSettings.histogram.barTargetTitle', {
-        defaultMessage: 'Target bars',
+        defaultMessage: 'Target buckets',
       }),
       value: 50,
       description: i18n.translate('data.advancedSettings.histogram.barTargetText', {
         defaultMessage:
-          'Attempt to generate around this many bars when using "auto" interval in date histograms',
+          'Attempt to generate around this many buckets when using "auto" interval in date and numeric histograms',
       }),
       schema: schema.number(),
     },
     [UI_SETTINGS.HISTOGRAM_MAX_BARS]: {
       name: i18n.translate('data.advancedSettings.histogram.maxBarsTitle', {
-        defaultMessage: 'Maximum bars',
+        defaultMessage: 'Maximum buckets',
       }),
       value: 100,
       description: i18n.translate('data.advancedSettings.histogram.maxBarsText', {
-        defaultMessage:
-          'Never show more than this many bars in date histograms, scale values if needed',
+        defaultMessage: `
+          Limits the density of date and number histograms across Kibana
+          for better performance using a test query. If the test query would too many buckets,
+          the interval between buckets will be increased. This setting applies separately
+          to each histogram aggregation, and does not apply to other types of aggregation.
+          To find the maximum value of this setting, divide the Elasticsearch 'search.max_buckets'
+          value by the maximum number of aggregations in each visualization.
+        `,
       }),
       schema: schema.number(),
     },
@@ -347,6 +361,7 @@ export function getUiSettings(): Record<string, UiSettingsParams<unknown>> {
   "date_nanos": { "id": "date_nanos", "params": {}, "es": true },
   "number": { "id": "number", "params": {} },
   "boolean": { "id": "boolean", "params": {} },
+  "histogram": { "id": "histogram", "params": {} },
   "_source": { "id": "_source", "params": {} },
   "_default_": { "id": "string", "params": {} }
 }`,
@@ -381,6 +396,10 @@ export function getUiSettings(): Record<string, UiSettingsParams<unknown>> {
           id: schema.string(),
           params: schema.object({}),
         }),
+        histogram: schema.object({
+          id: schema.string(),
+          params: schema.object({}),
+        }),
         _source: schema.object({
           id: schema.string(),
           params: schema.object({}),
@@ -404,7 +423,7 @@ export function getUiSettings(): Record<string, UiSettingsParams<unknown>> {
           'data.advancedSettings.format.numberFormat.numeralFormatLinkText',
         values: {
           numeralFormatLink:
-            '<a href="http://numeraljs.com/" target="_blank" rel="noopener noreferrer">' +
+            '<a href="https://www.elastic.co/guide/en/kibana/current/numeral.html" target="_blank" rel="noopener">' +
             i18n.translate('data.advancedSettings.format.numberFormat.numeralFormatLinkText', {
               defaultMessage: 'numeral format',
             }) +
@@ -426,7 +445,7 @@ export function getUiSettings(): Record<string, UiSettingsParams<unknown>> {
           'data.advancedSettings.format.percentFormat.numeralFormatLinkText',
         values: {
           numeralFormatLink:
-            '<a href="http://numeraljs.com/" target="_blank" rel="noopener noreferrer">' +
+            '<a href="https://www.elastic.co/guide/en/kibana/current/numeral.html" target="_blank" rel="noopener">' +
             i18n.translate('data.advancedSettings.format.percentFormat.numeralFormatLinkText', {
               defaultMessage: 'numeral format',
             }) +
@@ -448,7 +467,7 @@ export function getUiSettings(): Record<string, UiSettingsParams<unknown>> {
           'data.advancedSettings.format.bytesFormat.numeralFormatLinkText',
         values: {
           numeralFormatLink:
-            '<a href="http://numeraljs.com/" target="_blank" rel="noopener noreferrer">' +
+            '<a href="https://www.elastic.co/guide/en/kibana/current/numeral.html" target="_blank" rel="noopener">' +
             i18n.translate('data.advancedSettings.format.bytesFormat.numeralFormatLinkText', {
               defaultMessage: 'numeral format',
             }) +
@@ -470,7 +489,7 @@ export function getUiSettings(): Record<string, UiSettingsParams<unknown>> {
           'data.advancedSettings.format.currencyFormat.numeralFormatLinkText',
         values: {
           numeralFormatLink:
-            '<a href="http://numeraljs.com/" target="_blank" rel="noopener noreferrer">' +
+            '<a href="https://www.elastic.co/guide/en/kibana/current/numeral.html" target="_blank" rel="noopener">' +
             i18n.translate('data.advancedSettings.format.currencyFormat.numeralFormatLinkText', {
               defaultMessage: 'numeral format',
             }) +
@@ -496,7 +515,7 @@ export function getUiSettings(): Record<string, UiSettingsParams<unknown>> {
           'data.advancedSettings.format.formattingLocaleText',
         values: {
           numeralLanguageLink:
-            '<a href="http://numeraljs.com/" target="_blank" rel="noopener noreferrer">' +
+            '<a href="https://www.elastic.co/guide/en/kibana/current/numeral.html" target="_blank" rel="noopener">' +
             i18n.translate(
               'data.advancedSettings.format.formattingLocale.numeralLanguageLinkText',
               {
@@ -586,35 +605,35 @@ export function getUiSettings(): Record<string, UiSettingsParams<unknown>> {
             }),
           },
           {
-            from: 'now-24h',
+            from: 'now-24h/h',
             to: 'now',
             display: i18n.translate('data.advancedSettings.timepicker.last24Hours', {
               defaultMessage: 'Last 24 hours',
             }),
           },
           {
-            from: 'now-7d',
+            from: 'now-7d/d',
             to: 'now',
             display: i18n.translate('data.advancedSettings.timepicker.last7Days', {
               defaultMessage: 'Last 7 days',
             }),
           },
           {
-            from: 'now-30d',
+            from: 'now-30d/d',
             to: 'now',
             display: i18n.translate('data.advancedSettings.timepicker.last30Days', {
               defaultMessage: 'Last 30 days',
             }),
           },
           {
-            from: 'now-90d',
+            from: 'now-90d/d',
             to: 'now',
             display: i18n.translate('data.advancedSettings.timepicker.last90Days', {
               defaultMessage: 'Last 90 days',
             }),
           },
           {
-            from: 'now-1y',
+            from: 'now-1y/d',
             to: 'now',
             display: i18n.translate('data.advancedSettings.timepicker.last1Year', {
               defaultMessage: 'Last 1 year',
@@ -683,6 +702,31 @@ export function getUiSettings(): Record<string, UiSettingsParams<unknown>> {
           'Set this property to false to prevent the filter editor from suggesting values for fields.',
       }),
       schema: schema.boolean(),
+    },
+    [UI_SETTINGS.AUTOCOMPLETE_USE_TIMERANGE]: {
+      name: i18n.translate('data.advancedSettings.autocompleteIgnoreTimerange', {
+        defaultMessage: 'Use time range',
+        description: 'Restrict autocomplete results to the current time range',
+      }),
+      value: true,
+      description: i18n.translate('data.advancedSettings.autocompleteIgnoreTimerangeText', {
+        defaultMessage:
+          'Disable this property to get autocomplete suggestions from your full dataset, rather than from the current time range.',
+      }),
+      schema: schema.boolean(),
+    },
+    [UI_SETTINGS.SEARCH_TIMEOUT]: {
+      name: i18n.translate('data.advancedSettings.searchTimeout', {
+        defaultMessage: 'Search Timeout',
+      }),
+      value: 600000,
+      description: i18n.translate('data.advancedSettings.searchTimeoutDesc', {
+        defaultMessage:
+          'Change the maximum timeout for a search session or set to 0 to disable the timeout and allow queries to run to completion.',
+      }),
+      type: 'number',
+      category: ['search'],
+      schema: schema.number(),
     },
   };
 }

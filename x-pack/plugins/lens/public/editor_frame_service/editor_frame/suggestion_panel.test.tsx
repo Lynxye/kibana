@@ -1,11 +1,12 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React from 'react';
-import { mountWithIntl as mount } from 'test_utils/enzyme_helpers';
+import { mountWithIntl as mount } from '@kbn/test/jest';
 import { Visualization } from '../../types';
 import {
   createMockVisualization,
@@ -20,8 +21,8 @@ import { esFilters, IFieldType, IIndexPattern } from '../../../../../../src/plug
 import { SuggestionPanel, SuggestionPanelProps } from './suggestion_panel';
 import { getSuggestions, Suggestion } from './suggestion_helpers';
 import { EuiIcon, EuiPanel, EuiToolTip } from '@elastic/eui';
-import chartTableSVG from '../../..assets/chart_datatable.svg';
 import { dataPluginMock } from '../../../../../../src/plugins/data/public/mocks';
+import { LensIconChartDatatable } from '../../assets/chart_datatable';
 
 jest.mock('./suggestion_helpers');
 
@@ -98,7 +99,7 @@ describe('suggestion_panel', () => {
         .find('[data-test-subj="lnsSuggestion"]')
         .find(EuiPanel)
         .map((el) => el.parents(EuiToolTip).prop('content'))
-    ).toEqual(['Current', 'Suggestion1', 'Suggestion2']);
+    ).toEqual(['Current visualization', 'Suggestion1', 'Suggestion2']);
   });
 
   describe('uncommitted suggestions', () => {
@@ -249,7 +250,6 @@ describe('suggestion_panel', () => {
 
     expect(passedExpression).toMatchInlineSnapshot(`
       "kibana
-      | kibana_context timeRange=\\"{\\\\\\"from\\\\\\":\\\\\\"now-7d\\\\\\",\\\\\\"to\\\\\\":\\\\\\"now\\\\\\"}\\" query=\\"{\\\\\\"query\\\\\\":\\\\\\"\\\\\\",\\\\\\"language\\\\\\":\\\\\\"lucene\\\\\\"}\\" filters=\\"[{\\\\\\"meta\\\\\\":{\\\\\\"index\\\\\\":\\\\\\"index1\\\\\\"},\\\\\\"exists\\\\\\":{\\\\\\"field\\\\\\":\\\\\\"myfield\\\\\\"}}]\\"
       | lens_merge_tables layerIds=\\"first\\" tables={datasource_expression}
       | test
       | expression"
@@ -261,7 +261,7 @@ describe('suggestion_panel', () => {
     getSuggestionsMock.mockReturnValue([
       {
         datasourceState: {},
-        previewIcon: chartTableSVG,
+        previewIcon: LensIconChartDatatable,
         score: 0.5,
         visualizationState: suggestion1State,
         visualizationId: 'vis',
@@ -289,6 +289,26 @@ describe('suggestion_panel', () => {
     const wrapper = mount(<SuggestionPanel {...defaultProps} />);
 
     expect(wrapper.find(EuiIcon)).toHaveLength(1);
-    expect(wrapper.find(EuiIcon).prop('type')).toEqual(chartTableSVG);
+    expect(wrapper.find(EuiIcon).prop('type')).toEqual(LensIconChartDatatable);
+  });
+
+  it('should return no suggestion if visualization has missing index-patterns', () => {
+    // create a layer that is referencing an indexPatterns not retrieved by the datasource
+    const missingIndexPatternsState = {
+      layers: { indexPatternId: 'a' },
+      indexPatterns: {},
+    };
+    mockDatasource.checkIntegrity.mockReturnValue(['a']);
+    const newProps = {
+      ...defaultProps,
+      datasourceStates: {
+        mock: {
+          ...defaultProps.datasourceStates.mock,
+          state: missingIndexPatternsState,
+        },
+      },
+    };
+    const wrapper = mount(<SuggestionPanel {...newProps} />);
+    expect(wrapper.html()).toEqual(null);
   });
 });

@@ -1,20 +1,9 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import { i18n } from '@kbn/i18n';
@@ -107,31 +96,27 @@ export default new Datasource('es', {
       kibana: true,
       fit: 'nearest',
     });
+    const indexPatternsService = tlConfig.getIndexPatternsService();
+    const indexPatternSpec = (await indexPatternsService.find(config.index)).find(
+      (index) => index.title === config.index
+    );
 
-    const findResp = await tlConfig.savedObjectsClient.find({
-      type: 'index-pattern',
-      fields: ['title', 'fields'],
-      search: `"${config.index}"`,
-      search_fields: ['title'],
-    });
-    const indexPatternSavedObject = findResp.saved_objects.find((savedObject) => {
-      return savedObject.attributes.title === config.index;
-    });
-    let scriptedFields = [];
-    if (indexPatternSavedObject) {
-      const fields = JSON.parse(indexPatternSavedObject.attributes.fields);
-      scriptedFields = fields.filter((field) => {
-        return field.scripted;
-      });
-    }
-
+    const { scriptFields = {}, runtimeFields = {} } = indexPatternSpec?.getComputedFields() ?? {};
     const esShardTimeout = tlConfig.esShardTimeout;
 
-    const body = buildRequest(config, tlConfig, scriptedFields, esShardTimeout);
+    const body = buildRequest(config, tlConfig, scriptFields, runtimeFields, esShardTimeout);
 
-    const { callAsCurrentUser: callWithRequest } = tlConfig.esDataClient();
-    const resp = await callWithRequest('search', body);
-    if (!resp._shards.total) {
+    const resp = await tlConfig.context.search
+      .search(
+        body,
+        {
+          ...tlConfig.request?.body.searchSession,
+        },
+        tlConfig.context
+      )
+      .toPromise();
+
+    if (!resp.rawResponse._shards.total) {
       throw new Error(
         i18n.translate('timelion.serverSideErrors.esFunction.indexNotFoundErrorMessage', {
           defaultMessage: 'Elasticsearch index not found: {index}',
@@ -143,7 +128,7 @@ export default new Datasource('es', {
     }
     return {
       type: 'seriesList',
-      list: toSeriesList(resp.aggregations, config),
+      list: toSeriesList(resp.rawResponse.aggregations, config),
     };
   },
 });

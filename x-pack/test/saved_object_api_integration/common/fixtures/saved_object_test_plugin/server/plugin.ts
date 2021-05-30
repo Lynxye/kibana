@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { CoreSetup, SavedObject } from 'kibana/server';
@@ -48,6 +49,14 @@ export class Plugin {
       name: 'sharedtype',
       hidden: false,
       namespaceType: 'multiple',
+      management,
+      mappings,
+    });
+    core.savedObjects.registerType({
+      name: 'sharecapabletype',
+      hidden: false,
+      namespaceType: 'multiple-isolated',
+      management,
       mappings,
     });
     core.savedObjects.registerType({
@@ -61,6 +70,13 @@ export class Plugin {
       name: 'hiddentype',
       hidden: true,
       namespaceType: 'single',
+      mappings,
+    });
+    core.savedObjects.registerType({
+      name: 'resolvetype',
+      hidden: false,
+      namespaceType: 'multiple',
+      management,
       mappings,
     });
   }

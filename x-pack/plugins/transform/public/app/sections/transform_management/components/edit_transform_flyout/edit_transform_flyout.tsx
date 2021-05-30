@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { useState, FC } from 'react';
@@ -23,13 +24,12 @@ import {
   EuiTitle,
 } from '@elastic/eui';
 
-import { getErrorMessage } from '../../../../../shared_imports';
+import { isPostTransformsUpdateResponseSchema } from '../../../../../../common/api_schemas/type_guards';
+import { TransformConfigUnion } from '../../../../../../common/types/transform';
 
-import {
-  refreshTransformList$,
-  TransformPivotConfig,
-  REFRESH_TRANSFORM_LIST_STATE,
-} from '../../../../common';
+import { getErrorMessage } from '../../../../../../common/utils/errors';
+
+import { refreshTransformList$, REFRESH_TRANSFORM_LIST_STATE } from '../../../../common';
 import { useToastNotifications } from '../../../../app_dependencies';
 
 import { useApi } from '../../../../hooks/use_api';
@@ -43,7 +43,7 @@ import {
 
 interface EditTransformFlyoutProps {
   closeFlyout: () => void;
-  config: TransformPivotConfig;
+  config: TransformConfigUnion;
 }
 
 export const EditTransformFlyout: FC<EditTransformFlyoutProps> = ({ closeFlyout, config }) => {
@@ -58,19 +58,21 @@ export const EditTransformFlyout: FC<EditTransformFlyoutProps> = ({ closeFlyout,
     const requestConfig = applyFormFieldsToTransformConfig(config, state.formFields);
     const transformId = config.id;
 
-    try {
-      await api.updateTransform(transformId, requestConfig);
-      toastNotifications.addSuccess(
-        i18n.translate('xpack.transform.transformList.editTransformSuccessMessage', {
-          defaultMessage: 'Transform {transformId} updated.',
-          values: { transformId },
-        })
-      );
-      closeFlyout();
-      refreshTransformList$.next(REFRESH_TRANSFORM_LIST_STATE.REFRESH);
-    } catch (e) {
-      setErrorMessage(getErrorMessage(e));
+    const resp = await api.updateTransform(transformId, requestConfig);
+
+    if (!isPostTransformsUpdateResponseSchema(resp)) {
+      setErrorMessage(getErrorMessage(resp));
+      return;
     }
+
+    toastNotifications.addSuccess(
+      i18n.translate('xpack.transform.transformList.editTransformSuccessMessage', {
+        defaultMessage: 'Transform {transformId} updated.',
+        values: { transformId },
+      })
+    );
+    closeFlyout();
+    refreshTransformList$.next(REFRESH_TRANSFORM_LIST_STATE.REFRESH);
   }
 
   const isUpdateButtonDisabled = !state.isFormValid || !state.isFormTouched;

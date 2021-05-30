@@ -1,109 +1,78 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React from 'react';
 import { EuiText, EuiCommentProps, EuiAvatar } from '@elastic/eui';
-import { capitalize, union } from 'lodash';
+import { capitalize } from 'lodash';
 import moment from 'moment';
-import uuid from 'uuid';
 
-import * as i18n from './translations';
 import {
-  BuilderEntry,
-  CreateExceptionListItemBuilderSchema,
-  ExceptionsBuilderExceptionItem,
-} from './types';
-import { EXCEPTION_OPERATORS, isOperator } from '../autocomplete/operators';
-import { OperatorOption } from '../autocomplete/types';
-import {
+  comment,
+  osType,
   CommentsArray,
   Comment,
   CreateComment,
   Entry,
-  ExceptionListItemSchema,
   NamespaceType,
-  OperatorTypeEnum,
-  CreateExceptionListItemSchema,
-  comment,
-  entry,
-  entriesNested,
-  createExceptionListItemSchema,
-  exceptionListItemSchema,
-  UpdateExceptionListItemSchema,
-  ExceptionListType,
   EntryNested,
-} from '../../../shared_imports';
+  OsTypeArray,
+  ExceptionListType,
+  ListOperatorTypeEnum as OperatorTypeEnum,
+  ExceptionListItemSchema,
+  CreateExceptionListItemSchema,
+  UpdateExceptionListItemSchema,
+} from '@kbn/securitysolution-io-ts-list-types';
+
+import {
+  getOperatorType,
+  getNewExceptionItem,
+  addIdToEntries,
+  ExceptionsBuilderExceptionItem,
+} from '@kbn/securitysolution-list-utils';
+import * as i18n from './translations';
+import { AlertData, Flattened } from './types';
+
 import { IIndexPattern } from '../../../../../../../src/plugins/data/common';
-import { validate } from '../../../../common/validate';
-import { TimelineNonEcsData } from '../../../graphql/types';
+import { Ecs } from '../../../../common/ecs';
+import { CodeSignature } from '../../../../common/ecs/file';
 import { WithCopyToClipboard } from '../../lib/clipboard/with_copy_to_clipboard';
+import exceptionableLinuxFields from './exceptionable_linux_fields.json';
+import exceptionableWindowsMacFields from './exceptionable_windows_mac_fields.json';
+import exceptionableEndpointFields from './exceptionable_endpoint_fields.json';
+import exceptionableEndpointEventFields from './exceptionable_endpoint_event_fields.json';
 
-/**
- * Returns the operator type, may not need this if using io-ts types
- *
- * @param item a single ExceptionItem entry
- */
-export const getOperatorType = (item: BuilderEntry): OperatorTypeEnum => {
-  switch (item.type) {
-    case 'match':
-      return OperatorTypeEnum.MATCH;
-    case 'match_any':
-      return OperatorTypeEnum.MATCH_ANY;
-    case 'list':
-      return OperatorTypeEnum.LIST;
+export const filterIndexPatterns = (
+  patterns: IIndexPattern,
+  type: ExceptionListType,
+  osTypes?: OsTypeArray
+): IIndexPattern => {
+  switch (type) {
+    case 'endpoint':
+      const osFilterForEndpoint: (name: string) => boolean = osTypes?.includes('linux')
+        ? (name: string) =>
+            exceptionableLinuxFields.includes(name) || exceptionableEndpointFields.includes(name)
+        : (name: string) =>
+            exceptionableWindowsMacFields.includes(name) ||
+            exceptionableEndpointFields.includes(name);
+
+      return {
+        ...patterns,
+        fields: patterns.fields.filter(({ name }) => osFilterForEndpoint(name)),
+      };
+    case 'endpoint_events':
+      return {
+        ...patterns,
+        fields: patterns.fields.filter(({ name }) =>
+          exceptionableEndpointEventFields.includes(name)
+        ),
+      };
     default:
-      return OperatorTypeEnum.EXISTS;
+      return patterns;
   }
-};
-
-/**
- * Determines operator selection (is/is not/is one of, etc.)
- * Default operator is "is"
- *
- * @param item a single ExceptionItem entry
- */
-export const getExceptionOperatorSelect = (item: BuilderEntry): OperatorOption => {
-  if (item.type === 'nested') {
-    return isOperator;
-  } else {
-    const operatorType = getOperatorType(item);
-    const foundOperator = EXCEPTION_OPERATORS.find((operatorOption) => {
-      return item.operator === operatorOption.operator && operatorType === operatorOption.type;
-    });
-
-    return foundOperator ?? isOperator;
-  }
-};
-
-/**
- * Returns the fields corresponding value for an entry
- *
- * @param item a single ExceptionItem entry
- */
-export const getEntryValue = (item: BuilderEntry): string | string[] | undefined => {
-  switch (item.type) {
-    case OperatorTypeEnum.MATCH:
-    case OperatorTypeEnum.MATCH_ANY:
-      return item.value;
-    case OperatorTypeEnum.EXISTS:
-      return undefined;
-    case OperatorTypeEnum.LIST:
-      return item.list.id;
-    default:
-      return undefined;
-  }
-};
-
-/**
- * Retrieves the values of tags marked as os
- *
- * @param tags an ExceptionItem's tags
- */
-export const getOperatingSystems = (tags: string[]): string[] => {
-  return tags.filter((tag) => tag.startsWith('os:')).map((os) => os.substring(3).trim());
 };
 
 /**
@@ -111,6 +80,7 @@ export const getOperatingSystems = (tags: string[]): string[] => {
  */
 export const formatOperatingSystems = (osTypes: string[]): string => {
   return osTypes
+    .filter((os) => ['linux', 'macos', 'windows'].includes(os))
     .map((os) => {
       if (os === 'macos') {
         return 'macOS';
@@ -118,21 +88,6 @@ export const formatOperatingSystems = (osTypes: string[]): string => {
       return capitalize(os);
     })
     .join(', ');
-};
-
-/**
- * Returns all tags that match a given regex
- */
-export const getTagsInclude = ({
-  tags,
-  regex,
-}: {
-  tags: string[];
-  regex: RegExp;
-}): [boolean, string | null] => {
-  const matches: string[] | null = tags.join(';').match(regex);
-  const match = matches != null ? matches[1] : null;
-  return [matches != null, match];
 };
 
 /**
@@ -155,73 +110,6 @@ export const getFormattedComments = (comments: CommentsArray): EuiCommentProps[]
       />
     ),
   }));
-
-export const getNewExceptionItem = ({
-  listType,
-  listId,
-  namespaceType,
-  ruleName,
-}: {
-  listType: ExceptionListType;
-  listId: string;
-  namespaceType: NamespaceType;
-  ruleName: string;
-}): CreateExceptionListItemBuilderSchema => {
-  return {
-    _tags: [listType],
-    comments: [],
-    description: `${ruleName} - exception list item`,
-    entries: [
-      {
-        field: '',
-        operator: 'included',
-        type: 'match',
-        value: '',
-      },
-    ],
-    item_id: undefined,
-    list_id: listId,
-    meta: {
-      temporaryUuid: uuid.v4(),
-    },
-    name: `${ruleName} - exception list item`,
-    namespace_type: namespaceType,
-    tags: [],
-    type: 'simple',
-  };
-};
-
-export const filterExceptionItems = (
-  exceptions: ExceptionsBuilderExceptionItem[]
-): Array<ExceptionListItemSchema | CreateExceptionListItemSchema> => {
-  return exceptions.reduce<Array<ExceptionListItemSchema | CreateExceptionListItemSchema>>(
-    (acc, exception) => {
-      const entries = exception.entries.filter((t) => {
-        const [validatedEntry] = validate(t, entry);
-        const [validatedNestedEntry] = validate(t, entriesNested);
-
-        if (validatedEntry != null || validatedNestedEntry != null) {
-          return true;
-        }
-
-        return false;
-      });
-
-      const item = { ...exception, entries };
-
-      if (exceptionListItemSchema.is(item)) {
-        return [...acc, item];
-      } else if (createExceptionListItemSchema.is(item)) {
-        const { meta, ...rest } = item;
-        const itemSansMetaId: CreateExceptionListItemSchema = { ...rest, meta: undefined };
-        return [...acc, itemSansMetaId];
-      } else {
-        return acc;
-      }
-    },
-    []
-  );
-};
 
 export const formatExceptionItemForUpdate = (
   exceptionItem: ExceptionListItemSchema
@@ -288,6 +176,16 @@ export const enrichNewExceptionItemsWithComments = (
   });
 };
 
+export const buildGetAlertByIdQuery = (id: string | undefined) => ({
+  query: {
+    match: {
+      _id: {
+        query: id || '',
+      },
+    },
+  },
+});
+
 /**
  * Adds new and existing comments to exceptionItem
  * @param exceptionItem existing ExceptionItem
@@ -325,16 +223,25 @@ export const enrichExistingExceptionItemWithComments = (
  */
 export const enrichExceptionItemsWithOS = (
   exceptionItems: Array<ExceptionListItemSchema | CreateExceptionListItemSchema>,
-  osTypes: string[]
+  osTypes: OsTypeArray
 ): Array<ExceptionListItemSchema | CreateExceptionListItemSchema> => {
-  const osTags = osTypes.map((os) => `os:${os}`);
   return exceptionItems.map((item: ExceptionListItemSchema | CreateExceptionListItemSchema) => {
-    const newTags = item._tags ? union(item._tags, osTags) : [...osTags];
     return {
       ...item,
-      _tags: newTags,
+      os_types: osTypes,
     };
   });
+};
+
+export const retrieveAlertOsTypes = (alertData?: AlertData): OsTypeArray => {
+  const osDefaults: OsTypeArray = ['windows', 'macos'];
+  if (alertData != null) {
+    const os = alertData.host && alertData.host.os && alertData.host.os.family;
+    if (os != null) {
+      return osType.is(os) ? [os] : osDefaults;
+    }
+  }
+  return osDefaults;
 };
 
 /**
@@ -367,23 +274,6 @@ export const lowercaseHashValues = (
   });
 };
 
-/**
- * Returns the value for the given fieldname within TimelineNonEcsData if it exists
- */
-export const getMappedNonEcsValue = ({
-  data,
-  fieldName,
-}: {
-  data: TimelineNonEcsData[];
-  fieldName: string;
-}): string[] => {
-  const item = data.find((d) => d.field === fieldName);
-  if (item != null && item.value != null) {
-    return item.value;
-  }
-  return [];
-};
-
 export const entryHasListType = (
   exceptionItems: Array<ExceptionListItemSchema | CreateExceptionListItemSchema>
 ) => {
@@ -395,6 +285,196 @@ export const entryHasListType = (
     }
   }
   return false;
+};
+
+/**
+ * Returns the value for `file.Ext.code_signature` which
+ * can be an object or array of objects
+ */
+export const getFileCodeSignature = (
+  alertData: Flattened<Ecs>
+): Array<{ subjectName: string; trusted: string }> => {
+  const { file } = alertData;
+  const codeSignature = file && file.Ext && file.Ext.code_signature;
+
+  return getCodeSignatureValue(codeSignature);
+};
+
+/**
+ * Returns the value for `process.Ext.code_signature` which
+ * can be an object or array of objects
+ */
+export const getProcessCodeSignature = (
+  alertData: Flattened<Ecs>
+): Array<{ subjectName: string; trusted: string }> => {
+  const { process } = alertData;
+  const codeSignature = process && process.Ext && process.Ext.code_signature;
+  return getCodeSignatureValue(codeSignature);
+};
+
+/**
+ * Pre 7.10 `Ext.code_signature` fields were mistakenly populated as
+ * a single object with subject_name and trusted.
+ */
+export const getCodeSignatureValue = (
+  codeSignature: Flattened<CodeSignature> | Flattened<CodeSignature[]> | undefined
+): Array<{ subjectName: string; trusted: string }> => {
+  if (Array.isArray(codeSignature) && codeSignature.length > 0) {
+    return codeSignature.map((signature) => {
+      return {
+        subjectName: signature.subject_name ?? '',
+        trusted: signature.trusted.toString() ?? '',
+      };
+    });
+  } else {
+    const signature: Flattened<CodeSignature> | undefined = !Array.isArray(codeSignature)
+      ? codeSignature
+      : undefined;
+
+    return [
+      {
+        subjectName: signature?.subject_name ?? '',
+        trusted: signature?.trusted ?? '',
+      },
+    ];
+  }
+};
+
+/**
+ * Returns the default values from the alert data to autofill new endpoint exceptions
+ */
+export const getPrepopulatedEndpointException = ({
+  listId,
+  ruleName,
+  codeSignature,
+  eventCode,
+  listNamespace = 'agnostic',
+  alertEcsData,
+}: {
+  listId: string;
+  listNamespace?: NamespaceType;
+  ruleName: string;
+  codeSignature: { subjectName: string; trusted: string };
+  eventCode: string;
+  alertEcsData: Flattened<Ecs>;
+}): ExceptionsBuilderExceptionItem => {
+  const { file, host } = alertEcsData;
+  const filePath = file?.path ?? '';
+  const sha256Hash = file?.hash?.sha256 ?? '';
+  const filePathDefault = host?.os?.family === 'linux' ? 'file.path' : 'file.path.caseless';
+
+  return {
+    ...getNewExceptionItem({ listId, namespaceType: listNamespace, ruleName }),
+    entries: addIdToEntries([
+      {
+        field: 'file.Ext.code_signature',
+        type: 'nested',
+        entries: [
+          {
+            field: 'subject_name',
+            operator: 'included',
+            type: 'match',
+            value: codeSignature != null ? codeSignature.subjectName : '',
+          },
+          {
+            field: 'trusted',
+            operator: 'included',
+            type: 'match',
+            value: codeSignature != null ? codeSignature.trusted : '',
+          },
+        ],
+      },
+      {
+        field: filePathDefault,
+        operator: 'included',
+        type: 'match',
+        value: filePath ?? '',
+      },
+      {
+        field: 'file.hash.sha256',
+        operator: 'included',
+        type: 'match',
+        value: sha256Hash ?? '',
+      },
+      {
+        field: 'event.code',
+        operator: 'included',
+        type: 'match',
+        value: eventCode ?? '',
+      },
+    ]),
+  };
+};
+
+/**
+ * Returns the default values from the alert data to autofill new endpoint exceptions
+ */
+export const getPrepopulatedRansomwareException = ({
+  listId,
+  ruleName,
+  codeSignature,
+  eventCode,
+  listNamespace = 'agnostic',
+  alertEcsData,
+}: {
+  listId: string;
+  listNamespace?: NamespaceType;
+  ruleName: string;
+  codeSignature: { subjectName: string; trusted: string };
+  eventCode: string;
+  alertEcsData: Flattened<Ecs>;
+}): ExceptionsBuilderExceptionItem => {
+  const { process, Ransomware } = alertEcsData;
+  const sha256Hash = process?.hash?.sha256 ?? '';
+  const executable = process?.executable ?? '';
+  const ransomwareFeature = Ransomware?.feature ?? '';
+  return {
+    ...getNewExceptionItem({ listId, namespaceType: listNamespace, ruleName }),
+    entries: addIdToEntries([
+      {
+        field: 'process.Ext.code_signature',
+        type: 'nested',
+        entries: [
+          {
+            field: 'subject_name',
+            operator: 'included',
+            type: 'match',
+            value: codeSignature != null ? codeSignature.subjectName : '',
+          },
+          {
+            field: 'trusted',
+            operator: 'included',
+            type: 'match',
+            value: codeSignature != null ? codeSignature.trusted : '',
+          },
+        ],
+      },
+      {
+        field: 'process.executable',
+        operator: 'included',
+        type: 'match',
+        value: executable ?? '',
+      },
+      {
+        field: 'process.hash.sha256',
+        operator: 'included',
+        type: 'match',
+        value: sha256Hash ?? '',
+      },
+      {
+        field: 'Ransomware.feature',
+        operator: 'included',
+        type: 'match',
+        value: ransomwareFeature ?? '',
+      },
+      {
+        field: 'event.code',
+        operator: 'included',
+        type: 'match',
+        value: eventCode ?? '',
+      },
+    ]),
+  };
 };
 
 /**
@@ -431,65 +511,33 @@ export const entryHasNonEcsType = (
  * Returns the default values from the alert data to autofill new endpoint exceptions
  */
 export const defaultEndpointExceptionItems = (
-  listType: ExceptionListType,
   listId: string,
   ruleName: string,
-  alertData: TimelineNonEcsData[]
+  alertEcsData: Flattened<Ecs>
 ): ExceptionsBuilderExceptionItem[] => {
-  const [filePath] = getMappedNonEcsValue({ data: alertData, fieldName: 'file.path' });
-  const [signatureSigner] = getMappedNonEcsValue({
-    data: alertData,
-    fieldName: 'file.Ext.code_signature.subject_name',
-  });
-  const [signatureTrusted] = getMappedNonEcsValue({
-    data: alertData,
-    fieldName: 'file.Ext.code_signature.trusted',
-  });
-  const [sha256Hash] = getMappedNonEcsValue({ data: alertData, fieldName: 'file.hash.sha256' });
-  const [eventCode] = getMappedNonEcsValue({ data: alertData, fieldName: 'event.code' });
-  const namespaceType = 'agnostic';
+  const { event: alertEvent } = alertEcsData;
+  const eventCode = alertEvent?.code ?? '';
 
-  return [
-    {
-      ...getNewExceptionItem({ listType, listId, namespaceType, ruleName }),
-      entries: [
-        {
-          field: 'file.Ext.code_signature',
-          type: 'nested',
-          entries: [
-            {
-              field: 'subject_name',
-              operator: 'included',
-              type: 'match',
-              value: signatureSigner ?? '',
-            },
-            {
-              field: 'trusted',
-              operator: 'included',
-              type: 'match',
-              value: signatureTrusted ?? '',
-            },
-          ],
-        },
-        {
-          field: 'file.path.text',
-          operator: 'included',
-          type: 'match',
-          value: filePath ?? '',
-        },
-        {
-          field: 'file.hash.sha256',
-          operator: 'included',
-          type: 'match',
-          value: sha256Hash ?? '',
-        },
-        {
-          field: 'event.code',
-          operator: 'included',
-          type: 'match',
-          value: eventCode ?? '',
-        },
-      ],
-    },
-  ];
+  if (eventCode === 'ransomware') {
+    return getProcessCodeSignature(alertEcsData).map((codeSignature) =>
+      getPrepopulatedRansomwareException({
+        listId,
+        ruleName,
+        eventCode,
+        codeSignature,
+        alertEcsData,
+      })
+    );
+  }
+
+  // By default return the standard prepopulated Endpoint Exception fields
+  return getFileCodeSignature(alertEcsData).map((codeSignature) =>
+    getPrepopulatedEndpointException({
+      listId,
+      ruleName,
+      eventCode,
+      codeSignature,
+      alertEcsData,
+    })
+  );
 };

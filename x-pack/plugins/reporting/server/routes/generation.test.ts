@@ -1,19 +1,25 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { UnwrapPromise } from '@kbn/utility-types';
+import type { DeeplyMockedKeys } from '@kbn/utility-types/jest';
 import { of } from 'rxjs';
-import sinon from 'sinon';
+import { ElasticsearchClient } from 'kibana/server';
 import { setupServer } from 'src/core/server/test_utils';
 import supertest from 'supertest';
 import { ReportingCore } from '..';
 import { ExportTypesRegistry } from '../lib/export_types_registry';
-import { createMockReportingCore } from '../test_helpers';
-import { createMockLevelLogger } from '../test_helpers/create_mock_levellogger';
+import { createMockLevelLogger, createMockReportingCore } from '../test_helpers';
+import {
+  createMockConfigSchema,
+  createMockPluginSetup,
+} from '../test_helpers/create_mock_reportingplugin';
 import { registerJobGenerationRoutes } from './generation';
+import type { ReportingRequestHandlerContext } from '../types';
 
 type SetupServerReturn = UnwrapPromise<ReturnType<typeof setupServer>>;
 
@@ -22,39 +28,29 @@ describe('POST /api/reporting/generate', () => {
   let server: SetupServerReturn['server'];
   let httpSetup: SetupServerReturn['httpSetup'];
   let mockExportTypesRegistry: ExportTypesRegistry;
-  let callClusterStub: any;
   let core: ReportingCore;
+  let mockEsClient: DeeplyMockedKeys<ElasticsearchClient>;
 
-  const config = {
-    get: jest.fn().mockImplementation((...args) => {
-      const key = args.join('.');
-      switch (key) {
-        case 'queue.indexInterval':
-          return 'year';
-        case 'queue.timeout':
-          return 10000;
-        case 'index':
-          return '.reporting';
-        case 'queue.pollEnabled':
-          return false;
-        default:
-          return;
-      }
-    }),
-    kbnConfig: { get: jest.fn() },
-  };
+  const config = createMockConfigSchema({
+    queue: {
+      indexInterval: 'year',
+      timeout: 10000,
+      pollEnabled: true,
+    },
+    index: '.reporting',
+  });
+
   const mockLogger = createMockLevelLogger();
 
   beforeEach(async () => {
     ({ server, httpSetup } = await setupServer(reportingSymbol));
-    httpSetup.registerRouteHandlerContext(reportingSymbol, 'reporting', () => ({}));
+    httpSetup.registerRouteHandlerContext<ReportingRequestHandlerContext, 'reporting'>(
+      reportingSymbol,
+      'reporting',
+      () => ({ usesUiCapabilities: jest.fn() })
+    );
 
-    callClusterStub = sinon.stub().resolves({});
-
-    const mockSetupDeps = ({
-      elasticsearch: {
-        legacy: { client: { callAsInternalUser: callClusterStub } },
-      },
+    const mockSetupDeps = createMockPluginSetup({
       security: {
         license: { isEnabled: () => true },
         authc: {
@@ -63,7 +59,7 @@ describe('POST /api/reporting/generate', () => {
       },
       router: httpSetup.createRouter(''),
       licensing: { license$: of({ isActive: true, isAvailable: true, type: 'gold' }) },
-    } as unknown) as any;
+    });
 
     core = await createMockReportingCore(config, mockSetupDeps);
 
@@ -75,10 +71,13 @@ describe('POST /api/reporting/generate', () => {
       jobContentEncoding: 'base64',
       jobContentExtension: 'pdf',
       validLicenses: ['basic', 'gold'],
-      scheduleTaskFnFactory: () => () => ({ scheduleParamsTest: { test1: 'yes' } }),
-      runTaskFnFactory: () => () => ({ runParamsTest: { test2: 'yes' } }),
+      createJobFnFactory: () => async () => ({ createJobTest: { test1: 'yes' } } as any),
+      runTaskFnFactory: () => async () => ({ runParamsTest: { test2: 'yes' } } as any),
     });
     core.getExportTypesRegistry = () => mockExportTypesRegistry;
+
+    mockEsClient = (await core.getEsClient()).asInternalUser as typeof mockEsClient;
+    mockEsClient.index.mockResolvedValue({ body: {} } as any);
   });
 
   afterEach(async () => {
@@ -138,8 +137,7 @@ describe('POST /api/reporting/generate', () => {
   });
 
   it('returns 500 if job handler throws an error', async () => {
-    // throw an error from enqueueJob
-    core.getEnqueueJob = jest.fn().mockRejectedValue('Sorry, this tests says no');
+    mockEsClient.index.mockRejectedValueOnce('silly');
 
     registerJobGenerationRoutes(core, mockLogger);
 
@@ -152,8 +150,7 @@ describe('POST /api/reporting/generate', () => {
   });
 
   it(`returns 200 if job handler doesn't error`, async () => {
-    callClusterStub.withArgs('index').resolves({ _id: 'foo', _index: 'foo-index' });
-
+    mockEsClient.index.mockResolvedValueOnce({ body: { _id: 'foo', _index: 'foo-index' } } as any);
     registerJobGenerationRoutes(core, mockLogger);
 
     await server.start();
@@ -165,9 +162,19 @@ describe('POST /api/reporting/generate', () => {
       .then(({ body }) => {
         expect(body).toMatchObject({
           job: {
-            id: expect.any(String),
+            attempts: 0,
+            created_by: 'Tom Riddle',
+            id: 'foo',
+            index: 'foo-index',
+            jobtype: 'printable_pdf',
+            payload: {
+              createJobTest: {
+                test1: 'yes',
+              },
+            },
+            status: 'pending',
           },
-          path: expect.any(String),
+          path: 'undefined/api/reporting/jobs/download/foo',
         });
       });
   });

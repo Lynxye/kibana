@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { createSelector } from 'reselect';
@@ -11,33 +12,35 @@ import { Adapters } from 'src/plugins/inspector/public';
 import { TileLayer } from '../classes/layers/tile_layer/tile_layer';
 // @ts-ignore
 import { VectorTileLayer } from '../classes/layers/vector_tile_layer/vector_tile_layer';
-import { IVectorLayer, VectorLayer } from '../classes/layers/vector_layer/vector_layer';
+import { IVectorLayer, VectorLayer } from '../classes/layers/vector_layer';
 import { VectorStyle } from '../classes/styles/vector/vector_style';
-// @ts-ignore
-import { HeatmapLayer } from '../classes/layers/heatmap_layer/heatmap_layer';
+import { HeatmapLayer } from '../classes/layers/heatmap_layer';
 import { BlendedVectorLayer } from '../classes/layers/blended_vector_layer/blended_vector_layer';
 import { getTimeFilter } from '../kibana_services';
-import { getInspectorAdapters } from '../reducers/non_serializable_instances';
+import {
+  getChartsPaletteServiceGetColor,
+  getInspectorAdapters,
+} from '../reducers/non_serializable_instances';
 import { TiledVectorLayer } from '../classes/layers/tiled_vector_layer/tiled_vector_layer';
-import { copyPersistentState, TRACKED_LAYER_DESCRIPTOR } from '../reducers/util';
-import { IJoin } from '../classes/joins/join';
+import { copyPersistentState, TRACKED_LAYER_DESCRIPTOR } from '../reducers/copy_persistent_state';
 import { InnerJoin } from '../classes/joins/inner_join';
 import { getSourceByType } from '../classes/sources/source_registry';
-import { GeojsonFileSource } from '../classes/sources/geojson_file_source';
+import { GeoJsonFileSource } from '../classes/sources/geojson_file_source';
 import {
-  LAYER_TYPE,
   SOURCE_DATA_REQUEST_ID,
   STYLE_TYPE,
   VECTOR_STYLES,
   SPATIAL_FILTERS_LAYER_ID,
 } from '../../common/constants';
 // @ts-ignore
-import { extractFeaturesFromFilters } from '../elasticsearch_geo_utils';
+import { extractFeaturesFromFilters } from '../../common/elasticsearch_util';
 import { MapStoreState } from '../reducers/store';
 import {
+  AbstractSourceDescriptor,
   DataRequestDescriptor,
   DrawState,
   Goto,
+  HeatmapLayerDescriptor,
   LayerDescriptor,
   MapCenter,
   MapExtent,
@@ -51,12 +54,13 @@ import { Filter, TimeRange } from '../../../../../src/plugins/data/public';
 import { ISource } from '../classes/sources/source';
 import { ITMSSource } from '../classes/sources/tms_source';
 import { IVectorSource } from '../classes/sources/vector_source';
+import { ESGeoGridSource } from '../classes/sources/es_geo_grid_source';
 import { ILayer } from '../classes/layers/layer';
-import { ISavedGisMap } from '../routing/bootstrap/services/saved_gis_map';
 
-function createLayerInstance(
+export function createLayerInstance(
   layerDescriptor: LayerDescriptor,
-  inspectorAdapters: Adapters
+  inspectorAdapters?: Adapters,
+  chartsPaletteServiceGetColor?: (value: string) => string | null
 ): ILayer {
   const source: ISource = createSourceInstance(layerDescriptor.sourceDescriptor, inspectorAdapters);
 
@@ -64,11 +68,11 @@ function createLayerInstance(
     case TileLayer.type:
       return new TileLayer({ layerDescriptor, source: source as ITMSSource });
     case VectorLayer.type:
-      const joins: IJoin[] = [];
+      const joins: InnerJoin[] = [];
       const vectorLayerDescriptor = layerDescriptor as VectorLayerDescriptor;
       if (vectorLayerDescriptor.joins) {
         vectorLayerDescriptor.joins.forEach((joinDescriptor) => {
-          const join = new InnerJoin(joinDescriptor, source);
+          const join = new InnerJoin(joinDescriptor, source as IVectorSource);
           joins.push(join);
         });
       }
@@ -76,15 +80,20 @@ function createLayerInstance(
         layerDescriptor: vectorLayerDescriptor,
         source: source as IVectorSource,
         joins,
+        chartsPaletteServiceGetColor,
       });
     case VectorTileLayer.type:
-      return new VectorTileLayer({ layerDescriptor, source });
+      return new VectorTileLayer({ layerDescriptor, source: source as ITMSSource });
     case HeatmapLayer.type:
-      return new HeatmapLayer({ layerDescriptor, source });
+      return new HeatmapLayer({
+        layerDescriptor: layerDescriptor as HeatmapLayerDescriptor,
+        source: source as ESGeoGridSource,
+      });
     case BlendedVectorLayer.type:
       return new BlendedVectorLayer({
         layerDescriptor: layerDescriptor as VectorLayerDescriptor,
         source: source as IVectorSource,
+        chartsPaletteServiceGetColor,
       });
     case TiledVectorLayer.type:
       return new TiledVectorLayer({
@@ -96,7 +105,13 @@ function createLayerInstance(
   }
 }
 
-function createSourceInstance(sourceDescriptor: any, inspectorAdapters: Adapters): ISource {
+function createSourceInstance(
+  sourceDescriptor: AbstractSourceDescriptor | null,
+  inspectorAdapters?: Adapters
+): ISource {
+  if (sourceDescriptor === null) {
+    throw new Error('Source-descriptor should be initialized');
+  }
   const source = getSourceByType(sourceDescriptor.type);
   if (!source) {
     throw new Error(`Unrecognized sourceType ${sourceDescriptor.type}`);
@@ -146,21 +161,6 @@ export const getWaitingForMapReadyLayerListRaw = ({ map }: MapStoreState): Layer
 
 export const getScrollZoom = ({ map }: MapStoreState): boolean => map.mapState.scrollZoom;
 
-export const isInteractiveDisabled = ({ map }: MapStoreState): boolean =>
-  map.mapState.disableInteractive;
-
-export const isTooltipControlDisabled = ({ map }: MapStoreState): boolean =>
-  map.mapState.disableTooltipControl;
-
-export const isToolbarOverlayHidden = ({ map }: MapStoreState): boolean =>
-  map.mapState.hideToolbarOverlay;
-
-export const isLayerControlHidden = ({ map }: MapStoreState): boolean =>
-  map.mapState.hideLayerControl;
-
-export const isViewControlHidden = ({ map }: MapStoreState): boolean =>
-  map.mapState.hideViewControl;
-
 export const getMapExtent = ({ map }: MapStoreState): MapExtent | undefined => map.mapState.extent;
 
 export const getMapBuffer = ({ map }: MapStoreState): MapExtent | undefined => map.mapState.buffer;
@@ -176,9 +176,17 @@ export const getMouseCoordinates = ({ map }: MapStoreState) => map.mapState.mous
 export const getTimeFilters = ({ map }: MapStoreState): TimeRange =>
   map.mapState.timeFilters ? map.mapState.timeFilters : getTimeFilter().getTime();
 
+export const getTimeslice = ({ map }: MapStoreState) => map.mapState.timeslice;
+
 export const getQuery = ({ map }: MapStoreState): MapQuery | undefined => map.mapState.query;
 
 export const getFilters = ({ map }: MapStoreState): Filter[] => map.mapState.filters;
+
+export const getSearchSessionId = ({ map }: MapStoreState): string | undefined =>
+  map.mapState.searchSessionId;
+
+export const getSearchSessionMapBuffer = ({ map }: MapStoreState): MapExtent | undefined =>
+  map.mapState.searchSessionMapBuffer;
 
 export const isUsingSearch = (state: MapStoreState): boolean => {
   const filters = getFilters(state).filter((filter) => !filter.meta.disabled);
@@ -228,18 +236,34 @@ export const getDataFilters = createSelector(
   getMapBuffer,
   getMapZoom,
   getTimeFilters,
+  getTimeslice,
   getRefreshTimerLastTriggeredAt,
   getQuery,
   getFilters,
-  (mapExtent, mapBuffer, mapZoom, timeFilters, refreshTimerLastTriggeredAt, query, filters) => {
+  getSearchSessionId,
+  getSearchSessionMapBuffer,
+  (
+    mapExtent,
+    mapBuffer,
+    mapZoom,
+    timeFilters,
+    timeslice,
+    refreshTimerLastTriggeredAt,
+    query,
+    filters,
+    searchSessionId,
+    searchSessionMapBuffer
+  ) => {
     return {
       extent: mapExtent,
-      buffer: mapBuffer,
+      buffer: searchSessionId && searchSessionMapBuffer ? searchSessionMapBuffer : mapBuffer,
       zoom: mapZoom,
       timeFilters,
+      timeslice,
       refreshTimerLastTriggeredAt,
       query,
       filters,
+      searchSessionId,
     };
   }
 );
@@ -252,10 +276,10 @@ export const getSpatialFiltersLayer = createSelector(
       type: 'FeatureCollection',
       features: extractFeaturesFromFilters(filters),
     };
-    const geoJsonSourceDescriptor = GeojsonFileSource.createDescriptor(
-      featureCollection,
-      'spatialFilters'
-    );
+    const geoJsonSourceDescriptor = GeoJsonFileSource.createDescriptor({
+      __featureCollection: featureCollection,
+      name: 'spatialFilters',
+    });
 
     return new VectorLayer({
       layerDescriptor: VectorLayer.createDescriptor({
@@ -283,7 +307,7 @@ export const getSpatialFiltersLayer = createSelector(
           },
         }),
       }),
-      source: new GeojsonFileSource(geoJsonSourceDescriptor),
+      source: new GeoJsonFileSource(geoJsonSourceDescriptor),
     });
   }
 );
@@ -291,31 +315,23 @@ export const getSpatialFiltersLayer = createSelector(
 export const getLayerList = createSelector(
   getLayerListRaw,
   getInspectorAdapters,
-  (layerDescriptorList, inspectorAdapters) => {
+  getChartsPaletteServiceGetColor,
+  (layerDescriptorList, inspectorAdapters, chartsPaletteServiceGetColor) => {
     return layerDescriptorList.map((layerDescriptor) =>
-      createLayerInstance(layerDescriptor, inspectorAdapters)
+      createLayerInstance(layerDescriptor, inspectorAdapters, chartsPaletteServiceGetColor)
     );
   }
 );
+
+export const getLayerListConfigOnly = createSelector(getLayerListRaw, (layerDescriptorList) => {
+  return copyPersistentState(layerDescriptorList);
+});
 
 export function getLayerById(layerId: string | null, state: MapStoreState): ILayer | undefined {
   return getLayerList(state).find((layer) => {
     return layerId === layer.getId();
   });
 }
-
-export const getFittableLayers = createSelector(getLayerList, (layerList) => {
-  return layerList.filter((layer) => {
-    // These are the only layer-types that implement bounding-box retrieval reliably
-    // This will _not_ work if Maps will allow register custom layer types
-    const isFittable =
-      layer.getType() === LAYER_TYPE.VECTOR ||
-      layer.getType() === LAYER_TYPE.BLENDED_VECTOR ||
-      layer.getType() === LAYER_TYPE.HEATMAP;
-
-    return isFittable && layer.isVisible();
-  });
-});
 
 export const getHiddenLayerIds = createSelector(getLayerListRaw, (layers) =>
   layers.filter((layer) => !layer.visible).map((layer) => layer.id)
@@ -361,28 +377,54 @@ export const getSelectedLayerJoinDescriptors = createSelector(getSelectedLayer, 
     return [];
   }
 
-  return (selectedLayer as IVectorLayer).getJoins().map((join: IJoin) => {
+  return (selectedLayer as IVectorLayer).getJoins().map((join: InnerJoin) => {
     return join.toDescriptor();
   });
 });
 
-// Get list of unique index patterns used by all layers
-export const getUniqueIndexPatternIds = createSelector(getLayerList, (layerList) => {
-  const indexPatternIds: string[] = [];
-  layerList.forEach((layer) => {
-    indexPatternIds.push(...layer.getIndexPatternIds());
-  });
-  return _.uniq(indexPatternIds).sort();
-});
+export const getQueryableUniqueIndexPatternIds = createSelector(
+  getLayerList,
+  getWaitingForMapReadyLayerListRaw,
+  (layerList, waitingForMapReadyLayerList) => {
+    const indexPatternIds: string[] = [];
 
-// Get list of unique index patterns, excluding index patterns from layers that disable applyGlobalQuery
-export const getQueryableUniqueIndexPatternIds = createSelector(getLayerList, (layerList) => {
-  const indexPatternIds: string[] = [];
-  layerList.forEach((layer) => {
-    indexPatternIds.push(...layer.getQueryableIndexPatternIds());
-  });
-  return _.uniq(indexPatternIds);
-});
+    if (waitingForMapReadyLayerList.length) {
+      waitingForMapReadyLayerList.forEach((layerDescriptor) => {
+        const layer = createLayerInstance(layerDescriptor);
+        if (layer.isVisible()) {
+          indexPatternIds.push(...layer.getQueryableIndexPatternIds());
+        }
+      });
+    } else {
+      layerList.forEach((layer) => {
+        if (layer.isVisible()) {
+          indexPatternIds.push(...layer.getQueryableIndexPatternIds());
+        }
+      });
+    }
+    return _.uniq(indexPatternIds);
+  }
+);
+
+export const getGeoFieldNames = createSelector(
+  getLayerList,
+  getWaitingForMapReadyLayerListRaw,
+  (layerList, waitingForMapReadyLayerList) => {
+    const geoFieldNames: string[] = [];
+
+    if (waitingForMapReadyLayerList.length) {
+      waitingForMapReadyLayerList.forEach((layerDescriptor) => {
+        const layer = createLayerInstance(layerDescriptor);
+        geoFieldNames.push(...layer.getGeoFieldNames());
+      });
+    } else {
+      layerList.forEach((layer) => {
+        geoFieldNames.push(...layer.getGeoFieldNames());
+      });
+    }
+    return _.uniq(geoFieldNames);
+  }
+);
 
 export const hasDirtyState = createSelector(getLayerListRaw, (layerListRaw) => {
   return layerListRaw.some((layerDescriptor) => {
@@ -410,29 +452,15 @@ export const areLayersLoaded = createSelector(
 
     for (let i = 0; i < layerList.length; i++) {
       const layer = layerList[i];
-      if (layer.isVisible() && layer.showAtZoomLevel(zoom) && !layer.isDataLoaded()) {
+      if (
+        layer.isVisible() &&
+        layer.showAtZoomLevel(zoom) &&
+        !layer.hasErrors() &&
+        !layer.isInitialDataLoadComplete()
+      ) {
         return false;
       }
     }
     return true;
   }
 );
-
-export function hasUnsavedChanges(
-  state: MapStoreState,
-  savedMap: ISavedGisMap,
-  initialLayerListConfig: LayerDescriptor[]
-) {
-  const layerListConfigOnly = copyPersistentState(getLayerListRaw(state));
-
-  const savedLayerList = savedMap.getLayerList();
-
-  return !savedLayerList
-    ? !_.isEqual(layerListConfigOnly, initialLayerListConfig)
-    : // savedMap stores layerList as a JSON string using JSON.stringify.
-      // JSON.stringify removes undefined properties from objects.
-      // savedMap.getLayerList converts the JSON string back into Javascript array of objects.
-      // Need to perform the same process for layerListConfigOnly to compare apples to apples
-      // and avoid undefined properties in layerListConfigOnly triggering unsaved changes.
-      !_.isEqual(JSON.parse(JSON.stringify(layerListConfigOnly)), savedLayerList);
-}

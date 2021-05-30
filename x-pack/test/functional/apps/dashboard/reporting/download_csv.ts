@@ -1,18 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { REPO_ROOT } from '@kbn/dev-utils';
+import { REPO_ROOT } from '@kbn/utils';
 import expect from '@kbn/expect';
 import fs from 'fs';
 import path from 'path';
-import * as Rx from 'rxjs';
-import { filter, first, map, timeout } from 'rxjs/operators';
 import { FtrProviderContext } from '../../../ftr_provider_context';
-
-const csvPath = path.resolve(REPO_ROOT, 'target/functional-tests/downloads/Ecommerce Data.csv');
 
 export default function ({ getService, getPageObjects }: FtrProviderContext) {
   const esArchiver = getService('esArchiver');
@@ -20,49 +17,131 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
   const dashboardPanelActions = getService('dashboardPanelActions');
   const log = getService('log');
   const testSubjects = getService('testSubjects');
-  const PageObjects = getPageObjects(['reporting', 'common', 'dashboard']);
+  const filterBar = getService('filterBar');
+  const find = getService('find');
+  const retry = getService('retry');
+  const PageObjects = getPageObjects(['reporting', 'common', 'dashboard', 'timePicker']);
 
-  describe('Reporting Download CSV', () => {
+  const getCsvPath = (name: string) =>
+    path.resolve(REPO_ROOT, `target/functional-tests/downloads/${name}.csv`);
+
+  // checks every 100ms for the file to exist in the download dir
+  // just wait up to 5 seconds
+  const getDownload = (filePath: string) => {
+    return retry.tryForTime(5000, async () => {
+      expect(fs.existsSync(filePath)).to.be(true);
+      return fs.readFileSync(filePath).toString();
+    });
+  };
+
+  const clickActionsMenu = async (headingTestSubj: string) => {
+    const savedSearchPanel = await testSubjects.find('embeddablePanelHeading-' + headingTestSubj);
+    await dashboardPanelActions.toggleContextMenu(savedSearchPanel);
+  };
+
+  const clickDownloadCsv = async () => {
+    log.debug('click "More"');
+    await dashboardPanelActions.clickContextMenuMoreItem();
+
+    const actionItemTestSubj = 'embeddablePanelAction-downloadCsvReport';
+    await testSubjects.existOrFail(actionItemTestSubj); // wait for the full panel to display or else the test runner could click the wrong option!
+    log.debug('click "Download CSV"');
+    await testSubjects.click(actionItemTestSubj);
+    await testSubjects.existOrFail('csvDownloadStarted'); // validate toast panel
+  };
+
+  describe('Download CSV', () => {
     before('initialize tests', async () => {
       log.debug('ReportingPage:initTests');
-      await esArchiver.loadIfNeeded('reporting/ecommerce');
-      await esArchiver.loadIfNeeded('reporting/ecommerce_kibana');
       await browser.setWindowSize(1600, 850);
     });
 
-    after('clean up archives and previous file download', async () => {
-      await esArchiver.unload('reporting/ecommerce');
-      await esArchiver.unload('reporting/ecommerce_kibana');
+    afterEach('remove download', () => {
       try {
-        fs.unlinkSync(csvPath);
+        fs.unlinkSync(getCsvPath('Ecommerce Data'));
       } catch (e) {
-        // nothing to worry
+        // it might not have been there to begin with
       }
     });
 
-    it('Downloads a CSV export of a saved search panel', async function () {
-      await PageObjects.common.navigateToApp('dashboard');
-      await PageObjects.dashboard.loadSavedDashboard('Ecom Dashboard');
-      const savedSearchPanel = await testSubjects.find('embeddablePanelHeading-EcommerceData');
-      await dashboardPanelActions.toggleContextMenu(savedSearchPanel);
+    describe('E-Commerce Data', () => {
+      before(async () => {
+        await esArchiver.load('reporting/ecommerce');
+        await esArchiver.load('reporting/ecommerce_kibana');
+      });
+      after(async () => {
+        await esArchiver.unload('reporting/ecommerce');
+        await esArchiver.unload('reporting/ecommerce_kibana');
+      });
 
-      await testSubjects.existOrFail('embeddablePanelAction-downloadCsvReport'); // wait for the full panel to display or else the test runner could click the wrong option!
-      await testSubjects.click('embeddablePanelAction-downloadCsvReport');
-      await testSubjects.existOrFail('csvDownloadStarted'); // validate toast panel
+      it('Download CSV export of a saved search panel', async function () {
+        await PageObjects.common.navigateToApp('dashboard');
+        await PageObjects.dashboard.loadSavedDashboard('Ecom Dashboard');
+        await clickActionsMenu('EcommerceData');
+        await clickDownloadCsv();
 
-      // check every 100ms for the file to exist in the download dir
-      // just wait up to 5 seconds
-      const success$ = Rx.interval(100).pipe(
-        map(() => fs.existsSync(csvPath)),
-        filter((value) => value === true),
-        first(),
-        timeout(5000)
-      );
+        const csvFile = await getDownload(getCsvPath('Ecommerce Data'));
+        expectSnapshot(csvFile).toMatch();
+      });
 
-      const fileExists = await success$.toPromise();
-      expect(fileExists).to.be(true);
+      it('Downloads a filtered CSV export of a saved search panel', async function () {
+        await PageObjects.common.navigateToApp('dashboard');
+        await PageObjects.dashboard.loadSavedDashboard('Ecom Dashboard');
 
-      // no need to validate download contents, API Integration tests do that some different variations
+        // add a filter
+        await filterBar.addFilter('currency', 'is', 'EUR');
+
+        await clickActionsMenu('EcommerceData');
+        await clickDownloadCsv();
+
+        const csvFile = await getDownload(getCsvPath('Ecommerce Data'));
+        expectSnapshot(csvFile).toMatch();
+      });
+
+      it('Gets the correct filename if panel titles are hidden', async () => {
+        await PageObjects.common.navigateToApp('dashboard');
+        await PageObjects.dashboard.loadSavedDashboard('Ecom Dashboard Hidden Panel Titles');
+        const savedSearchPanel = await find.byCssSelector(
+          '[data-test-embeddable-id="94eab06f-60ac-4a85-b771-3a8ed475c9bb"]'
+        ); // panel title is hidden
+        await dashboardPanelActions.toggleContextMenu(savedSearchPanel);
+
+        await clickDownloadCsv();
+        await testSubjects.existOrFail('csvDownloadStarted');
+
+        const csvFile = await getDownload(getCsvPath('Ecommerce Data')); // file exists with proper name
+        expect(csvFile).to.not.be(null);
+      });
+    });
+
+    describe('Field Formatters and Scripted Fields', () => {
+      before(async () => {
+        await esArchiver.load('reporting/hugedata');
+      });
+      after(async () => {
+        await esArchiver.unload('reporting/hugedata');
+      });
+
+      it('Download CSV export of a saved search panel', async () => {
+        await PageObjects.common.navigateToApp('dashboard');
+        await PageObjects.dashboard.loadSavedDashboard('names dashboard');
+        await PageObjects.timePicker.setAbsoluteRange(
+          'Jan 01, 1980 @ 00:00:00.000',
+          'Dec 31, 1984 @ 23:59:59.000'
+        );
+
+        await PageObjects.common.sleep(1000);
+
+        await filterBar.addFilter('name.keyword', 'is', 'Fethany');
+
+        await PageObjects.common.sleep(1000);
+
+        await clickActionsMenu('namessearch');
+        await clickDownloadCsv();
+
+        const csvFile = await getDownload(getCsvPath('namessearch'));
+        expectSnapshot(csvFile).toMatch();
+      });
     });
   });
 }

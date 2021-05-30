@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
@@ -48,7 +49,7 @@ export const LOADING_ALERTS = i18n.translate(
 export const TOTAL_COUNT_OF_ALERTS = i18n.translate(
   'xpack.securitySolution.detectionEngine.alerts.totalCountOfAlertsTitle',
   {
-    defaultMessage: 'alerts match the search criteria',
+    defaultMessage: 'alerts',
   }
 );
 
@@ -56,6 +57,13 @@ export const ALERTS_HEADERS_RULE = i18n.translate(
   'xpack.securitySolution.eventsViewer.alerts.defaultHeaders.ruleTitle',
   {
     defaultMessage: 'Rule',
+  }
+);
+
+export const ALERTS_HEADERS_RULE_NAME = i18n.translate(
+  'xpack.securitySolution.eventsViewer.alerts.defaultHeaders.ruleNameTitle',
+  {
+    defaultMessage: 'Rule name',
   }
 );
 
@@ -80,10 +88,38 @@ export const ALERTS_HEADERS_SEVERITY = i18n.translate(
   }
 );
 
+export const ALERTS_HEADERS_REASON = i18n.translate(
+  'xpack.securitySolution.eventsViewer.alerts.defaultHeaders.reasonTitle',
+  {
+    defaultMessage: 'Reason',
+  }
+);
+
 export const ALERTS_HEADERS_RISK_SCORE = i18n.translate(
   'xpack.securitySolution.eventsViewer.alerts.defaultHeaders.riskScoreTitle',
   {
     defaultMessage: 'Risk Score',
+  }
+);
+
+export const ALERTS_HEADERS_THRESHOLD_COUNT = i18n.translate(
+  'xpack.securitySolution.eventsViewer.alerts.defaultHeaders.thresholdCount',
+  {
+    defaultMessage: 'Threshold Count',
+  }
+);
+
+export const ALERTS_HEADERS_THRESHOLD_TERMS = i18n.translate(
+  'xpack.securitySolution.eventsViewer.alerts.defaultHeaders.thresholdTerms',
+  {
+    defaultMessage: 'Threshold Terms',
+  }
+);
+
+export const ALERTS_HEADERS_THRESHOLD_CARDINALITY = i18n.translate(
+  'xpack.securitySolution.eventsViewer.alerts.defaultHeaders.thresholdCardinality',
+  {
+    defaultMessage: 'Threshold Cardinality',
   }
 );
 
@@ -115,10 +151,24 @@ export const ACTION_INVESTIGATE_IN_TIMELINE = i18n.translate(
   }
 );
 
+export const ACTION_INVESTIGATE_IN_TIMELINE_ARIA_LABEL = i18n.translate(
+  'xpack.securitySolution.detectionEngine.alerts.actions.investigateInTimelineAriaLabel',
+  {
+    defaultMessage: 'Send alert to timeline',
+  }
+);
+
 export const ACTION_ADD_EXCEPTION = i18n.translate(
   'xpack.securitySolution.detectionEngine.alerts.actions.addException',
   {
     defaultMessage: 'Add rule exception',
+  }
+);
+
+export const ACTION_ADD_EVENT_EXCEPTION = i18n.translate(
+  'xpack.securitySolution.detectionEngine.alerts.actions.addEventException',
+  {
+    defaultMessage: 'Add Endpoint event exception',
   }
 );
 
@@ -135,6 +185,13 @@ export const CLOSED_ALERT_SUCCESS_TOAST = (totalAlerts: number) =>
     defaultMessage:
       'Successfully closed {totalAlerts} {totalAlerts, plural, =1 {alert} other {alerts}}.',
   });
+
+export const ALERT_DURATION = i18n.translate(
+  'xpack.securitySolution.eventsViewer.alerts.defaultHeaders.alertDurationTitle',
+  {
+    defaultMessage: 'Alert duration',
+  }
+);
 
 export const OPENED_ALERT_SUCCESS_TOAST = (totalAlerts: number) =>
   i18n.translate('xpack.securitySolution.detectionEngine.alerts.openedAlertSuccessToastMessage', {
@@ -171,5 +228,26 @@ export const IN_PROGRESS_ALERT_FAILED_TOAST = i18n.translate(
   'xpack.securitySolution.detectionEngine.alerts.inProgressAlertFailedToastMessage',
   {
     defaultMessage: 'Failed to mark alert(s) as in progress',
+  }
+);
+
+export const MORE_ACTIONS = i18n.translate(
+  'xpack.securitySolution.detectionEngine.alerts.moreActionsAriaLabel',
+  {
+    defaultMessage: 'More actions',
+  }
+);
+
+export const STATUS = i18n.translate(
+  'xpack.securitySolution.eventsViewer.alerts.defaultHeaders.statusTitle',
+  {
+    defaultMessage: 'Status',
+  }
+);
+
+export const TRIGGERED = i18n.translate(
+  'xpack.securitySolution.eventsViewer.alerts.defaultHeaders.triggeredTitle',
+  {
+    defaultMessage: 'Triggered',
   }
 );

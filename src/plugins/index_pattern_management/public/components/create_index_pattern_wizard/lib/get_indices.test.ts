@@ -1,24 +1,12 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import { getIndices, responseToItemArray } from './get_indices';
-import { IndexPatternCreationConfig } from '../../../../../index_pattern_management/public';
 import { httpServiceMock } from '../../../../../../core/public/mocks';
 import { ResolveIndexResponseItemIndexAttrs } from '../types';
 
@@ -44,33 +32,27 @@ export const successfulResponse = {
   ],
 };
 
-const mockIndexPatternCreationType = new IndexPatternCreationConfig({
-  type: 'default',
-  name: 'name',
-  showSystemIndices: false,
-  httpClient: {},
-  isBeta: false,
-});
+const mockGetTags = () => [];
 
 const http = httpServiceMock.createStartContract();
 http.get.mockResolvedValue(successfulResponse);
 
 describe('getIndices', () => {
   it('should work in a basic case', async () => {
-    const result = await getIndices(http, mockIndexPatternCreationType, 'kibana', false);
+    const result = await getIndices(http, mockGetTags, 'kibana', false);
     expect(result.length).toBe(3);
     expect(result[0].name).toBe('f-alias');
     expect(result[1].name).toBe('foo');
   });
 
   it('should ignore ccs query-all', async () => {
-    expect((await getIndices(http, mockIndexPatternCreationType, '*:', false)).length).toBe(0);
+    expect((await getIndices(http, mockGetTags, '*:', false)).length).toBe(0);
   });
 
   it('should ignore a single comma', async () => {
-    expect((await getIndices(http, mockIndexPatternCreationType, ',', false)).length).toBe(0);
-    expect((await getIndices(http, mockIndexPatternCreationType, ',*', false)).length).toBe(0);
-    expect((await getIndices(http, mockIndexPatternCreationType, ',foobar', false)).length).toBe(0);
+    expect((await getIndices(http, mockGetTags, ',', false)).length).toBe(0);
+    expect((await getIndices(http, mockGetTags, ',*', false)).length).toBe(0);
+    expect((await getIndices(http, mockGetTags, ',foobar', false)).length).toBe(0);
   });
 
   it('response object to item array', () => {
@@ -98,8 +80,8 @@ describe('getIndices', () => {
         },
       ],
     };
-    expect(responseToItemArray(result, mockIndexPatternCreationType)).toMatchSnapshot();
-    expect(responseToItemArray({}, mockIndexPatternCreationType)).toEqual([]);
+    expect(responseToItemArray(result, mockGetTags)).toMatchSnapshot();
+    expect(responseToItemArray({}, mockGetTags)).toEqual([]);
   });
 
   describe('errors', () => {
@@ -107,7 +89,7 @@ describe('getIndices', () => {
       http.get.mockImplementationOnce(() => {
         throw new Error('Test error');
       });
-      const result = await getIndices(http, mockIndexPatternCreationType, 'kibana', false);
+      const result = await getIndices(http, mockGetTags, 'kibana', false);
       expect(result.length).toBe(0);
     });
   });

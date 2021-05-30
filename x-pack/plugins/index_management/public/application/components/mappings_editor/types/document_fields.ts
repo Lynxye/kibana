@@ -1,13 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import { ReactNode } from 'react';
 
 import { GenericObject } from './mappings_editor';
 
-import { FieldConfig } from '../shared_imports';
+import { FieldConfig, RuntimeField } from '../shared_imports';
 import { PARAMETERS_DEFINITION } from '../constants';
 
 export interface DataTypeDefinition {
@@ -19,12 +21,13 @@ export interface DataTypeDefinition {
   };
   subTypes?: { label: string; types: SubType[] };
   description?: () => ReactNode;
+  isBeta?: boolean;
 }
 
 export interface ParameterDefinition {
   title?: string;
   description?: JSX.Element | string;
-  fieldConfig: FieldConfig;
+  fieldConfig: FieldConfig<any>;
   schema?: any;
   props?: { [key: string]: ParameterDefinition };
   documentation?: {
@@ -59,6 +62,11 @@ export type MainType =
   | 'geo_point'
   | 'geo_shape'
   | 'token_count'
+  | 'point'
+  | 'histogram'
+  | 'constant_keyword'
+  | 'version'
+  | 'wildcard'
   /**
    * 'other' is a special type that only exists inside of MappingsEditor as a placeholder
    * for undocumented field types.
@@ -106,6 +114,7 @@ export type ParameterName =
   | 'null_value_boolean'
   | 'null_value_geo_point'
   | 'null_value_ip'
+  | 'null_value_point'
   | 'copy_to'
   | 'dynamic'
   | 'dynamic_toggle'
@@ -124,6 +133,7 @@ export type ParameterName =
   | 'eager_global_ordinals_join'
   | 'index_prefixes'
   | 'index_phrases'
+  | 'positive_score_impact'
   | 'norms'
   | 'norms_keyword'
   | 'term_vector'
@@ -144,7 +154,9 @@ export type ParameterName =
   | 'dims'
   | 'depth_limit'
   | 'relations'
-  | 'max_shingle_size';
+  | 'max_shingle_size'
+  | 'value'
+  | 'meta';
 
 export interface Parameter {
   fieldConfig: FieldConfig;
@@ -208,4 +220,17 @@ export type ChildFieldName = 'properties' | 'fields';
 export interface AliasOption {
   id: string;
   label: string;
+}
+
+export interface RuntimeFields {
+  [name: string]: Omit<RuntimeField, 'name'>;
+}
+
+export interface NormalizedRuntimeField {
+  id: string;
+  source: RuntimeField;
+}
+
+export interface NormalizedRuntimeFields {
+  [id: string]: NormalizedRuntimeField;
 }

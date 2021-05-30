@@ -1,163 +1,120 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
-/* eslint-disable complexity */
 
-import moment from 'moment';
-
-import { AlertServices } from '../../../../../alerts/server';
-import { ListClient } from '../../../../../lists/server';
-import { RuleAlertAction } from '../../../../common/detection_engine/types';
-import { RuleTypeParams, RefreshTypes } from '../types';
-import { Logger } from '../../../../../../../src/core/server';
+import { identity } from 'lodash';
+import { SortResults } from '@elastic/elasticsearch/api/types';
 import { singleSearchAfter } from './single_search_after';
 import { singleBulkCreate } from './single_bulk_create';
-import { BuildRuleMessage } from './rule_messages';
-import { SignalSearchResponse } from './types';
-import { filterEventsAgainstList } from './filter_events_with_list';
-import { ExceptionListItemSchema } from '../../../../../lists/common/schemas';
-import { getSignalTimeTuples } from './utils';
-
-interface SearchAfterAndBulkCreateParams {
-  gap: moment.Duration | null;
-  previousStartedAt: Date | null | undefined;
-  ruleParams: RuleTypeParams;
-  services: AlertServices;
-  listClient: ListClient | undefined; // TODO: undefined is for temporary development, remove before merged
-  exceptionsList: ExceptionListItemSchema[];
-  logger: Logger;
-  id: string;
-  inputIndexPattern: string[];
-  signalsIndex: string;
-  name: string;
-  actions: RuleAlertAction[];
-  createdAt: string;
-  createdBy: string;
-  updatedBy: string;
-  updatedAt: string;
-  interval: string;
-  enabled: boolean;
-  pageSize: number;
-  filter: unknown;
-  refresh: RefreshTypes;
-  tags: string[];
-  throttle: string;
-  buildRuleMessage: BuildRuleMessage;
-}
-
-export interface SearchAfterAndBulkCreateReturnType {
-  success: boolean;
-  searchAfterTimes: string[];
-  bulkCreateTimes: string[];
-  lastLookBackDate: Date | null | undefined;
-  createdSignalsCount: number;
-}
+import { filterEventsAgainstList } from './filters/filter_events_against_list';
+import { sendAlertTelemetryEvents } from './send_telemetry_events';
+import {
+  createSearchAfterReturnType,
+  createSearchResultReturnType,
+  createSearchAfterReturnTypeFromResponse,
+  createTotalHitsFromSearchResult,
+  mergeReturns,
+  mergeSearchResults,
+  getSafeSortIds,
+} from './utils';
+import { SearchAfterAndBulkCreateParams, SearchAfterAndBulkCreateReturnType } from './types';
 
 // search_after through documents and re-index using bulk endpoint.
 export const searchAfterAndBulkCreate = async ({
-  gap,
-  previousStartedAt,
-  ruleParams,
+  tuples: totalToFromTuples,
+  ruleSO,
   exceptionsList,
   services,
   listClient,
   logger,
+  eventsTelemetry,
   id,
   inputIndexPattern,
   signalsIndex,
   filter,
-  actions,
-  name,
-  createdAt,
-  createdBy,
-  updatedBy,
-  updatedAt,
-  interval,
-  enabled,
   pageSize,
   refresh,
-  tags,
-  throttle,
   buildRuleMessage,
+  enrichment = identity,
 }: SearchAfterAndBulkCreateParams): Promise<SearchAfterAndBulkCreateReturnType> => {
-  const toReturn: SearchAfterAndBulkCreateReturnType = {
-    success: false,
-    searchAfterTimes: [],
-    bulkCreateTimes: [],
-    lastLookBackDate: null,
-    createdSignalsCount: 0,
-  };
+  const ruleParams = ruleSO.attributes.params;
+  let toReturn = createSearchAfterReturnType();
 
   // sortId tells us where to start our next consecutive search_after query
-  let sortId;
+  let sortIds: SortResults | undefined;
+  let hasSortId = true; // default to true so we execute the search on initial run
 
   // signalsCreatedCount keeps track of how many signals we have created,
   // to ensure we don't exceed maxSignals
   let signalsCreatedCount = 0;
 
-  const totalToFromTuples = getSignalTimeTuples({
-    logger,
-    ruleParamsFrom: ruleParams.from,
-    ruleParamsTo: ruleParams.to,
-    ruleParamsMaxSignals: ruleParams.maxSignals,
-    gap,
-    previousStartedAt,
-    interval,
-    buildRuleMessage,
-  });
+  const tuplesToBeLogged = [...totalToFromTuples];
   logger.debug(buildRuleMessage(`totalToFromTuples: ${totalToFromTuples.length}`));
+
   while (totalToFromTuples.length > 0) {
     const tuple = totalToFromTuples.pop();
     if (tuple == null || tuple.to == null || tuple.from == null) {
       logger.error(buildRuleMessage(`[-] malformed date tuple`));
-      toReturn.success = false;
-      return toReturn;
+      return createSearchAfterReturnType({
+        success: false,
+        errors: ['malformed date tuple'],
+      });
     }
     signalsCreatedCount = 0;
     while (signalsCreatedCount < tuple.maxSignals) {
       try {
-        logger.debug(buildRuleMessage(`sortIds: ${sortId}`));
+        let mergedSearchResults = createSearchResultReturnType();
+        logger.debug(buildRuleMessage(`sortIds: ${sortIds}`));
 
-        // perform search_after with optionally undefined sortId
-        const {
-          searchResult,
-          searchDuration,
-        }: { searchResult: SignalSearchResponse; searchDuration: string } = await singleSearchAfter(
-          {
-            searchAfterSortId: sortId,
+        if (hasSortId) {
+          const { searchResult, searchDuration, searchErrors } = await singleSearchAfter({
+            buildRuleMessage,
+            searchAfterSortIds: sortIds,
             index: inputIndexPattern,
             from: tuple.from.toISOString(),
             to: tuple.to.toISOString(),
             services,
             logger,
+            // @ts-expect-error please, declare a type explicitly instead of unknown
             filter,
-            pageSize: tuple.maxSignals < pageSize ? Math.ceil(tuple.maxSignals) : pageSize, // maximum number of docs to receive per search result.
+            pageSize: Math.ceil(Math.min(tuple.maxSignals, pageSize)),
             timestampOverride: ruleParams.timestampOverride,
+          });
+          mergedSearchResults = mergeSearchResults([mergedSearchResults, searchResult]);
+          toReturn = mergeReturns([
+            toReturn,
+            createSearchAfterReturnTypeFromResponse({
+              searchResult: mergedSearchResults,
+              timestampOverride: ruleParams.timestampOverride,
+            }),
+            createSearchAfterReturnType({
+              searchAfterTimes: [searchDuration],
+              errors: searchErrors,
+            }),
+          ]);
+
+          const lastSortIds = getSafeSortIds(
+            searchResult.hits.hits[searchResult.hits.hits.length - 1]?.sort
+          );
+          if (lastSortIds != null && lastSortIds.length !== 0) {
+            sortIds = lastSortIds;
+            hasSortId = true;
+          } else {
+            hasSortId = false;
           }
-        );
-        toReturn.searchAfterTimes.push(searchDuration);
+        }
 
         // determine if there are any candidate signals to be processed
-        const totalHits =
-          typeof searchResult.hits.total === 'number'
-            ? searchResult.hits.total
-            : searchResult.hits.total.value;
+        const totalHits = createTotalHitsFromSearchResult({ searchResult: mergedSearchResults });
         logger.debug(buildRuleMessage(`totalHits: ${totalHits}`));
         logger.debug(
-          buildRuleMessage(`searchResult.hit.hits.length: ${searchResult.hits.hits.length}`)
+          buildRuleMessage(`searchResult.hit.hits.length: ${mergedSearchResults.hits.hits.length}`)
         );
 
-        // search results yielded zero hits so exit
-        // with search_after, these two values can be different when
-        // searching with the last sortId of a consecutive search_after
-        // yields zero hits, but there were hits using the previous
-        // sortIds.
-        // e.g. totalHits was 156, index 50 of 100 results, do another search-after
-        // this time with a new sortId, index 22 of the remainding 56, get another sortId
-        // search with that sortId, total is still 156 but the hits.hits array is empty.
-        if (totalHits === 0 || searchResult.hits.hits.length === 0) {
+        if (totalHits === 0 || mergedSearchResults.hits.hits.length === 0) {
           logger.debug(
             buildRuleMessage(
               `${
@@ -165,29 +122,19 @@ export const searchAfterAndBulkCreate = async ({
               } was 0, exiting and moving on to next tuple`
             )
           );
-          toReturn.success = true;
           break;
         }
-        toReturn.lastLookBackDate =
-          searchResult.hits.hits.length > 0
-            ? new Date(
-                searchResult.hits.hits[searchResult.hits.hits.length - 1]?._source['@timestamp']
-              )
-            : null;
 
         // filter out the search results that match with the values found in the list.
         // the resulting set are signals to be indexed, given they are not duplicates
         // of signals already present in the signals index.
-        const filteredEvents: SignalSearchResponse =
-          listClient != null
-            ? await filterEventsAgainstList({
-                listClient,
-                exceptionsList,
-                logger,
-                eventSearchResult: searchResult,
-                buildRuleMessage,
-              })
-            : searchResult;
+        const filteredEvents = await filterEventsAgainstList({
+          listClient,
+          exceptionsList,
+          logger,
+          eventSearchResult: mergedSearchResults,
+          buildRuleMessage,
+        });
 
         // only bulk create if there are filteredEvents leftover
         // if there isn't anything after going through the value list filter
@@ -201,75 +148,61 @@ export const searchAfterAndBulkCreate = async ({
               tuple.maxSignals - signalsCreatedCount
             );
           }
+          const enrichedEvents = await enrichment(filteredEvents);
+
           const {
             bulkCreateDuration: bulkDuration,
             createdItemsCount: createdCount,
+            createdItems,
+            success: bulkSuccess,
+            errors: bulkErrors,
           } = await singleBulkCreate({
-            filteredEvents,
-            ruleParams,
+            buildRuleMessage,
+            filteredEvents: enrichedEvents,
+            ruleSO,
             services,
             logger,
             id,
             signalsIndex,
-            actions,
-            name,
-            createdAt,
-            createdBy,
-            updatedAt,
-            updatedBy,
-            interval,
-            enabled,
             refresh,
-            tags,
-            throttle,
           });
-          logger.debug(buildRuleMessage(`created ${createdCount} signals`));
-          toReturn.createdSignalsCount += createdCount;
+          toReturn = mergeReturns([
+            toReturn,
+            createSearchAfterReturnType({
+              success: bulkSuccess,
+              createdSignalsCount: createdCount,
+              createdSignals: createdItems,
+              bulkCreateTimes: bulkDuration ? [bulkDuration] : undefined,
+              errors: bulkErrors,
+            }),
+          ]);
           signalsCreatedCount += createdCount;
+          logger.debug(buildRuleMessage(`created ${createdCount} signals`));
           logger.debug(buildRuleMessage(`signalsCreatedCount: ${signalsCreatedCount}`));
-          if (bulkDuration) {
-            toReturn.bulkCreateTimes.push(bulkDuration);
-          }
-
           logger.debug(
             buildRuleMessage(`filteredEvents.hits.hits: ${filteredEvents.hits.hits.length}`)
           );
 
-          if (
-            filteredEvents.hits.hits[0].sort != null &&
-            filteredEvents.hits.hits[0].sort.length !== 0
-          ) {
-            sortId = filteredEvents.hits.hits[0].sort
-              ? filteredEvents.hits.hits[0].sort[0]
-              : undefined;
-          } else {
-            logger.debug(buildRuleMessage('sortIds was empty on filteredEvents'));
-            toReturn.success = true;
-            break;
-          }
-        } else {
-          // we are guaranteed to have searchResult hits at this point
-          // because we check before if the totalHits or
-          // searchResult.hits.hits.length is 0
-          if (
-            searchResult.hits.hits[0].sort != null &&
-            searchResult.hits.hits[0].sort.length !== 0
-          ) {
-            sortId = searchResult.hits.hits[0].sort ? searchResult.hits.hits[0].sort[0] : undefined;
-          } else {
-            logger.debug(buildRuleMessage('sortIds was empty on searchResult'));
-            toReturn.success = true;
-            break;
-          }
+          sendAlertTelemetryEvents(logger, eventsTelemetry, filteredEvents, buildRuleMessage);
         }
-      } catch (exc) {
+
+        if (!hasSortId) {
+          logger.debug(buildRuleMessage('ran out of sort ids to sort on'));
+          break;
+        }
+      } catch (exc: unknown) {
         logger.error(buildRuleMessage(`[-] search_after and bulk threw an error ${exc}`));
-        toReturn.success = false;
-        return toReturn;
+        return mergeReturns([
+          toReturn,
+          createSearchAfterReturnType({
+            success: false,
+            errors: [`${exc}`],
+          }),
+        ]);
       }
     }
   }
   logger.debug(buildRuleMessage(`[+] completed bulk index of ${toReturn.createdSignalsCount}`));
-  toReturn.success = true;
+  toReturn.totalToFromTuples = tuplesToBeLogged;
   return toReturn;
 };

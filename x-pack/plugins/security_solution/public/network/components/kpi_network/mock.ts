@@ -1,48 +1,46 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { KpiNetworkData } from '../../../graphql/types';
+import { NetworkKpiStrategyResponse } from '../../../../common/search_strategy';
 import { StatItems } from '../../../common/components/stat_items';
 
 export const mockNarrowDateRange = jest.fn();
 
-export const mockData: { KpiNetwork: KpiNetworkData } = {
-  KpiNetwork: {
-    networkEvents: 16,
-    uniqueFlowId: 10277307,
-    uniqueSourcePrivateIps: 383,
-    uniqueSourcePrivateIpsHistogram: [
-      {
-        x: new Date('2019-02-09T16:00:00.000Z').valueOf(),
-        y: 8,
-      },
-      {
-        x: new Date('2019-02-09T19:00:00.000Z').valueOf(),
-        y: 0,
-      },
-    ],
-    uniqueDestinationPrivateIps: 18,
-    uniqueDestinationPrivateIpsHistogram: [
-      {
-        x: new Date('2019-02-09T16:00:00.000Z').valueOf(),
-        y: 8,
-      },
-      {
-        x: new Date('2019-02-09T19:00:00.000Z').valueOf(),
-        y: 0,
-      },
-    ],
-    dnsQueries: 278,
-    tlsHandshakes: 10000,
-  },
+export const mockData: NetworkKpiStrategyResponse = {
+  networkEvents: 16,
+  uniqueFlowId: 10277307,
+  uniqueSourcePrivateIps: 383,
+  uniqueSourcePrivateIpsHistogram: [
+    {
+      x: new Date('2019-02-09T16:00:00.000Z').valueOf(),
+      y: 8,
+    },
+    {
+      x: new Date('2019-02-09T19:00:00.000Z').valueOf(),
+      y: 0,
+    },
+  ],
+  uniqueDestinationPrivateIps: 18,
+  uniqueDestinationPrivateIpsHistogram: [
+    {
+      x: new Date('2019-02-09T16:00:00.000Z').valueOf(),
+      y: 8,
+    },
+    {
+      x: new Date('2019-02-09T19:00:00.000Z').valueOf(),
+      y: 0,
+    },
+  ],
+  dnsQueries: 278,
+  tlsHandshakes: 10000,
 };
 
 const mockMappingItems: StatItems = {
   key: 'UniqueIps',
-  index: 0,
   fields: [
     {
       key: 'uniqueSourcePrivateIps',
@@ -64,7 +62,6 @@ const mockMappingItems: StatItems = {
   description: 'Unique private IPs',
   enableAreaChart: true,
   enableBarChart: true,
-  grow: 2,
 };
 
 export const mockNoChartMappings: Readonly<StatItems[]> = [
@@ -97,7 +94,6 @@ export const mockDisableChartsInitialData = {
   description: 'Unique private IPs',
   enableAreaChart: false,
   enableBarChart: false,
-  grow: 2,
   areaChart: undefined,
   barChart: undefined,
 };
@@ -124,7 +120,6 @@ export const mockEnableChartsInitialData = {
   description: 'Unique private IPs',
   enableAreaChart: true,
   enableBarChart: true,
-  grow: 2,
   areaChart: [],
   barChart: [
     {
@@ -221,9 +216,7 @@ export const mockEnableChartsData = {
     },
   ],
   from: '2019-06-15T06:00:00.000Z',
-  grow: 2,
   id: 'statItem',
-  index: 2,
   statKey: 'UniqueIps',
   to: '2019-06-18T06:00:00.000Z',
   narrowDateRange: mockNarrowDateRange,

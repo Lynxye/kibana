@@ -6,12 +6,13 @@
   "false_positives": [
     "Certain tools may create hidden temporary files or directories upon installation or as part of their normal behavior. These events can be filtered by the process arguments, username, or process name values."
   ],
+  "from": "now-9m",
   "index": [
     "auditbeat-*",
     "logs-endpoint.events.*"
   ],
   "language": "lucene",
-  "license": "Elastic License",
+  "license": "Elastic License v2",
   "max_signals": 33,
   "name": "Creation of Hidden Files and Directories",
   "query": "event.category:process AND event.type:(start or process_started) AND process.working_directory:(\"/tmp\" or \"/var/tmp\" or \"/dev/shm\") AND process.args:/\\.[a-zA-Z0-9_\\-][a-zA-Z0-9_\\-\\.]{1,254}/ AND NOT process.name:(ls or find)",
@@ -20,7 +21,10 @@
   "severity": "medium",
   "tags": [
     "Elastic",
-    "Linux"
+    "Host",
+    "Linux",
+    "Threat Detection",
+    "Defense Evasion"
   ],
   "threat": [
     {
@@ -32,9 +36,16 @@
       },
       "technique": [
         {
-          "id": "T1158",
-          "name": "Hidden Files and Directories",
-          "reference": "https://attack.mitre.org/techniques/T1158/"
+          "id": "T1564",
+          "name": "Hide Artifacts",
+          "reference": "https://attack.mitre.org/techniques/T1564/",
+          "subtechnique": [
+            {
+              "id": "T1564.001",
+              "name": "Hidden Files and Directories",
+              "reference": "https://attack.mitre.org/techniques/T1564/001/"
+            }
+          ]
         }
       ]
     },
@@ -45,15 +56,10 @@
         "name": "Persistence",
         "reference": "https://attack.mitre.org/tactics/TA0003/"
       },
-      "technique": [
-        {
-          "id": "T1158",
-          "name": "Hidden Files and Directories",
-          "reference": "https://attack.mitre.org/techniques/T1158/"
-        }
-      ]
+      "technique": []
     }
   ],
+  "timestamp_override": "event.ingested",
   "type": "query",
-  "version": 1
+  "version": 6
 }

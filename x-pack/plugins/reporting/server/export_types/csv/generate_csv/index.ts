@@ -1,25 +1,30 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
-import { IUiSettingsClient } from 'src/core/server';
-import { getFieldFormats } from '../../../services';
+import { ElasticsearchClient, IUiSettingsClient } from 'src/core/server';
 import { ReportingConfig } from '../../../';
 import { CancellationToken } from '../../../../../../plugins/reporting/common';
 import { CSV_BOM_CHARS } from '../../../../common/constants';
+import { byteSizeValueToNumber } from '../../../../common/schema_utils';
 import { LevelLogger } from '../../../lib';
-import { IndexPatternSavedObject, SavedSearchGeneratorResult } from '../types';
+import { getFieldFormats } from '../../../services';
+import { createEscapeValue } from '../../csv_searchsource/generate_csv/escape_value';
+import { MaxSizeStringBuilder } from '../../csv_searchsource/generate_csv/max_size_string_builder';
+import {
+  IndexPatternSavedObjectDeprecatedCSV,
+  SavedSearchGeneratorResultDeprecatedCSV,
+} from '../types';
 import { checkIfRowsHaveFormulas } from './check_cells_for_formulas';
-import { createEscapeValue } from './escape_value';
 import { fieldFormatMapFactory } from './field_format_map';
 import { createFlattenHit } from './flatten_hit';
 import { createFormatCsvValues } from './format_csv_values';
 import { getUiSettings } from './get_ui_settings';
-import { createHitIterator, EndpointCaller } from './hit_iterator';
-import { MaxSizeStringBuilder } from './max_size_string_builder';
+import { createHitIterator } from './hit_iterator';
 
 interface SearchRequest {
   index: string;
@@ -36,11 +41,9 @@ interface SearchRequest {
 }
 
 export interface GenerateCsvParams {
-  jobParams: {
-    browserTimezone: string;
-  };
+  browserTimezone?: string;
   searchRequest: SearchRequest;
-  indexPatternSavedObject: IndexPatternSavedObject;
+  indexPatternSavedObject: IndexPatternSavedObjectDeprecatedCSV;
   fields: string[];
   metaFields: string[];
   conflictedTypesFields: string[];
@@ -53,18 +56,13 @@ export function createGenerateCsv(logger: LevelLogger) {
     job: GenerateCsvParams,
     config: ReportingConfig,
     uiSettingsClient: IUiSettingsClient,
-    callEndpoint: EndpointCaller,
+    elasticsearchClient: ElasticsearchClient,
     cancellationToken: CancellationToken
-  ): Promise<SavedSearchGeneratorResult> {
-    const settings = await getUiSettings(
-      job.jobParams?.browserTimezone,
-      uiSettingsClient,
-      config,
-      logger
-    );
+  ): Promise<SavedSearchGeneratorResultDeprecatedCSV> {
+    const settings = await getUiSettings(job.browserTimezone, uiSettingsClient, config, logger);
     const escapeValue = createEscapeValue(settings.quoteValues, settings.escapeFormulaValues);
     const bom = config.get('csv', 'useByteOrderMarkEncoding') ? CSV_BOM_CHARS : '';
-    const builder = new MaxSizeStringBuilder(settings.maxSizeBytes, bom);
+    const builder = new MaxSizeStringBuilder(byteSizeValueToNumber(settings.maxSizeBytes), bom);
 
     const { fields, metaFields, conflictedTypesFields } = job;
     const header = `${fields.map(escapeValue).join(settings.separator)}\n`;
@@ -81,7 +79,7 @@ export function createGenerateCsv(logger: LevelLogger) {
 
     const iterator = hitIterator(
       settings.scroll,
-      callEndpoint,
+      elasticsearchClient,
       job.searchRequest,
       cancellationToken
     );
@@ -110,6 +108,10 @@ export function createGenerateCsv(logger: LevelLogger) {
         }
 
         if (done) {
+          break;
+        }
+
+        if (cancellationToken.isCancelled()) {
           break;
         }
 

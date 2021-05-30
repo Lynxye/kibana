@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { DatatableColumn } from '../../types';
@@ -20,5 +21,5 @@ export function getFieldType(columns: DatatableColumn[], field?: string): string
   }
   const realField = unquoteString(field);
   const column = columns.find((dataTableColumn) => dataTableColumn.name === realField);
-  return column ? column.type : 'null';
+  return column ? column.meta.type : 'null';
 }

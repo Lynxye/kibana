@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { Component, Fragment } from 'react';
@@ -13,8 +14,10 @@ import {
   EuiDroppable,
   EuiText,
   EuiTextAlign,
+  EuiTextColor,
   EuiSpacer,
 } from '@elastic/eui';
+import { FormattedMessage } from '@kbn/i18n/react';
 import { i18n } from '@kbn/i18n';
 import { AddTooltipFieldPopover, FieldProps } from './add_tooltip_field_popover';
 import { IField } from '../../classes/fields/field';
@@ -156,7 +159,18 @@ export class TooltipSelector extends Component<Props, State> {
 
   _renderProperties() {
     if (!this.state.selectedFieldProps.length) {
-      return null;
+      return (
+        <EuiText size="s" textAlign="center">
+          <p>
+            <EuiTextColor color="subdued">
+              <FormattedMessage
+                id="xpack.maps.tooltipSelector.emptyState.description"
+                defaultMessage="Add a tooltip field to create filters from field values."
+              />
+            </EuiTextColor>
+          </p>
+        </EuiText>
+      );
     }
 
     return (

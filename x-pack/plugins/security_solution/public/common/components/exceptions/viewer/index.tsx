@@ -1,13 +1,21 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { useCallback, useEffect, useReducer } from 'react';
 import { EuiSpacer } from '@elastic/eui';
 import uuid from 'uuid';
 
+import type {
+  ExceptionListTypeEnum,
+  ExceptionListItemSchema,
+  ExceptionListIdentifiers,
+  UseExceptionListItemsSuccess,
+} from '@kbn/securitysolution-io-ts-list-types';
+import { useApi, useExceptionListItems } from '@kbn/securitysolution-list-hooks';
 import * as i18n from '../translations';
 import { useStateToaster } from '../../toasters';
 import { useKibana } from '../../../../common/lib/kibana';
@@ -16,14 +24,7 @@ import { Loader } from '../../../../common/components/loader';
 import { ExceptionsViewerHeader } from './exceptions_viewer_header';
 import { ExceptionListItemIdentifiers, Filter } from '../types';
 import { allExceptionItemsReducer, State, ViewerModalName } from './reducer';
-import {
-  useExceptionList,
-  ExceptionIdentifiers,
-  ExceptionListTypeEnum,
-  ExceptionListItemSchema,
-  UseExceptionListSuccess,
-  useApi,
-} from '../../../../../public/lists_plugin_deps';
+
 import { ExceptionsViewerPagination } from './exceptions_pagination';
 import { ExceptionsViewerUtility } from './exceptions_utility';
 import { ExceptionsViewerItems } from './exceptions_viewer_items';
@@ -54,7 +55,7 @@ interface ExceptionsViewerProps {
   ruleId: string;
   ruleName: string;
   ruleIndices: string[];
-  exceptionListsMeta: ExceptionIdentifiers[];
+  exceptionListsMeta: ExceptionListIdentifiers[];
   availableListTypes: ExceptionListTypeEnum[];
   commentsAccordionId: string;
   onRuleChange?: () => void;
@@ -105,7 +106,10 @@ const ExceptionsViewerComponent = ({
   const { deleteExceptionItem, getExceptionListsItems } = useApi(services.http);
 
   const setExceptions = useCallback(
-    ({ exceptions: newExceptions, pagination: newPagination }: UseExceptionListSuccess): void => {
+    ({
+      exceptions: newExceptions,
+      pagination: newPagination,
+    }: UseExceptionListItemsSuccess): void => {
       dispatch({
         type: 'setExceptions',
         lists: exceptionListsMeta,
@@ -115,7 +119,7 @@ const ExceptionsViewerComponent = ({
     },
     [dispatch, exceptionListsMeta]
   );
-  const [loadingList, , , fetchListItems] = useExceptionList({
+  const [loadingList, , , fetchListItems] = useExceptionListItems({
     http: services.http,
     lists: exceptionListsMeta,
     filterOptions:
@@ -322,11 +326,13 @@ const ExceptionsViewerComponent = ({
         exceptionListTypeToEdit != null && (
           <EditExceptionModal
             ruleName={ruleName}
+            ruleId={ruleId}
             ruleIndices={ruleIndices}
             exceptionListType={exceptionListTypeToEdit}
             exceptionItem={exceptionToEdit}
             onCancel={handleOnCancelExceptionModal}
             onConfirm={handleOnConfirmExceptionModal}
+            onRuleChange={onRuleChange}
           />
         )}
 

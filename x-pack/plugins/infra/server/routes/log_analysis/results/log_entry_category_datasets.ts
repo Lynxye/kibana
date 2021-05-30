@@ -1,10 +1,11 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import Boom from 'boom';
+import Boom from '@hapi/boom';
 import {
   getLogEntryCategoryDatasetsRequestPayloadRT,
   getLogEntryCategoryDatasetsSuccessReponsePayloadRT,
@@ -14,6 +15,7 @@ import { createValidationFunction } from '../../../../common/runtime_types';
 import type { InfraBackendLibs } from '../../../lib/infra_types';
 import { getLogEntryCategoryDatasets } from '../../../lib/log_analysis';
 import { assertHasInfraMlPlugins } from '../../../utils/request_context';
+import { isMlPrivilegesError } from '../../../lib/log_analysis/errors';
 
 export const initGetLogEntryCategoryDatasetsRoute = ({ framework }: InfraBackendLibs) => {
   framework.registerRoute(
@@ -53,6 +55,15 @@ export const initGetLogEntryCategoryDatasetsRoute = ({ framework }: InfraBackend
       } catch (error) {
         if (Boom.isBoom(error)) {
           throw error;
+        }
+
+        if (isMlPrivilegesError(error)) {
+          return response.customError({
+            statusCode: 403,
+            body: {
+              message: error.message,
+            },
+          });
         }
 
         return response.customError({

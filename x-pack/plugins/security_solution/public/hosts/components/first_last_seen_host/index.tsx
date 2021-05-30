@@ -1,63 +1,70 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { EuiIcon, EuiLoadingSpinner, EuiText, EuiToolTip } from '@elastic/eui';
-import React from 'react';
-import { ApolloConsumer } from 'react-apollo';
+import React, { useMemo } from 'react';
 
-import { useFirstLastSeenHostQuery } from '../../containers/hosts/first_last_seen';
+import { useFirstLastSeenHost } from '../../containers/hosts/first_last_seen';
 import { getEmptyTagValue } from '../../../common/components/empty_value';
 import { FormattedRelativePreferenceDate } from '../../../common/components/formatted_date';
+import { Direction, DocValueFields } from '../../../../common/search_strategy';
 
 export enum FirstLastSeenHostType {
   FIRST_SEEN = 'first-seen',
   LAST_SEEN = 'last-seen',
 }
 
-export const FirstLastSeenHost = React.memo<{ hostname: string; type: FirstLastSeenHostType }>(
-  ({ hostname, type }) => {
+interface FirstLastSeenHostProps {
+  docValueFields: DocValueFields[];
+  hostName: string;
+  indexNames: string[];
+  type: FirstLastSeenHostType;
+}
+
+export const FirstLastSeenHost = React.memo<FirstLastSeenHostProps>(
+  ({ docValueFields, hostName, type, indexNames }) => {
+    const [loading, { firstSeen, lastSeen, errorMessage }] = useFirstLastSeenHost({
+      docValueFields,
+      hostName,
+      indexNames,
+      order: type === FirstLastSeenHostType.FIRST_SEEN ? Direction.asc : Direction.desc,
+    });
+    const valueSeen = useMemo(
+      () => (type === FirstLastSeenHostType.FIRST_SEEN ? firstSeen : lastSeen),
+      [firstSeen, lastSeen, type]
+    );
+
+    if (errorMessage != null) {
+      return (
+        <EuiToolTip
+          position="top"
+          content={errorMessage}
+          data-test-subj="firstLastSeenErrorToolTip"
+          aria-label={`firstLastSeenError-${type}`}
+          id={`firstLastSeenError-${hostName}-${type}`}
+        >
+          <EuiIcon aria-describedby={`firstLastSeenError-${hostName}-${type}`} type="alert" />
+        </EuiToolTip>
+      );
+    }
+
     return (
-      <ApolloConsumer>
-        {(client) => {
-          /* eslint-disable-next-line react-hooks/rules-of-hooks */
-          const { loading, firstSeen, lastSeen, errorMessage } = useFirstLastSeenHostQuery(
-            hostname,
-            'default',
-            client
-          );
-          if (errorMessage != null) {
-            return (
-              <EuiToolTip
-                position="top"
-                content={errorMessage}
-                data-test-subj="firstLastSeenErrorToolTip"
-                aria-label={`firstLastSeenError-${type}`}
-                id={`firstLastSeenError-${hostname}-${type}`}
-              >
-                <EuiIcon aria-describedby={`firstLastSeenError-${hostname}-${type}`} type="alert" />
-              </EuiToolTip>
-            );
-          }
-          const valueSeen = type === FirstLastSeenHostType.FIRST_SEEN ? firstSeen : lastSeen;
-          return (
-            <>
-              {loading && <EuiLoadingSpinner size="m" />}
-              {!loading && valueSeen != null && new Date(valueSeen).toString() === 'Invalid Date'
-                ? valueSeen
-                : !loading &&
-                  valueSeen != null && (
-                    <EuiText size="s">
-                      <FormattedRelativePreferenceDate value={`${valueSeen}`} />
-                    </EuiText>
-                  )}
-              {!loading && valueSeen == null && getEmptyTagValue()}
-            </>
-          );
-        }}
-      </ApolloConsumer>
+      <>
+        {loading && <EuiLoadingSpinner size="m" />}
+        {!loading && valueSeen != null && new Date(valueSeen).toString() === 'Invalid Date'
+          ? valueSeen
+          : !loading &&
+            valueSeen != null && (
+              <EuiText size="s">
+                <FormattedRelativePreferenceDate value={`${valueSeen}`} />
+              </EuiText>
+            )}
+        {!loading && valueSeen == null && getEmptyTagValue()}
+      </>
     );
   }
 );

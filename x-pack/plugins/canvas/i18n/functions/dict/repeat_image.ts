@@ -1,11 +1,12 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
-import { repeatImage } from '../../../canvas_plugin_src/functions/common/repeatImage';
+import { repeatImage } from '../../../canvas_plugin_src/functions/common/repeat_image';
 import { FunctionHelp } from '../function_help';
 import { FunctionFactory } from '../../../types';
 import { CONTEXT, BASE64, URL } from '../../constants';
@@ -17,7 +18,7 @@ export const help: FunctionHelp<FunctionFactory<typeof repeatImage>> = {
   args: {
     emptyImage: i18n.translate('xpack.canvas.functions.repeatImage.args.emptyImageHelpText', {
       defaultMessage:
-        'Fills the difference between the {CONTEXT} and {maxArg} parameter for the element with this image' +
+        'Fills the difference between the {CONTEXT} and {maxArg} parameter for the element with this image. ' +
         'Provide an image asset as a {BASE64} data {URL}, or pass in a sub-expression.',
       values: {
         BASE64,

@@ -1,19 +1,23 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
+import { EuiButtonGroup, EuiCheckbox } from '@elastic/eui';
+import { act } from '@testing-library/react';
 import React from 'react';
+
+import { mountWithIntl } from '@kbn/test/jest';
+
+import { KibanaFeature } from '../../../../../../../../features/public';
+import type { Role } from '../../../../../../../common/model';
 import { kibanaFeatures } from '../../../../__fixtures__/kibana_features';
 import { createKibanaPrivileges } from '../../../../__fixtures__/kibana_privileges';
 import { SecuredSubFeature } from '../../../../model';
 import { PrivilegeFormCalculator } from '../privilege_form_calculator';
-import { Role } from '../../../../../../../common/model';
-import { mountWithIntl } from 'test_utils/enzyme_helpers';
 import { SubFeatureForm } from './sub_feature_form';
-import { EuiCheckbox, EuiButtonGroup } from '@elastic/eui';
-import { act } from '@testing-library/react';
 
 // Note: these tests are not concerned with the proper display of privileges,
 // as that is verified by the feature_table and privilege_space_form tests.
@@ -233,5 +237,66 @@ describe('SubFeatureForm', () => {
     });
 
     expect(onChange).toHaveBeenCalledWith([]);
+  });
+
+  it('does not render empty privilege groups', () => {
+    // privilege groups are filtered server-side to only include the
+    // sub-feature privileges that are allowed by the current license.
+
+    const role = createRole([
+      {
+        base: [],
+        feature: {
+          with_sub_features: ['cool_all'],
+        },
+        spaces: [],
+      },
+    ]);
+    const feature = new KibanaFeature({
+      id: 'test_feature',
+      name: 'test feature',
+      category: { id: 'test', label: 'test' },
+      app: [],
+      privileges: {
+        all: {
+          savedObject: { all: [], read: [] },
+          ui: [],
+        },
+        read: {
+          savedObject: { all: [], read: [] },
+          ui: [],
+        },
+      },
+      subFeatures: [
+        {
+          name: 'subFeature1',
+          privilegeGroups: [
+            {
+              groupType: 'independent',
+              privileges: [],
+            },
+          ],
+        },
+      ],
+    });
+    const subFeature1 = new SecuredSubFeature(feature.toRaw().subFeatures![0]);
+    const kibanaPrivileges = createKibanaPrivileges([feature]);
+    const calculator = new PrivilegeFormCalculator(kibanaPrivileges, role);
+
+    const onChange = jest.fn();
+
+    const wrapper = mountWithIntl(
+      <SubFeatureForm
+        featureId={feature.id}
+        subFeature={subFeature1}
+        selectedFeaturePrivileges={['cool_all']}
+        privilegeCalculator={calculator}
+        privilegeIndex={0}
+        onChange={onChange}
+        disabled={false}
+      />
+    );
+
+    expect(wrapper.children()).toMatchInlineSnapshot(`null`);
   });
 });

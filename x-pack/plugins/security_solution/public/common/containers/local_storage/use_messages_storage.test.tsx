@@ -1,22 +1,19 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { renderHook, act } from '@testing-library/react-hooks';
 import { useKibana } from '../../lib/kibana';
-import { createUseKibanaMock } from '../../mock/kibana_react';
 import { useMessagesStorage, UseMessagesStorage } from './use_messages_storage';
 
 jest.mock('../../lib/kibana');
-const useKibanaMock = useKibana as jest.Mock;
 
 describe('useLocalStorage', () => {
   beforeEach(() => {
-    const services = { ...createUseKibanaMock()().services };
-    useKibanaMock.mockImplementation(() => ({ services }));
-    services.storage.store.clear();
+    useKibana().services.storage.clear();
   });
 
   it('should return an empty array when there is no messages', async () => {

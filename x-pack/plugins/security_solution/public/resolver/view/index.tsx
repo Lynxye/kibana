@@ -1,13 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 /* eslint-disable react/display-name */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Provider } from 'react-redux';
-import { storeFactory } from '../store';
+import { resolverStoreFactory } from '../store';
 import { StartServices } from '../../types';
 import { useKibana } from '../../../../../../src/plugins/kibana_react/public';
 import { DataAccessLayer, ResolverProps } from '../types';
@@ -24,11 +26,19 @@ export const Resolver = React.memo((props: ResolverProps) => {
   ]);
 
   const store = useMemo(() => {
-    return storeFactory(dataAccessLayer);
+    return resolverStoreFactory(dataAccessLayer);
   }, [dataAccessLayer]);
 
+  const [activeStore, updateActiveStore] = useState(store);
+
+  useEffect(() => {
+    if (props.shouldUpdate) {
+      updateActiveStore(resolverStoreFactory(dataAccessLayer));
+    }
+  }, [dataAccessLayer, props.shouldUpdate]);
+
   return (
-    <Provider store={store}>
+    <Provider store={activeStore}>
       <ResolverWithoutProviders {...props} />
     </Provider>
   );

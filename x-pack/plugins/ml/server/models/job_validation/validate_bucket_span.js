@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { estimateBucketSpanFactory } from '../../models/bucket_span_estimator';
@@ -45,7 +46,7 @@ const pickBucketSpan = (bucketSpans) => {
   return bucketSpans[i];
 };
 
-export async function validateBucketSpan(mlClusterClient, job, duration) {
+export async function validateBucketSpan(client, job, duration) {
   validateJobObject(job);
 
   // if there is no duration, do not run the estimate test
@@ -117,7 +118,7 @@ export async function validateBucketSpan(mlClusterClient, job, duration) {
   try {
     const estimations = estimatorConfigs.map((data) => {
       return new Promise((resolve) => {
-        estimateBucketSpanFactory(mlClusterClient)(data)
+        estimateBucketSpanFactory(client)(data)
           .then(resolve)
           // this catch gets triggered when the estimation code runs without error
           // but isn't able to come up with a bucket span estimation.

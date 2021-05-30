@@ -1,14 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import expect from '@kbn/expect';
 
 import { FtrProviderContext } from '../../../ftr_provider_context';
 import { USER } from '../../../../functional/services/ml/security_common';
-import { COMMON_REQUEST_HEADERS } from '../../../../functional/services/ml/common';
+import { COMMON_REQUEST_HEADERS } from '../../../../functional/services/ml/common_api';
 
 export default ({ getService }: FtrProviderContext) => {
   const supertest = getService('supertestWithoutAuth');
@@ -51,7 +52,11 @@ export default ({ getService }: FtrProviderContext) => {
       expect(createdCalendar.description).to.eql(requestBody.description);
       expect(createdCalendar.job_ids).to.eql(requestBody.job_ids);
 
-      await ml.api.waitForEventsToExistInCalendar(calendarId, requestBody.events);
+      await ml.api.waitForEventsToExistInCalendar(
+        calendarId,
+        // @ts-expect-error not full interface
+        requestBody.events
+      );
     });
 
     it('should not create new calendar for user without required permission', async () => {
@@ -60,10 +65,10 @@ export default ({ getService }: FtrProviderContext) => {
         .auth(USER.ML_VIEWER, ml.securityCommon.getPasswordForUser(USER.ML_VIEWER))
         .set(COMMON_REQUEST_HEADERS)
         .send(requestBody)
-        .expect(404);
+        .expect(403);
 
-      expect(body.error).to.eql('Not Found');
-      expect(body.message).to.eql('Not Found');
+      expect(body.error).to.eql('Forbidden');
+      expect(body.message).to.eql('Forbidden');
       await ml.api.waitForCalendarNotToExist(calendarId);
     });
 
@@ -73,10 +78,10 @@ export default ({ getService }: FtrProviderContext) => {
         .auth(USER.ML_UNAUTHORIZED, ml.securityCommon.getPasswordForUser(USER.ML_UNAUTHORIZED))
         .set(COMMON_REQUEST_HEADERS)
         .send(requestBody)
-        .expect(404);
+        .expect(403);
 
-      expect(body.error).to.eql('Not Found');
-      expect(body.message).to.eql('Not Found');
+      expect(body.error).to.eql('Forbidden');
+      expect(body.message).to.eql('Forbidden');
       await ml.api.waitForCalendarNotToExist(calendarId);
     });
   });

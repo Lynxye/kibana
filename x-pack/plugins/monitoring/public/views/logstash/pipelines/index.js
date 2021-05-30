@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React from 'react';
@@ -69,7 +70,12 @@ uiRoutes.when('/logstash/pipelines', {
   controller: class LogstashPipelinesList extends MonitoringViewBaseEuiTableController {
     constructor($injector, $scope) {
       super({
-        title: 'Logstash Pipelines',
+        title: i18n.translate('xpack.monitoring.logstash.pipelines.routeTitle', {
+          defaultMessage: 'Logstash Pipelines',
+        }),
+        pageTitle: i18n.translate('xpack.monitoring.logstash.pipelines.pageTitle', {
+          defaultMessage: 'Logstash pipelines',
+        }),
         storageKey: 'logstash.pipelines',
         getPageData,
         reactNodeId: 'monitoringLogstashPipelinesApp',

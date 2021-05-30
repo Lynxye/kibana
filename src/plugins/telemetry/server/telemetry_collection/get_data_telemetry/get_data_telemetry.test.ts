@@ -1,24 +1,14 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import { buildDataTelemetryPayload, getDataTelemetry } from './get_data_telemetry';
 import { DATA_DATASETS_INDEX_PATTERNS, DATA_DATASETS_INDEX_PATTERNS_UNIQUE } from './constants';
+import { elasticsearchServiceMock } from '../../../../../../src/core/server/mocks';
 
 describe('get_data_telemetry', () => {
   describe('DATA_DATASETS_INDEX_PATTERNS', () => {
@@ -56,19 +46,28 @@ describe('get_data_telemetry', () => {
       ).toStrictEqual([]);
     });
 
+    test('should not include Async Search indices', () => {
+      expect(
+        buildDataTelemetryPayload([
+          { name: '.async_search', docCount: 0 },
+          { name: '.async-search', docCount: 0 },
+        ])
+      ).toStrictEqual([]);
+    });
+
     test('matches some indices and puts them in their own category', () => {
       expect(
         buildDataTelemetryPayload([
-          // APM Indices have known shipper (so we can infer the datasetType from mapping constant)
+          // APM Indices have known shipper (so we can infer the dataStreamType from mapping constant)
           { name: 'apm-7.7.0-error-000001', shipper: 'apm', isECS: true },
           { name: 'apm-7.7.0-metric-000001', shipper: 'apm', isECS: true },
           { name: 'apm-7.7.0-onboarding-2020.05.17', shipper: 'apm', isECS: true },
           { name: 'apm-7.7.0-profile-000001', shipper: 'apm', isECS: true },
           { name: 'apm-7.7.0-span-000001', shipper: 'apm', isECS: true },
           { name: 'apm-7.7.0-transaction-000001', shipper: 'apm', isECS: true },
-          // Packetbeat indices with known shipper (we can infer datasetType from mapping constant)
+          // Packetbeat indices with known shipper (we can infer dataStreamType from mapping constant)
           { name: 'packetbeat-7.7.0-2020.06.11-000001', shipper: 'packetbeat', isECS: true },
-          // Matching patterns from the list => known datasetName but the rest is unknown
+          // Matching patterns from the list => known dataStreamDataset but the rest is unknown
           { name: 'filebeat-12314', docCount: 100, sizeInBytes: 10 },
           { name: 'metricbeat-1234', docCount: 100, sizeInBytes: 10, isECS: false },
           { name: '.app-search-1234', docCount: 0 },
@@ -76,8 +75,8 @@ describe('get_data_telemetry', () => {
           // New Indexing strategy: everything can be inferred from the constant_keyword values
           {
             name: '.ds-logs-nginx.access-default-000001',
-            datasetName: 'nginx.access',
-            datasetType: 'logs',
+            dataStreamDataset: 'nginx.access',
+            dataStreamType: 'logs',
             shipper: 'filebeat',
             isECS: true,
             docCount: 1000,
@@ -85,8 +84,8 @@ describe('get_data_telemetry', () => {
           },
           {
             name: '.ds-logs-nginx.access-default-000002',
-            datasetName: 'nginx.access',
-            datasetType: 'logs',
+            dataStreamDataset: 'nginx.access',
+            dataStreamType: 'logs',
             shipper: 'filebeat',
             isECS: true,
             docCount: 1000,
@@ -94,8 +93,8 @@ describe('get_data_telemetry', () => {
           },
           {
             name: '.ds-traces-something-default-000002',
-            datasetName: 'something',
-            datasetType: 'traces',
+            dataStreamDataset: 'something',
+            dataStreamType: 'traces',
             packageName: 'some-package',
             isECS: true,
             docCount: 1000,
@@ -103,26 +102,26 @@ describe('get_data_telemetry', () => {
           },
           {
             name: '.ds-metrics-something.else-default-000002',
-            datasetName: 'something.else',
-            datasetType: 'metrics',
+            dataStreamDataset: 'something.else',
+            dataStreamType: 'metrics',
             managedBy: 'ingest-manager',
             isECS: true,
             docCount: 1000,
             sizeInBytes: 60,
           },
-          // Filter out if it has datasetName and datasetType but none of the shipper, packageName or managedBy === 'ingest-manager'
+          // Filter out if it has dataStreamDataset and dataStreamType but none of the shipper, packageName or managedBy === 'ingest-manager'
           {
             name: 'some-index-that-should-not-show',
-            datasetName: 'should-not-show',
-            datasetType: 'logs',
+            dataStreamDataset: 'should-not-show',
+            dataStreamType: 'logs',
             isECS: true,
             docCount: 1000,
             sizeInBytes: 60,
           },
           {
             name: 'other-index-that-should-not-show',
-            datasetName: 'should-not-show-either',
-            datasetType: 'metrics',
+            dataStreamDataset: 'should-not-show-either',
+            dataStreamType: 'metrics',
             managedBy: 'me',
             isECS: true,
             docCount: 1000,
@@ -167,7 +166,7 @@ describe('get_data_telemetry', () => {
           doc_count: 0,
         },
         {
-          dataset: { name: 'nginx.access', type: 'logs' },
+          data_stream: { dataset: 'nginx.access', type: 'logs' },
           shipper: 'filebeat',
           index_count: 2,
           ecs_index_count: 2,
@@ -175,7 +174,7 @@ describe('get_data_telemetry', () => {
           size_in_bytes: 1060,
         },
         {
-          dataset: { name: 'something', type: 'traces' },
+          data_stream: { dataset: 'something', type: 'traces' },
           package: { name: 'some-package' },
           index_count: 1,
           ecs_index_count: 1,
@@ -183,7 +182,7 @@ describe('get_data_telemetry', () => {
           size_in_bytes: 60,
         },
         {
-          dataset: { name: 'something.else', type: 'metrics' },
+          data_stream: { dataset: 'something.else', type: 'metrics' },
           index_count: 1,
           ecs_index_count: 1,
           doc_count: 1000,
@@ -195,13 +194,15 @@ describe('get_data_telemetry', () => {
 
   describe('getDataTelemetry', () => {
     test('it returns the base payload (all 0s) because no indices are found', async () => {
-      const callCluster = mockCallCluster();
-      await expect(getDataTelemetry(callCluster)).resolves.toStrictEqual([]);
+      const esClient = mockEsClient();
+      await expect(getDataTelemetry(esClient)).resolves.toStrictEqual([]);
+      expect(esClient.indices.getMapping).toHaveBeenCalledTimes(1);
+      expect(esClient.indices.stats).toHaveBeenCalledTimes(1);
     });
 
     test('can only see the index mappings, but not the stats', async () => {
-      const callCluster = mockCallCluster(['filebeat-12314']);
-      await expect(getDataTelemetry(callCluster)).resolves.toStrictEqual([
+      const esClient = mockEsClient(['filebeat-12314']);
+      await expect(getDataTelemetry(esClient)).resolves.toStrictEqual([
         {
           pattern_name: 'filebeat',
           shipper: 'filebeat',
@@ -209,10 +210,12 @@ describe('get_data_telemetry', () => {
           ecs_index_count: 0,
         },
       ]);
+      expect(esClient.indices.getMapping).toHaveBeenCalledTimes(1);
+      expect(esClient.indices.stats).toHaveBeenCalledTimes(1);
     });
 
     test('can see the mappings and the stats', async () => {
-      const callCluster = mockCallCluster(
+      const esClient = mockEsClient(
         ['filebeat-12314'],
         { isECS: true },
         {
@@ -221,7 +224,7 @@ describe('get_data_telemetry', () => {
           },
         }
       );
-      await expect(getDataTelemetry(callCluster)).resolves.toStrictEqual([
+      await expect(getDataTelemetry(esClient)).resolves.toStrictEqual([
         {
           pattern_name: 'filebeat',
           shipper: 'filebeat',
@@ -234,9 +237,9 @@ describe('get_data_telemetry', () => {
     });
 
     test('find an index that does not match any index pattern but has mappings metadata', async () => {
-      const callCluster = mockCallCluster(
+      const esClient = mockEsClient(
         ['cannot_match_anything'],
-        { isECS: true, datasetType: 'traces', shipper: 'my-beat' },
+        { isECS: true, dataStreamType: 'traces', shipper: 'my-beat' },
         {
           indices: {
             cannot_match_anything: {
@@ -245,9 +248,9 @@ describe('get_data_telemetry', () => {
           },
         }
       );
-      await expect(getDataTelemetry(callCluster)).resolves.toStrictEqual([
+      await expect(getDataTelemetry(esClient)).resolves.toStrictEqual([
         {
-          dataset: { name: undefined, type: 'traces' },
+          data_stream: { dataset: undefined, type: 'traces' },
           shipper: 'my-beat',
           index_count: 1,
           ecs_index_count: 1,
@@ -258,45 +261,51 @@ describe('get_data_telemetry', () => {
     });
 
     test('return empty array when there is an error', async () => {
-      const callCluster = jest.fn().mockRejectedValue(new Error('Something went terribly wrong'));
-      await expect(getDataTelemetry(callCluster)).resolves.toStrictEqual([]);
+      const esClient = elasticsearchServiceMock.createClusterClient().asInternalUser;
+      esClient.indices.getMapping.mockRejectedValue(new Error('Something went terribly wrong'));
+      esClient.indices.stats.mockRejectedValue(new Error('Something went terribly wrong'));
+      await expect(getDataTelemetry(esClient)).resolves.toStrictEqual([]);
     });
   });
 });
-
-function mockCallCluster(
-  indicesMappings: string[] = [],
-  { isECS = false, datasetName = '', datasetType = '', shipper = '' } = {},
-  indexStats: any = {}
+function mockEsClient(
+  indicesMappings: string[] = [], // an array of `indices` to get mappings from.
+  { isECS = false, dataStreamDataset = '', dataStreamType = '', shipper = '' } = {},
+  indexStats = {}
 ) {
-  return jest.fn().mockImplementation(async (method: string, opts: any) => {
-    if (method === 'indices.getMapping') {
-      return Object.fromEntries(
-        indicesMappings.map((index) => [
-          index,
-          {
-            mappings: {
-              ...(shipper && { _meta: { beat: shipper } }),
-              properties: {
-                ...(isECS && { ecs: { properties: { version: { type: 'keyword' } } } }),
-                ...((datasetType || datasetName) && {
-                  dataset: {
-                    properties: {
-                      ...(datasetName && {
-                        name: { type: 'constant_keyword', value: datasetName },
-                      }),
-                      ...(datasetType && {
-                        type: { type: 'constant_keyword', value: datasetType },
-                      }),
-                    },
+  const esClient = elasticsearchServiceMock.createClusterClient().asInternalUser;
+  // @ts-expect-error
+  esClient.indices.getMapping.mockImplementationOnce(async () => {
+    const body = Object.fromEntries(
+      indicesMappings.map((index) => [
+        index,
+        {
+          mappings: {
+            ...(shipper && { _meta: { beat: shipper } }),
+            properties: {
+              ...(isECS && { ecs: { properties: { version: { type: 'keyword' } } } }),
+              ...((dataStreamType || dataStreamDataset) && {
+                data_stream: {
+                  properties: {
+                    ...(dataStreamDataset && {
+                      dataset: { type: 'constant_keyword', value: dataStreamDataset },
+                    }),
+                    ...(dataStreamType && {
+                      type: { type: 'constant_keyword', value: dataStreamType },
+                    }),
                   },
-                }),
-              },
+                },
+              }),
             },
           },
-        ])
-      );
-    }
-    return indexStats;
+        },
+      ])
+    );
+    return { body };
   });
+  // @ts-expect-error
+  esClient.indices.stats.mockImplementationOnce(async () => {
+    return { body: indexStats };
+  });
+  return esClient;
 }

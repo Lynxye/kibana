@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { EuiBreadcrumb } from '@elastic/eui';
@@ -54,6 +55,20 @@ export const CREATE_JOB_BREADCRUMB: ChromeBreadcrumb = Object.freeze({
   href: '/jobs/new_job',
 });
 
+export const CALENDAR_MANAGEMENT_BREADCRUMB: ChromeBreadcrumb = Object.freeze({
+  text: i18n.translate('xpack.ml.settings.breadcrumbs.calendarManagementLabel', {
+    defaultMessage: 'Calendar management',
+  }),
+  href: '/settings/calendars_list',
+});
+
+export const FILTER_LISTS_BREADCRUMB: ChromeBreadcrumb = Object.freeze({
+  text: i18n.translate('xpack.ml.settings.breadcrumbs.filterListsLabel', {
+    defaultMessage: 'Filter lists',
+  }),
+  href: '/settings/filter_lists',
+});
+
 const breadcrumbs = {
   ML_BREADCRUMB,
   SETTINGS_BREADCRUMB,
@@ -61,6 +76,8 @@ const breadcrumbs = {
   DATA_FRAME_ANALYTICS_BREADCRUMB,
   DATA_VISUALIZER_BREADCRUMB,
   CREATE_JOB_BREADCRUMB,
+  CALENDAR_MANAGEMENT_BREADCRUMB,
+  FILTER_LISTS_BREADCRUMB,
 };
 type Breadcrumb = keyof typeof breadcrumbs;
 
@@ -76,10 +93,12 @@ export const breadcrumbOnClickFactory = (
 
 export const getBreadcrumbWithUrlForApp = (
   breadcrumbName: Breadcrumb,
-  navigateToPath: NavigateToPath
+  navigateToPath: NavigateToPath,
+  basePath: string
 ): EuiBreadcrumb => {
   return {
-    ...breadcrumbs[breadcrumbName],
+    text: breadcrumbs[breadcrumbName].text,
+    href: `${basePath}/app/ml${breadcrumbs[breadcrumbName].href}`,
     onClick: breadcrumbOnClickFactory(breadcrumbs[breadcrumbName].href, navigateToPath),
   };
 };

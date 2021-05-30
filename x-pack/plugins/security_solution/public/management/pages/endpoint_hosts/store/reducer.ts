@@ -1,16 +1,24 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { isOnHostPage, hasSelectedHost } from './selectors';
-import { HostState } from '../types';
+import {
+  isOnEndpointPage,
+  hasSelectedEndpoint,
+  uiQueryParams,
+  getCurrentIsolationRequestState,
+} from './selectors';
+import { EndpointState } from '../types';
 import { AppAction } from '../../../../common/store/actions';
 import { ImmutableReducer } from '../../../../common/store';
 import { Immutable } from '../../../../../common/endpoint/types';
+import { DEFAULT_POLL_INTERVAL } from '../../../common/constants';
+import { createUninitialisedResourceState, isUninitialisedResourceState } from '../../../state';
 
-export const initialHostListState: Immutable<HostState> = {
+export const initialEndpointListState: Immutable<EndpointState> = {
   hosts: [],
   pageSize: 10,
   pageIndex: 0,
@@ -29,20 +37,35 @@ export const initialHostListState: Immutable<HostState> = {
   policyItemsLoading: false,
   endpointPackageInfo: undefined,
   nonExistingPolicies: {},
-  hostsExist: true,
+  agentPolicies: {},
+  endpointsExist: true,
+  patterns: [],
+  patternsError: undefined,
+  isAutoRefreshEnabled: true,
+  autoRefreshInterval: DEFAULT_POLL_INTERVAL,
+  agentsWithEndpointsTotal: 0,
+  agentsWithEndpointsTotalError: undefined,
+  endpointsTotal: 0,
+  endpointsTotalError: undefined,
+  queryStrategyVersion: undefined,
+  policyVersionInfo: undefined,
+  hostStatus: undefined,
+  isolationRequestState: createUninitialisedResourceState(),
 };
 
 /* eslint-disable-next-line complexity */
-export const hostListReducer: ImmutableReducer<HostState, AppAction> = (
-  state = initialHostListState,
+export const endpointListReducer: ImmutableReducer<EndpointState, AppAction> = (
+  state = initialEndpointListState,
   action
 ) => {
-  if (action.type === 'serverReturnedHostList') {
+  if (action.type === 'serverReturnedEndpointList') {
     const {
       hosts,
       total,
       request_page_size: pageSize,
       request_page_index: pageIndex,
+      query_strategy_version: queryStrategyVersion,
+      policy_info: policyVersionInfo,
     } = action.payload;
     return {
       ...state,
@@ -50,16 +73,18 @@ export const hostListReducer: ImmutableReducer<HostState, AppAction> = (
       total,
       pageSize,
       pageIndex,
+      queryStrategyVersion,
+      policyVersionInfo,
       loading: false,
       error: undefined,
     };
-  } else if (action.type === 'serverFailedToReturnHostList') {
+  } else if (action.type === 'serverFailedToReturnEndpointList') {
     return {
       ...state,
       error: action.payload,
       loading: false,
     };
-  } else if (action.type === 'serverReturnedHostNonExistingPolicies') {
+  } else if (action.type === 'serverReturnedEndpointNonExistingPolicies') {
     return {
       ...state,
       nonExistingPolicies: {
@@ -67,14 +92,36 @@ export const hostListReducer: ImmutableReducer<HostState, AppAction> = (
         ...action.payload,
       },
     };
-  } else if (action.type === 'serverReturnedHostDetails') {
+  } else if (action.type === 'serverReturnedEndpointAgentPolicies') {
+    return {
+      ...state,
+      agentPolicies: {
+        ...state.agentPolicies,
+        ...action.payload,
+      },
+    };
+  } else if (action.type === 'serverReturnedMetadataPatterns') {
+    // handle error case
+    return {
+      ...state,
+      patterns: action.payload,
+      patternsError: undefined,
+    };
+  } else if (action.type === 'serverFailedToReturnMetadataPatterns') {
+    return {
+      ...state,
+      patternsError: action.payload,
+    };
+  } else if (action.type === 'serverReturnedEndpointDetails') {
     return {
       ...state,
       details: action.payload.metadata,
+      policyVersionInfo: action.payload.policy_info,
+      hostStatus: action.payload.host_status,
       detailsLoading: false,
       detailsError: undefined,
     };
-  } else if (action.type === 'serverFailedToReturnHostDetails') {
+  } else if (action.type === 'serverFailedToReturnEndpointDetails') {
     return {
       ...state,
       detailsError: action.payload,
@@ -92,14 +139,14 @@ export const hostListReducer: ImmutableReducer<HostState, AppAction> = (
       error: action.payload,
       policyItemsLoading: false,
     };
-  } else if (action.type === 'serverReturnedHostPolicyResponse') {
+  } else if (action.type === 'serverReturnedEndpointPolicyResponse') {
     return {
       ...state,
       policyResponse: action.payload.policy_response,
       policyResponseLoading: false,
       policyResponseError: undefined,
     };
-  } else if (action.type === 'serverFailedToReturnHostPolicyResponse') {
+  } else if (action.type === 'serverFailedToReturnEndpointPolicyResponse') {
     return {
       ...state,
       policyResponseError: action.payload,
@@ -111,7 +158,7 @@ export const hostListReducer: ImmutableReducer<HostState, AppAction> = (
       selectedPolicyId: action.payload.selectedPolicyId,
       policyResponseLoading: false,
     };
-  } else if (action.type === 'serverCancelledHostListLoading') {
+  } else if (action.type === 'serverCancelledEndpointListLoading') {
     return {
       ...state,
       loading: false,
@@ -126,69 +173,114 @@ export const hostListReducer: ImmutableReducer<HostState, AppAction> = (
       ...state,
       endpointPackageInfo: action.payload,
     };
-  } else if (action.type === 'serverReturnedHostExistValue') {
+  } else if (action.type === 'serverReturnedEndpointExistValue') {
     return {
       ...state,
-      hostsExist: action.payload,
+      endpointsExist: action.payload,
     };
+  } else if (action.type === 'serverReturnedAgenstWithEndpointsTotal') {
+    return {
+      ...state,
+      agentsWithEndpointsTotal: action.payload,
+      agentsWithEndpointsTotalError: undefined,
+    };
+  } else if (action.type === 'serverFailedToReturnAgenstWithEndpointsTotal') {
+    return {
+      ...state,
+      agentsWithEndpointsTotalError: action.payload,
+    };
+  } else if (action.type === 'serverReturnedEndpointsTotal') {
+    return {
+      ...state,
+      endpointsTotal: action.payload,
+      endpointsTotalError: undefined,
+    };
+  } else if (action.type === 'serverFailedToReturnEndpointsTotal') {
+    return {
+      ...state,
+      endpointsTotalError: action.payload,
+    };
+  } else if (action.type === 'userUpdatedEndpointListRefreshOptions') {
+    return {
+      ...state,
+      isAutoRefreshEnabled: action.payload.isAutoRefreshEnabled ?? state.isAutoRefreshEnabled,
+      autoRefreshInterval: action.payload.autoRefreshInterval ?? state.autoRefreshInterval,
+    };
+  } else if (action.type === 'endpointIsolationRequestStateChange') {
+    return handleEndpointIsolationRequestStateChanged(state, action);
   } else if (action.type === 'userChangedUrl') {
-    const newState: Immutable<HostState> = {
+    const newState: Immutable<EndpointState> = {
       ...state,
       location: action.payload,
     };
-    const isCurrentlyOnListPage = isOnHostPage(newState) && !hasSelectedHost(newState);
-    const wasPreviouslyOnListPage = isOnHostPage(state) && !hasSelectedHost(state);
-    const isCurrentlyOnDetailsPage = isOnHostPage(newState) && hasSelectedHost(newState);
-    const wasPreviouslyOnDetailsPage = isOnHostPage(state) && hasSelectedHost(state);
+    const isCurrentlyOnListPage = isOnEndpointPage(newState) && !hasSelectedEndpoint(newState);
+    const wasPreviouslyOnListPage = isOnEndpointPage(state) && !hasSelectedEndpoint(state);
+    const isCurrentlyOnDetailsPage = isOnEndpointPage(newState) && hasSelectedEndpoint(newState);
+    const wasPreviouslyOnDetailsPage = isOnEndpointPage(state) && hasSelectedEndpoint(state);
 
-    // if on the host list page for the first time, return new location and load list
-    if (isCurrentlyOnListPage) {
-      if (!wasPreviouslyOnListPage) {
-        return {
-          ...state,
-          location: action.payload,
-          loading: true,
-          policyItemsLoading: true,
-          error: undefined,
-          detailsError: undefined,
-        };
-      }
-    } else if (isCurrentlyOnDetailsPage) {
-      // if previous page was the list or another host details page, load host details only
-      if (wasPreviouslyOnDetailsPage || wasPreviouslyOnListPage) {
-        return {
-          ...state,
-          location: action.payload,
-          detailsLoading: true,
-          policyResponseLoading: true,
-          error: undefined,
-          detailsError: undefined,
-          policyResponseError: undefined,
-        };
-      } else {
-        // if previous page was not host list or host details, load both list and details
-        return {
-          ...state,
-          location: action.payload,
-          loading: true,
-          detailsLoading: true,
-          policyResponseLoading: true,
-          error: undefined,
-          detailsError: undefined,
-          policyResponseError: undefined,
-          policyItemsLoading: true,
-        };
-      }
-    }
-    // otherwise we are not on a host list or details page
-    return {
-      ...state,
+    const stateUpdates: Partial<EndpointState> = {
       location: action.payload,
       error: undefined,
       detailsError: undefined,
       policyResponseError: undefined,
-      hostsExist: true,
+    };
+
+    // Reset `isolationRequestState` if needed
+    if (
+      uiQueryParams(newState).show !== 'isolate' &&
+      !isUninitialisedResourceState(getCurrentIsolationRequestState(newState))
+    ) {
+      stateUpdates.isolationRequestState = createUninitialisedResourceState();
+    }
+
+    // if on the endpoint list page for the first time, return new location and load list
+    if (isCurrentlyOnListPage) {
+      if (!wasPreviouslyOnListPage) {
+        return {
+          ...state,
+          ...stateUpdates,
+          loading: true,
+          policyItemsLoading: true,
+        };
+      }
+    } else if (isCurrentlyOnDetailsPage) {
+      // if previous page was the list or another endpoint details page, load endpoint details only
+      if (wasPreviouslyOnDetailsPage || wasPreviouslyOnListPage) {
+        return {
+          ...state,
+          ...stateUpdates,
+          detailsLoading: true,
+          policyResponseLoading: true,
+        };
+      } else {
+        // if previous page was not endpoint list or endpoint details, load both list and details
+        return {
+          ...state,
+          ...stateUpdates,
+          loading: true,
+          detailsLoading: true,
+          policyResponseLoading: true,
+          policyItemsLoading: true,
+        };
+      }
+    }
+    // otherwise we are not on a endpoint list or details page
+    return {
+      ...state,
+      ...stateUpdates,
+      endpointsExist: true,
     };
   }
+
   return state;
+};
+
+const handleEndpointIsolationRequestStateChanged: ImmutableReducer<
+  EndpointState,
+  AppAction & { type: 'endpointIsolationRequestStateChange' }
+> = (state, action) => {
+  return {
+    ...state!,
+    isolationRequestState: action.payload,
+  };
 };

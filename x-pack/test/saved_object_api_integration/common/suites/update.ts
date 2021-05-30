@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import expect from '@kbn/expect';
@@ -28,15 +29,18 @@ const NEW_ATTRIBUTE_KEY = 'title'; // all type mappings include this attribute, 
 const NEW_ATTRIBUTE_VAL = `Updated attribute value ${Date.now()}`;
 
 const DOES_NOT_EXIST = Object.freeze({ type: 'dashboard', id: 'does-not-exist' });
-export const TEST_CASES = Object.freeze({ ...CASES, DOES_NOT_EXIST });
+export const TEST_CASES: Record<string, UpdateTestCase> = Object.freeze({
+  ...CASES,
+  DOES_NOT_EXIST,
+});
 
 export function updateTestSuiteFactory(esArchiver: any, supertest: SuperTest<any>) {
-  const expectForbidden = expectResponses.forbiddenTypes('update');
+  const expectSavedObjectForbidden = expectResponses.forbiddenTypes('update');
   const expectResponseBody = (testCase: UpdateTestCase): ExpectResponseBody => async (
     response: Record<string, any>
   ) => {
     if (testCase.failure === 403) {
-      await expectForbidden(testCase.type)(response);
+      await expectSavedObjectForbidden(testCase.type)(response);
     } else {
       // permitted
       const object = response.body;

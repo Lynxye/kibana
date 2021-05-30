@@ -1,20 +1,22 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
-import {
+
+import type {
+  ExceptionListType,
+  ExceptionListItemSchema,
+  ExceptionListIdentifiers,
+  Pagination,
+} from '@kbn/securitysolution-io-ts-list-types';
+import type {
   FilterOptions,
   ExceptionsPagination,
   ExceptionListItemIdentifiers,
   Filter,
 } from '../types';
-import {
-  ExceptionListType,
-  ExceptionListItemSchema,
-  ExceptionIdentifiers,
-  Pagination,
-} from '../../../../../public/lists_plugin_deps';
 
 export type ViewerModalName = 'addModal' | 'editModal' | null;
 
@@ -36,7 +38,7 @@ export interface State {
 export type Action =
   | {
       type: 'setExceptions';
-      lists: ExceptionIdentifiers[];
+      lists: ExceptionListIdentifiers[];
       exceptions: ExceptionListItemSchema[];
       pagination: Pagination;
     }
@@ -48,7 +50,7 @@ export type Action =
   | { type: 'updateModalOpen'; modalName: ViewerModalName }
   | {
       type: 'updateExceptionToEdit';
-      lists: ExceptionIdentifiers[];
+      lists: ExceptionListIdentifiers[];
       exception: ExceptionListItemSchema;
     }
   | { type: 'updateLoadingItemIds'; items: ExceptionListItemIdentifiers[] }

@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React from 'react';
@@ -16,13 +17,12 @@ import {
 } from '../../common/constants';
 import { UptimeApp, UptimeAppProps } from './uptime_app';
 import { ClientPluginsSetup, ClientPluginsStart } from './plugin';
-import { PLUGIN } from '../../common/constants/plugin';
 
 export function renderApp(
   core: CoreStart,
   plugins: ClientPluginsSetup,
   startPlugins: ClientPluginsStart,
-  { element }: AppMountParameters
+  appMountParameters: AppMountParameters
 ) {
   const {
     application: { capabilities },
@@ -67,14 +67,14 @@ export function renderApp(
           },
         ],
       }),
-    routerBasename: basePath.prepend(PLUGIN.ROUTER_BASE_NAME),
     setBadge,
+    appMountParameters,
     setBreadcrumbs: core.chrome.setBreadcrumbs,
   };
 
-  ReactDOM.render(<UptimeApp {...props} />, element);
+  ReactDOM.render(<UptimeApp {...props} />, appMountParameters.element);
 
   return () => {
-    ReactDOM.unmountComponentAtNode(element);
+    ReactDOM.unmountComponentAtNode(appMountParameters.element);
   };
 }

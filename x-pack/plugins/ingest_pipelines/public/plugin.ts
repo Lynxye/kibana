@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
@@ -9,11 +10,13 @@ import { CoreSetup, Plugin } from 'src/core/public';
 
 import { PLUGIN_ID } from '../common/constants';
 import { uiMetricService, apiService } from './application/services';
-import { Dependencies } from './types';
+import { SetupDependencies, StartDependencies } from './types';
+import { registerUrlGenerator } from './url_generator';
 
-export class IngestPipelinesPlugin implements Plugin {
-  public setup(coreSetup: CoreSetup, plugins: Dependencies): void {
-    const { management, usageCollection } = plugins;
+export class IngestPipelinesPlugin
+  implements Plugin<void, void, SetupDependencies, StartDependencies> {
+  public setup(coreSetup: CoreSetup<StartDependencies>, plugins: SetupDependencies): void {
+    const { management, usageCollection, share } = plugins;
     const { http, getStartServices } = coreSetup;
 
     // Initialize services
@@ -46,6 +49,8 @@ export class IngestPipelinesPlugin implements Plugin {
         };
       },
     });
+
+    registerUrlGenerator(coreSetup, management, share);
   }
 
   public start() {}

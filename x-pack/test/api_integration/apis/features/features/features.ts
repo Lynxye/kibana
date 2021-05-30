@@ -1,11 +1,12 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import expect from '@kbn/expect';
-import { Feature } from '../../../../../plugins/features/server';
+import { KibanaFeature } from '../../../../../plugins/features/server';
 import { FtrProviderContext } from '../../../ftr_provider_context';
 
 export default function ({ getService }: FtrProviderContext) {
@@ -49,7 +50,7 @@ export default function ({ getService }: FtrProviderContext) {
       });
     });
     describe('without the "global all" privilege', () => {
-      it('should return a 404', async () => {
+      it('should return a 403', async () => {
         const username = 'dashboard_all';
         const roleName = 'dashboard_all';
         const password = `${username}-password`;
@@ -76,7 +77,7 @@ export default function ({ getService }: FtrProviderContext) {
             .get('/api/features')
             .auth(username, password)
             .set('kbn-xsrf', 'foo')
-            .expect(404);
+            .expect(403);
         } finally {
           await security.role.delete(roleName);
           await security.user.delete(username);
@@ -90,7 +91,7 @@ export default function ({ getService }: FtrProviderContext) {
 
         expect(body).to.be.an(Array);
 
-        const featureIds = body.map((b: Feature) => b.id);
+        const featureIds = body.map((b: KibanaFeature) => b.id);
         expect(featureIds.sort()).to.eql(
           [
             'discover',
@@ -105,16 +106,17 @@ export default function ({ getService }: FtrProviderContext) {
             'graph',
             'monitoring',
             'savedObjectsManagement',
+            'savedObjectsTagging',
             'ml',
             'apm',
-            'builtInAlerts',
+            'stackAlerts',
             'canvas',
             'infrastructure',
             'logs',
             'maps',
             'uptime',
             'siem',
-            'ingestManager',
+            'fleet',
           ].sort()
         );
       });

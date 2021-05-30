@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { FC, useContext, useEffect, useState } from 'react';
@@ -26,6 +27,7 @@ import { PLUGIN_ID } from '../../../../../../../../../../../common/constants/app
 import { Calendar } from '../../../../../../../../../../../common/types/calendars';
 import { useMlKibana } from '../../../../../../../../../contexts/kibana';
 import { GLOBAL_CALENDAR } from '../../../../../../../../../../../common/constants/calendars';
+import { ML_PAGES } from '../../../../../../../../../../../common/constants/ml_url_generator';
 
 export const CalendarsSelection: FC = () => {
   const {
@@ -73,7 +75,7 @@ export const CalendarsSelection: FC = () => {
   };
 
   const manageCalendarsHref = getUrlForApp(PLUGIN_ID, {
-    path: '/settings/calendars_list',
+    path: ML_PAGES.CALENDARS_MANAGE,
   });
 
   return (

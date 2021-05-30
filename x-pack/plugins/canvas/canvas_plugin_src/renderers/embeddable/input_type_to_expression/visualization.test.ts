@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { toExpression } from './visualization';
@@ -68,5 +69,17 @@ describe('toExpression', () => {
 
     expect(aColor?.chain[0].arguments.color[0]).toBe(colorMap.a);
     expect(bColor?.chain[0].arguments.color[0]).toBe(colorMap.b);
+  });
+
+  it('includes empty panel title', () => {
+    const input = {
+      ...baseInput,
+      title: '',
+    };
+
+    const expression = toExpression(input);
+    const ast = fromExpression(expression);
+
+    expect(ast.chain[0].arguments).toHaveProperty('title', [input.title]);
   });
 });

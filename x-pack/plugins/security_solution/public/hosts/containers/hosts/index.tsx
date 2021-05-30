@@ -1,188 +1,221 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { get, getOr } from 'lodash/fp';
-import memoizeOne from 'memoize-one';
-import React from 'react';
-import { Query } from 'react-apollo';
-import { connect } from 'react-redux';
-import { compose } from 'redux';
+import deepEqual from 'fast-deep-equal';
+import { noop } from 'lodash/fp';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Subscription } from 'rxjs';
 
-import { DEFAULT_INDEX_KEY } from '../../../../common/constants';
-import {
-  Direction,
-  GetHostsTableQuery,
-  HostsEdges,
-  HostsFields,
-  PageInfoPaginated,
-} from '../../../graphql/types';
-import { inputsModel, State, inputsSelectors } from '../../../common/store';
-import { createFilter, getDefaultFetchPolicy } from '../../../common/containers/helpers';
-import {
-  QueryTemplatePaginated,
-  QueryTemplatePaginatedProps,
-} from '../../../common/containers/query_template_paginated';
-import { withKibana, WithKibanaProps } from '../../../common/lib/kibana';
+import { inputsModel, State } from '../../../common/store';
+import { createFilter } from '../../../common/containers/helpers';
+import { useKibana } from '../../../common/lib/kibana';
+import { useDeepEqualSelector } from '../../../common/hooks/use_selector';
 import { hostsModel, hostsSelectors } from '../../store';
-import { HostsTableQuery } from './hosts_table.gql_query';
 import { generateTablePaginationOptions } from '../../../common/components/paginated_table/helpers';
+import {
+  HostsEdges,
+  PageInfoPaginated,
+  DocValueFields,
+  HostsQueries,
+  HostsRequestOptions,
+  HostsStrategyResponse,
+} from '../../../../common/search_strategy';
+import { ESTermQuery } from '../../../../common/typed_json';
 
-const ID = 'hostsQuery';
+import * as i18n from './translations';
+import { isCompleteResponse, isErrorResponse } from '../../../../../../../src/plugins/data/common';
+import { getInspectResponse } from '../../../helpers';
+import { InspectResponse } from '../../../types';
+import { useTransforms } from '../../../transforms/containers/use_transforms';
+import { useAppToasts } from '../../../common/hooks/use_app_toasts';
 
+const ID = 'hostsAllQuery';
+
+type LoadPage = (newActivePage: number) => void;
 export interface HostsArgs {
   endDate: string;
   hosts: HostsEdges[];
   id: string;
-  inspect: inputsModel.InspectQuery;
+  inspect: InspectResponse;
   isInspected: boolean;
-  loading: boolean;
-  loadPage: (newActivePage: number) => void;
+  loadPage: LoadPage;
   pageInfo: PageInfoPaginated;
   refetch: inputsModel.Refetch;
   startDate: string;
   totalCount: number;
 }
 
-export interface OwnProps extends QueryTemplatePaginatedProps {
-  children: (args: HostsArgs) => React.ReactNode;
-  type: hostsModel.HostsType;
-  startDate: string;
+interface UseAllHost {
+  docValueFields?: DocValueFields[];
+  filterQuery?: ESTermQuery | string;
   endDate: string;
+  indexNames: string[];
+  skip?: boolean;
+  startDate: string;
+  type: hostsModel.HostsType;
 }
 
-export interface HostsComponentReduxProps {
-  activePage: number;
-  isInspected: boolean;
-  limit: number;
-  sortField: HostsFields;
-  direction: Direction;
-}
+export const useAllHost = ({
+  docValueFields,
+  filterQuery,
+  endDate,
+  indexNames,
+  skip = false,
+  startDate,
+  type,
+}: UseAllHost): [boolean, HostsArgs] => {
+  const getHostsSelector = useMemo(() => hostsSelectors.hostsSelector(), []);
+  const { activePage, direction, limit, sortField } = useDeepEqualSelector((state: State) =>
+    getHostsSelector(state, type)
+  );
+  const { data } = useKibana().services;
+  const refetch = useRef<inputsModel.Refetch>(noop);
+  const abortCtrl = useRef(new AbortController());
+  const searchSubscription = useRef(new Subscription());
+  const [loading, setLoading] = useState(false);
+  const [hostsRequest, setHostRequest] = useState<HostsRequestOptions | null>(null);
+  const { getTransformChangesIfTheyExist } = useTransforms();
+  const { addError, addWarning } = useAppToasts();
 
-type HostsProps = OwnProps & HostsComponentReduxProps & WithKibanaProps;
+  const wrappedLoadMore = useCallback(
+    (newActivePage: number) => {
+      setHostRequest((prevRequest) => {
+        if (!prevRequest) {
+          return prevRequest;
+        }
 
-class HostsComponentQuery extends QueryTemplatePaginated<
-  HostsProps,
-  GetHostsTableQuery.Query,
-  GetHostsTableQuery.Variables
-> {
-  private memoizedHosts: (
-    variables: string,
-    data: GetHostsTableQuery.Source | undefined
-  ) => HostsEdges[];
+        return {
+          ...prevRequest,
+          pagination: generateTablePaginationOptions(newActivePage, limit),
+        };
+      });
+    },
+    [limit]
+  );
 
-  constructor(props: HostsProps) {
-    super(props);
-    this.memoizedHosts = memoizeOne(this.getHosts);
-  }
+  const [hostsResponse, setHostsResponse] = useState<HostsArgs>({
+    endDate,
+    hosts: [],
+    id: ID,
+    inspect: {
+      dsl: [],
+      response: [],
+    },
+    isInspected: false,
+    loadPage: wrappedLoadMore,
+    pageInfo: {
+      activePage: 0,
+      fakeTotalCount: 0,
+      showMorePagesIndicator: false,
+    },
+    refetch: refetch.current,
+    startDate,
+    totalCount: -1,
+  });
 
-  public render() {
-    const {
-      activePage,
-      docValueFields,
-      id = ID,
-      isInspected,
-      children,
-      direction,
-      filterQuery,
-      endDate,
-      kibana,
-      limit,
-      startDate,
-      skip,
-      sourceId,
-      sortField,
-    } = this.props;
-    const defaultIndex = kibana.services.uiSettings.get<string[]>(DEFAULT_INDEX_KEY);
+  const hostsSearch = useCallback(
+    (request: HostsRequestOptions | null) => {
+      if (request == null || skip) {
+        return;
+      }
 
-    const variables: GetHostsTableQuery.Variables = {
-      sourceId,
-      timerange: {
-        interval: '12h',
-        from: startDate,
-        to: endDate,
-      },
-      sort: {
-        direction,
-        field: sortField,
-      },
-      pagination: generateTablePaginationOptions(activePage, limit),
-      filterQuery: createFilter(filterQuery),
-      defaultIndex,
-      docValueFields: docValueFields ?? [],
-      inspect: isInspected,
-    };
-    return (
-      <Query<GetHostsTableQuery.Query, GetHostsTableQuery.Variables>
-        query={HostsTableQuery}
-        fetchPolicy={getDefaultFetchPolicy()}
-        notifyOnNetworkStatusChange
-        variables={variables}
-        skip={skip}
-      >
-        {({ data, loading, fetchMore, networkStatus, refetch }) => {
-          this.setFetchMore(fetchMore);
-          this.setFetchMoreOptions((newActivePage: number) => ({
-            variables: {
-              pagination: generateTablePaginationOptions(newActivePage, limit),
-            },
-            updateQuery: (prev, { fetchMoreResult }) => {
-              if (!fetchMoreResult) {
-                return prev;
+      const asyncSearch = async () => {
+        abortCtrl.current = new AbortController();
+        setLoading(true);
+
+        searchSubscription.current = data.search
+          .search<HostsRequestOptions, HostsStrategyResponse>(request, {
+            strategy: 'securitySolutionSearchStrategy',
+            abortSignal: abortCtrl.current.signal,
+          })
+          .subscribe({
+            next: (response) => {
+              if (isCompleteResponse(response)) {
+                setLoading(false);
+                setHostsResponse((prevResponse) => ({
+                  ...prevResponse,
+                  hosts: response.edges,
+                  inspect: getInspectResponse(response, prevResponse.inspect),
+                  pageInfo: response.pageInfo,
+                  refetch: refetch.current,
+                  totalCount: response.totalCount,
+                }));
+                searchSubscription.current.unsubscribe();
+              } else if (isErrorResponse(response)) {
+                setLoading(false);
+                addWarning(i18n.ERROR_ALL_HOST);
+                searchSubscription.current.unsubscribe();
               }
-              return {
-                ...fetchMoreResult,
-                source: {
-                  ...fetchMoreResult.source,
-                  Hosts: {
-                    ...fetchMoreResult.source.Hosts,
-                    edges: [...fetchMoreResult.source.Hosts.edges],
-                  },
-                },
-              };
             },
-          }));
-          const isLoading = this.isItAValidLoading(loading, variables, networkStatus);
-          return children({
-            endDate,
-            hosts: this.memoizedHosts(JSON.stringify(variables), get('source', data)),
-            id,
-            inspect: getOr(null, 'source.Hosts.inspect', data),
-            isInspected,
-            loading: isLoading,
-            loadPage: this.wrappedLoadMore,
-            pageInfo: getOr({}, 'source.Hosts.pageInfo', data),
-            refetch: this.memoizedRefetchQuery(variables, limit, refetch),
-            startDate,
-            totalCount: getOr(-1, 'source.Hosts.totalCount', data),
+            error: (msg) => {
+              setLoading(false);
+              addError(msg, { title: i18n.FAIL_ALL_HOST });
+              searchSubscription.current.unsubscribe();
+            },
           });
-        }}
-      </Query>
-    );
-  }
+      };
+      searchSubscription.current.unsubscribe();
+      abortCtrl.current.abort();
+      asyncSearch();
+      refetch.current = asyncSearch;
+    },
+    [data.search, addError, addWarning, skip]
+  );
 
-  private getHosts = (
-    variables: string,
-    source: GetHostsTableQuery.Source | undefined
-  ): HostsEdges[] => getOr([], 'Hosts.edges', source);
-}
+  useEffect(() => {
+    setHostRequest((prevRequest) => {
+      const { indices, factoryQueryType, timerange } = getTransformChangesIfTheyExist({
+        factoryQueryType: HostsQueries.hosts,
+        indices: indexNames,
+        filterQuery,
+        timerange: {
+          interval: '12h',
+          from: startDate,
+          to: endDate,
+        },
+      });
+      const myRequest = {
+        ...(prevRequest ?? {}),
+        defaultIndex: indices,
+        docValueFields: docValueFields ?? [],
+        factoryQueryType,
+        filterQuery: createFilter(filterQuery),
+        pagination: generateTablePaginationOptions(activePage, limit),
+        timerange,
+        sort: {
+          direction,
+          field: sortField,
+        },
+      };
+      if (!deepEqual(prevRequest, myRequest)) {
+        return myRequest;
+      }
+      return prevRequest;
+    });
+  }, [
+    activePage,
+    direction,
+    docValueFields,
+    endDate,
+    filterQuery,
+    indexNames,
+    limit,
+    startDate,
+    sortField,
+    getTransformChangesIfTheyExist,
+  ]);
 
-const makeMapStateToProps = () => {
-  const getHostsSelector = hostsSelectors.hostsSelector();
-  const getQuery = inputsSelectors.globalQueryByIdSelector();
-  const mapStateToProps = (state: State, { type, id = ID }: OwnProps) => {
-    const { isInspected } = getQuery(state, id);
-    return {
-      ...getHostsSelector(state, type),
-      isInspected,
+  useEffect(() => {
+    hostsSearch(hostsRequest);
+    return () => {
+      searchSubscription.current.unsubscribe();
+      abortCtrl.current.abort();
     };
-  };
-  return mapStateToProps;
-};
+  }, [hostsRequest, hostsSearch]);
 
-export const HostsQuery = compose<React.ComponentClass<OwnProps>>(
-  connect(makeMapStateToProps),
-  withKibana
-)(HostsComponentQuery);
+  return [loading, hostsResponse];
+};

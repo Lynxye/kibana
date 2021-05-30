@@ -1,10 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { kbnBaseUrl } from '../../../../../../src/plugins/kibana_legacy/common/kbn_base_url';
 import { uiRoutes } from '../../angular/helpers/routes';
 import template from './index.html';
 
@@ -35,7 +35,7 @@ uiRoutes.when('/access-denied', {
     const $interval = $injector.get('$interval');
 
     // The template's "Back to Kibana" button click handler
-    this.goToKibanaURL = kbnBaseUrl;
+    this.goToKibanaURL = '/app/home';
 
     // keep trying to load data in the background
     const accessPoller = $interval(() => tryPrivilege($http), 5 * 1000); // every 5 seconds

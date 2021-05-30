@@ -1,11 +1,12 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { EuiModalBody, EuiModalHeader } from '@elastic/eui';
-import React, { memo, useMemo } from 'react';
+import { EuiModalBody, EuiModalHeader, EuiSpacer } from '@elastic/eui';
+import React, { Fragment, memo, useMemo } from 'react';
 import styled from 'styled-components';
 
 import { OpenTimelineProps, ActionTimelineToShow } from '../types';
@@ -38,7 +39,6 @@ export const OpenTimelineModalBody = memo<OpenTimelineProps>(
     onToggleShowNotes,
     pageIndex,
     pageSize,
-    query,
     searchResults,
     selectedItems,
     sortDirection,
@@ -61,12 +61,11 @@ export const OpenTimelineModalBody = memo<OpenTimelineProps>(
 
     const SearchRowContent = useMemo(
       () => (
-        <>
-          {!!timelineFilter && timelineFilter}
+        <Fragment key="search-row-content">
           {!!templateTimelineFilter && templateTimelineFilter}
-        </>
+        </Fragment>
       ),
-      [timelineFilter, templateTimelineFilter]
+      [templateTimelineFilter]
     );
 
     return (
@@ -84,9 +83,14 @@ export const OpenTimelineModalBody = memo<OpenTimelineProps>(
 
         <EuiModalBody>
           <>
+            {!!timelineFilter && (
+              <>
+                {timelineFilter}
+                <EuiSpacer size="m" />
+              </>
+            )}
             <SearchRow
               data-test-subj="search-row"
-              favoriteCount={favoriteCount}
               onlyFavorites={onlyFavorites}
               onQueryChange={onQueryChange}
               onToggleOnlyFavorites={onToggleOnlyFavorites}

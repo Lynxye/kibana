@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import dateMath from '@elastic/datemath';
@@ -9,22 +10,29 @@ import moment from 'moment';
 import memoizeOne from 'memoize-one';
 import { useLocation } from 'react-router-dom';
 
-import { ActionVariable } from '../../../../../../triggers_actions_ui/public';
-import { RuleAlertAction, RuleType } from '../../../../../common/detection_engine/types';
-import { isMlRule } from '../../../../../common/machine_learning/helpers';
+import styled from 'styled-components';
+import { EuiFlexItem } from '@elastic/eui';
+import {
+  Threats,
+  Type,
+  SeverityMapping,
+  Severity,
+} from '@kbn/securitysolution-io-ts-alerting-types';
+import { ENDPOINT_LIST_ID } from '@kbn/securitysolution-list-constants';
+import { ActionVariables } from '../../../../../../triggers_actions_ui/public';
+import { normalizeThresholdField } from '../../../../../common/detection_engine/utils';
+import { RuleAlertAction } from '../../../../../common/detection_engine/types';
+import { assertUnreachable } from '../../../../../common/utility_types';
 import { transformRuleToAlertAction } from '../../../../../common/detection_engine/transform_actions';
 import { Filter } from '../../../../../../../../src/plugins/data/public';
-import { ENDPOINT_LIST_ID } from '../../../../shared_imports';
 import { Rule } from '../../../containers/detection_engine/rules';
 import {
   AboutStepRule,
   AboutStepRuleDetails,
   DefineStepRule,
-  IMitreEnterpriseAttack,
   ScheduleStepRule,
   ActionsStepRule,
 } from './types';
-import { SeverityMapping } from '../../../../../common/detection_engine/schemas/common/schemas';
 import { severityOptions } from '../../../components/rules/step_about_rule/data';
 
 export interface GetStepsData {
@@ -64,7 +72,6 @@ export const getActionsStepsData = (
 
   return {
     actions: actions?.map(transformRuleToAlertAction),
-    isNew: false,
     throttle,
     kibanaSiemAppUrl: meta?.kibana_siem_app_url,
     enabled,
@@ -72,11 +79,17 @@ export const getActionsStepsData = (
 };
 
 export const getDefineStepsData = (rule: Rule): DefineStepRule => ({
-  isNew: false,
   ruleType: rule.type,
   anomalyThreshold: rule.anomaly_threshold ?? 50,
-  machineLearningJobId: rule.machine_learning_job_id ?? '',
+  machineLearningJobId: rule.machine_learning_job_id ?? [],
   index: rule.index ?? [],
+  threatIndex: rule.threat_index ?? [],
+  threatQueryBar: {
+    query: { query: rule.threat_query ?? '', language: rule.threat_language ?? '' },
+    filters: (rule.threat_filters ?? []) as Filter[],
+    saved_id: undefined,
+  },
+  threatMapping: rule.threat_mapping ?? [],
   queryBar: {
     query: { query: rule.query ?? '', language: rule.language ?? '' },
     filters: (rule.filters ?? []) as Filter[],
@@ -87,8 +100,16 @@ export const getDefineStepsData = (rule: Rule): DefineStepRule => ({
     title: rule.timeline_title ?? null,
   },
   threshold: {
-    field: rule.threshold?.field ? [rule.threshold.field] : [],
+    field: normalizeThresholdField(rule.threshold?.field),
     value: `${rule.threshold?.value || 100}`,
+    ...(rule.threshold?.cardinality?.length
+      ? {
+          cardinality: {
+            field: [`${rule.threshold.cardinality[0].field}`],
+            value: `${rule.threshold.cardinality[0].value}`,
+          },
+        }
+      : {}),
   },
 });
 
@@ -97,7 +118,6 @@ export const getScheduleStepsData = (rule: Rule): ScheduleStepRule => {
   const fromHumanizedValue = getHumanizedDuration(from, interval);
 
   return {
-    isNew: false,
     interval,
     from: fromHumanizedValue,
   };
@@ -108,15 +128,21 @@ export const getHumanizedDuration = (from: string, interval: string): string => 
   const intervalValue = dateMath.parse(`now-${interval}`) ?? moment();
 
   const fromDuration = moment.duration(intervalValue.diff(fromValue));
-  const fromHumanize = `${Math.floor(fromDuration.asHours())}h`;
 
-  if (fromDuration.asSeconds() < 60) {
-    return `${Math.floor(fromDuration.asSeconds())}s`;
-  } else if (fromDuration.asMinutes() < 60) {
-    return `${Math.floor(fromDuration.asMinutes())}m`;
+  // Basing calculations off floored seconds count as moment durations weren't precise
+  const intervalDuration = Math.floor(fromDuration.asSeconds());
+  // For consistency of display value
+  if (intervalDuration === 0) {
+    return `0s`;
   }
 
-  return fromHumanize;
+  if (intervalDuration % 3600 === 0) {
+    return `${intervalDuration / 3600}h`;
+  } else if (intervalDuration % 60 === 0) {
+    return `${intervalDuration / 60}m`;
+  } else {
+    return `${intervalDuration}s`;
+  }
 };
 
 export const getAboutStepsData = (rule: Rule, detailsView: boolean): AboutStepRule => {
@@ -136,10 +162,10 @@ export const getAboutStepsData = (rule: Rule, detailsView: boolean): AboutStepRu
     risk_score: riskScore,
     tags,
     threat,
+    threat_indicator_path: threatIndicatorPath,
   } = rule;
 
   return {
-    isNew: false,
     author,
     isAssociatedToEndpointList: exceptionsList?.some(({ id }) => id === ENDPOINT_LIST_ID) ?? false,
     isBuildingBlock: buildingBlockType !== undefined,
@@ -151,7 +177,7 @@ export const getAboutStepsData = (rule: Rule, detailsView: boolean): AboutStepRu
     note: note!,
     references,
     severity: {
-      value: severity,
+      value: severity as Severity,
       mapping: fillEmptySeverityMappings(severityMapping),
       isMappingChecked: severityMapping.length > 0,
     },
@@ -162,7 +188,8 @@ export const getAboutStepsData = (rule: Rule, detailsView: boolean): AboutStepRu
       isMappingChecked: riskScoreMapping.length > 0,
     },
     falsePositives,
-    threat: threat as IMitreEnterpriseAttack[],
+    threat: threat as Threats,
+    threatIndicatorPath,
   };
 };
 
@@ -307,21 +334,24 @@ export const redirectToDetections = (
   hasEncryptionKey === false ||
   needsListsConfiguration;
 
-const getRuleSpecificRuleParamKeys = (ruleType: RuleType) => {
+const getRuleSpecificRuleParamKeys = (ruleType: Type) => {
   const queryRuleParams = ['index', 'filters', 'language', 'query', 'saved_id'];
 
-  if (isMlRule(ruleType)) {
-    return ['anomaly_threshold', 'machine_learning_job_id'];
+  switch (ruleType) {
+    case 'machine_learning':
+      return ['anomaly_threshold', 'machine_learning_job_id'];
+    case 'threshold':
+      return ['threshold', ...queryRuleParams];
+    case 'threat_match':
+    case 'query':
+    case 'saved_query':
+    case 'eql':
+      return queryRuleParams;
   }
-
-  if (ruleType === 'threshold') {
-    return ['threshold', ...queryRuleParams];
-  }
-
-  return queryRuleParams;
+  assertUnreachable(ruleType);
 };
 
-export const getActionMessageRuleParams = (ruleType: RuleType): string[] => {
+export const getActionMessageRuleParams = (ruleType: Type): string[] => {
   const commonRuleParamsKeys = [
     'id',
     'name',
@@ -338,7 +368,6 @@ export const getActionMessageRuleParams = (ruleType: RuleType): string[] => {
     'threat',
     'type',
     'version',
-    // 'lists',
   ];
 
   const ruleParamsKeys = [
@@ -350,23 +379,36 @@ export const getActionMessageRuleParams = (ruleType: RuleType): string[] => {
 };
 
 export const getActionMessageParams = memoizeOne(
-  (ruleType: RuleType | undefined): ActionVariable[] => {
+  (ruleType: Type | undefined): ActionVariables => {
     if (!ruleType) {
-      return [];
+      return { state: [], params: [] };
     }
     const actionMessageRuleParams = getActionMessageRuleParams(ruleType);
-
-    return [
-      { name: 'state.signals_count', description: 'state.signals_count' },
-      { name: '{context.results_link}', description: 'context.results_link' },
-      ...actionMessageRuleParams.map((param) => {
-        const extendedParam = `context.rule.${param}`;
-        return { name: extendedParam, description: extendedParam };
-      }),
-    ];
+    // Prefixes are being added automatically by the ActionTypeForm
+    return {
+      state: [{ name: 'signals_count', description: 'state.signals_count' }],
+      params: [],
+      context: [
+        {
+          name: 'results_link',
+          description: 'context.results_link',
+          useWithTripleBracesInTemplates: true,
+        },
+        { name: 'alerts', description: 'context.alerts' },
+        ...actionMessageRuleParams.map((param) => {
+          const extendedParam = `rule.${param}`;
+          return { name: extendedParam, description: `context.${extendedParam}` };
+        }),
+      ],
+    };
   }
 );
 
 // typed as null not undefined as the initial state for this value is null.
 export const userHasNoPermissions = (canUserCRUD: boolean | null): boolean =>
   canUserCRUD != null ? !canUserCRUD : false;
+
+export const MaxWidthEuiFlexItem = styled(EuiFlexItem)`
+  max-width: 1000px;
+  overflow: hidden;
+`;

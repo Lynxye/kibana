@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import {
@@ -17,14 +18,14 @@ export class StyleMeta {
   }
 
   getRangeFieldMetaDescriptor(fieldName: string): RangeFieldMeta | null {
-    return this._descriptor && this._descriptor.fieldMeta[fieldName]
-      ? this._descriptor.fieldMeta[fieldName].range
+    return this._descriptor.fieldMeta[fieldName] && this._descriptor.fieldMeta[fieldName].range
+      ? this._descriptor.fieldMeta[fieldName].range!
       : null;
   }
 
   getCategoryFieldMetaDescriptor(fieldName: string): CategoryFieldMeta | null {
-    return this._descriptor && this._descriptor.fieldMeta[fieldName]
-      ? this._descriptor.fieldMeta[fieldName].categories
+    return this._descriptor.fieldMeta[fieldName] && this._descriptor.fieldMeta[fieldName].categories
+      ? this._descriptor.fieldMeta[fieldName].categories!
       : null;
   }
 

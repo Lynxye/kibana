@@ -1,21 +1,21 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import moment from 'moment';
-import { UI_SETTINGS } from '../../../../../../src/plugins/data/common';
-import { KibanaRequest } from '../../../../../../src/core/server';
+import { Logger } from 'kibana/server';
+import { isActivePlatinumLicense } from '../../../common/license_check';
 import { APMConfig } from '../..';
+import { KibanaRequest } from '../../../../../../src/core/server';
+import { UI_SETTINGS } from '../../../../../../src/plugins/data/common';
+import { UIFilters } from '../../../typings/ui_filters';
+import { APMRouteHandlerResources } from '../../routes/typings';
 import {
-  getApmIndices,
   ApmIndicesConfig,
+  getApmIndices,
 } from '../settings/apm_indices/get_apm_indices';
-import { ESFilter } from '../../../typings/elasticsearch';
-import { getUiFiltersES } from './convert_ui_filters/get_ui_filters_es';
-import { APMRequestHandlerContext } from '../../routes/typings';
-import { ProcessorEvent } from '../../../common/processor_event';
 import {
   APMEventClient,
   createApmEventClient,
@@ -24,14 +24,8 @@ import {
   APMInternalClient,
   createInternalESClient,
 } from './create_es_client/create_internal_es_client';
+import { withApmSpan } from '../../utils/with_apm_span';
 
-function decodeUiFilters(uiFiltersEncoded?: string) {
-  if (!uiFiltersEncoded) {
-    return [];
-  }
-  const uiFilters = JSON.parse(uiFiltersEncoded);
-  return getUiFiltersES(uiFilters);
-}
 // Explicitly type Setup to prevent TS initialization errors
 // https://github.com/microsoft/TypeScript/issues/34933
 
@@ -41,6 +35,7 @@ export interface Setup {
   ml?: ReturnType<typeof getMlSetup>;
   config: APMConfig;
   indices: ApmIndicesConfig;
+  uiFilters: UIFilters;
 }
 
 export interface SetupTimeRange {
@@ -48,82 +43,107 @@ export interface SetupTimeRange {
   end: number;
 }
 
-export interface SetupUIFilters {
-  uiFiltersES: ESFilter[];
-}
-
 interface SetupRequestParams {
-  query?: {
-    _debug?: boolean;
-    start?: string;
-    end?: string;
+  query: {
+    _inspect?: boolean;
+
+    /**
+     * Timestamp in ms since epoch
+     */
+    start?: number;
+
+    /**
+     * Timestamp in ms since epoch
+     */
+    end?: number;
     uiFilters?: string;
-    processorEvent?: ProcessorEvent;
   };
 }
 
 type InferSetup<TParams extends SetupRequestParams> = Setup &
-  (TParams extends { query: { start: string } } ? { start: number } : {}) &
-  (TParams extends { query: { end: string } } ? { end: number } : {}) &
-  (TParams extends { query: { uiFilters: string } }
-    ? { uiFiltersES: ESFilter[] }
-    : {});
+  (TParams extends { query: { start: number } } ? { start: number } : {}) &
+  (TParams extends { query: { end: number } } ? { end: number } : {});
 
-export async function setupRequest<TParams extends SetupRequestParams>(
-  context: APMRequestHandlerContext<TParams>,
-  request: KibanaRequest
-): Promise<InferSetup<TParams>> {
-  const { config } = context;
-  const { query } = context.params;
+export async function setupRequest<TParams extends SetupRequestParams>({
+  context,
+  params,
+  core,
+  plugins,
+  request,
+  config,
+  logger,
+}: APMRouteHandlerResources & {
+  params: TParams;
+}): Promise<InferSetup<TParams>> {
+  return withApmSpan('setup_request', async () => {
+    const { query } = params;
 
-  const [indices, includeFrozen] = await Promise.all([
-    getApmIndices({
-      savedObjectsClient: context.core.savedObjects.client,
-      config,
-    }),
-    context.core.uiSettings.client.get(UI_SETTINGS.SEARCH_INCLUDE_FROZEN),
-  ]);
+    const [indices, includeFrozen] = await Promise.all([
+      getApmIndices({
+        savedObjectsClient: context.core.savedObjects.client,
+        config,
+      }),
+      withApmSpan('get_ui_settings', () =>
+        context.core.uiSettings.client.get(UI_SETTINGS.SEARCH_INCLUDE_FROZEN)
+      ),
+    ]);
 
-  const uiFiltersES = decodeUiFilters(query.uiFilters);
+    const uiFilters = decodeUiFilters(logger, query.uiFilters);
 
-  const coreSetupRequest = {
-    indices,
-    apmEventClient: createApmEventClient({
-      context,
-      request,
+    const coreSetupRequest = {
       indices,
-      options: { includeFrozen },
-    }),
-    internalClient: createInternalESClient({
-      context,
-      request,
-    }),
-    ml: getMlSetup(context, request),
-    config,
-  };
+      apmEventClient: createApmEventClient({
+        esClient: context.core.elasticsearch.client.asCurrentUser,
+        debug: query._inspect,
+        request,
+        indices,
+        options: { includeFrozen },
+      }),
+      internalClient: createInternalESClient({
+        context,
+        request,
+        debug: query._inspect,
+      }),
+      ml:
+        plugins.ml && isActivePlatinumLicense(context.licensing.license)
+          ? getMlSetup(
+              plugins.ml.setup,
+              context.core.savedObjects.client,
+              request
+            )
+          : undefined,
+      config,
+      uiFilters,
+    };
 
-  return {
-    ...('start' in query ? { start: moment.utc(query.start).valueOf() } : {}),
-    ...('end' in query ? { end: moment.utc(query.end).valueOf() } : {}),
-    ...('uiFilters' in query ? { uiFiltersES } : {}),
-    ...coreSetupRequest,
-  } as InferSetup<TParams>;
+    return {
+      ...('start' in query ? { start: query.start } : {}),
+      ...('end' in query ? { end: query.end } : {}),
+      ...coreSetupRequest,
+    } as InferSetup<TParams>;
+  });
 }
 
-function getMlSetup(context: APMRequestHandlerContext, request: KibanaRequest) {
-  if (!context.plugins.ml) {
-    return;
-  }
-  const ml = context.plugins.ml;
-  const mlClient = ml.mlClient.asScoped(request);
+function getMlSetup(
+  ml: Required<APMRouteHandlerResources['plugins']>['ml']['setup'],
+  savedObjectsClient: APMRouteHandlerResources['context']['core']['savedObjects']['client'],
+  request: KibanaRequest
+) {
   return {
-    mlSystem: ml.mlSystemProvider(mlClient, request),
-    anomalyDetectors: ml.anomalyDetectorsProvider(mlClient, request),
-    modules: ml.modulesProvider(
-      mlClient,
-      request,
-      context.core.savedObjects.client
-    ),
-    mlClient,
+    mlSystem: ml.mlSystemProvider(request, savedObjectsClient),
+    anomalyDetectors: ml.anomalyDetectorsProvider(request, savedObjectsClient),
+    modules: ml.modulesProvider(request, savedObjectsClient),
   };
+}
+
+function decodeUiFilters(logger: Logger, uiFiltersEncoded?: string): UIFilters {
+  if (!uiFiltersEncoded) {
+    return {};
+  }
+  try {
+    return JSON.parse(uiFiltersEncoded);
+  } catch (error) {
+    logger.error(error);
+    return {};
+  }
 }

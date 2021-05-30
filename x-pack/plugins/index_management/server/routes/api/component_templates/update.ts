@@ -1,8 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import { schema } from '@kbn/config-schema';
 
 import { RouteDependencies } from '../../../types';
@@ -13,11 +15,7 @@ const paramsSchema = schema.object({
   name: schema.string(),
 });
 
-export const registerUpdateRoute = ({
-  router,
-  license,
-  lib: { isEsError },
-}: RouteDependencies): void => {
+export const registerUpdateRoute = ({ router, lib: { isEsError } }: RouteDependencies): void => {
   router.put(
     {
       path: addBasePath('/component_templates/{name}'),
@@ -26,7 +24,7 @@ export const registerUpdateRoute = ({
         params: paramsSchema,
       },
     },
-    license.guardApiRoute(async (ctx, req, res) => {
+    async (ctx, req, res) => {
       const { callAsCurrentUser } = ctx.dataManagement!.client;
       const { name } = req.params;
       const { template, version, _meta } = req.body;
@@ -53,8 +51,8 @@ export const registerUpdateRoute = ({
           });
         }
 
-        return res.internalError({ body: error });
+        throw error;
       }
-    })
+    }
   );
 };

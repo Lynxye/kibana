@@ -1,20 +1,9 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import {
@@ -28,21 +17,11 @@ import { BehaviorSubject, Subject } from 'rxjs';
 import { bufferCount, take, takeUntil } from 'rxjs/operators';
 import { shallow, mount } from 'enzyme';
 
-import { injectedMetadataServiceMock } from '../injected_metadata/injected_metadata_service.mock';
-import { contextServiceMock } from '../context/context_service.mock';
 import { httpServiceMock } from '../http/http_service.mock';
 import { overlayServiceMock } from '../overlays/overlay_service.mock';
 import { MockLifecycle } from './test_types';
 import { ApplicationService } from './application_service';
-import {
-  App,
-  PublicAppInfo,
-  AppNavLinkStatus,
-  AppStatus,
-  AppUpdater,
-  LegacyApp,
-  PublicLegacyAppInfo,
-} from './types';
+import { App, PublicAppInfo, AppNavLinkStatus, AppStatus, AppUpdater } from './types';
 import { act } from 'react-dom/test-utils';
 
 const createApp = (props: Partial<App>): App => {
@@ -50,15 +29,6 @@ const createApp = (props: Partial<App>): App => {
     id: 'some-id',
     title: 'some-title',
     mount: () => () => undefined,
-    ...props,
-  };
-};
-
-const createLegacyApp = (props: Partial<LegacyApp>): LegacyApp => {
-  return {
-    id: 'some-id',
-    title: 'some-title',
-    appUrl: '/my-url',
     ...props,
   };
 };
@@ -72,11 +42,8 @@ describe('#setup()', () => {
     const http = httpServiceMock.createSetupContract({ basePath: '/base-path' });
     setupDeps = {
       http,
-      context: contextServiceMock.createSetupContract(),
-      injectedMetadata: injectedMetadataServiceMock.createSetupContract(),
       redirectTo: jest.fn(),
     };
-    setupDeps.injectedMetadata.getLegacyMode.mockReturnValue(false);
     startDeps = { http, overlays: overlayServiceMock.createStartContract() };
     service = new ApplicationService();
   });
@@ -108,7 +75,10 @@ describe('#setup()', () => {
       const pluginId = Symbol('plugin');
       const updater$ = new BehaviorSubject<AppUpdater>((app) => ({}));
       setup.register(pluginId, createApp({ id: 'app1', updater$ }));
-      setup.register(pluginId, createApp({ id: 'app2' }));
+      setup.register(
+        pluginId,
+        createApp({ id: 'app2', deepLinks: [{ id: 'subapp1', title: 'Subapp', path: '/subapp' }] })
+      );
       const { applications$ } = await service.start(startDeps);
 
       let applications = await applications$.pipe(take(1)).toPromise();
@@ -116,17 +86,20 @@ describe('#setup()', () => {
       expect(applications.get('app1')).toEqual(
         expect.objectContaining({
           id: 'app1',
-          legacy: false,
-          navLinkStatus: AppNavLinkStatus.default,
+          navLinkStatus: AppNavLinkStatus.visible,
           status: AppStatus.accessible,
         })
       );
       expect(applications.get('app2')).toEqual(
         expect.objectContaining({
           id: 'app2',
-          legacy: false,
-          navLinkStatus: AppNavLinkStatus.default,
+          navLinkStatus: AppNavLinkStatus.visible,
           status: AppStatus.accessible,
+          deepLinks: [
+            expect.objectContaining({
+              navLinkStatus: AppNavLinkStatus.hidden,
+            }),
+          ],
         })
       );
 
@@ -141,8 +114,7 @@ describe('#setup()', () => {
       expect(applications.get('app1')).toEqual(
         expect.objectContaining({
           id: 'app1',
-          legacy: false,
-          navLinkStatus: AppNavLinkStatus.default,
+          navLinkStatus: AppNavLinkStatus.hidden,
           status: AppStatus.inaccessible,
           defaultPath: 'foo/bar',
           tooltip: 'App inaccessible due to reason',
@@ -151,15 +123,14 @@ describe('#setup()', () => {
       expect(applications.get('app2')).toEqual(
         expect.objectContaining({
           id: 'app2',
-          legacy: false,
-          navLinkStatus: AppNavLinkStatus.default,
+          navLinkStatus: AppNavLinkStatus.visible,
           status: AppStatus.accessible,
         })
       );
     });
 
     it('throws an error if an App with the same appRoute is registered', () => {
-      const { register, registerLegacyApp } = service.setup(setupDeps);
+      const { register } = service.setup(setupDeps);
 
       register(Symbol(), createApp({ id: 'app1' }));
 
@@ -168,7 +139,6 @@ describe('#setup()', () => {
       ).toThrowErrorMatchingInlineSnapshot(
         `"An application is already registered with the appRoute \\"/app/app1\\""`
       );
-      expect(() => registerLegacyApp(createLegacyApp({ id: 'app1' }))).toThrow();
 
       register(Symbol(), createApp({ id: 'app-next', appRoute: '/app/app3' }));
 
@@ -177,7 +147,6 @@ describe('#setup()', () => {
       ).toThrowErrorMatchingInlineSnapshot(
         `"An application is already registered with the appRoute \\"/app/app3\\""`
       );
-      expect(() => registerLegacyApp(createLegacyApp({ id: 'app3' }))).not.toThrow();
     });
 
     it('throws an error if an App starts with the HTTP base path', () => {
@@ -192,41 +161,6 @@ describe('#setup()', () => {
       expect(() =>
         register(Symbol(), createApp({ id: 'app3', appRoute: '/base-path-i-am-not' }))
       ).not.toThrow();
-    });
-  });
-
-  describe('registerLegacyApp', () => {
-    it('throws an error if two apps with the same id are registered', () => {
-      const { registerLegacyApp } = service.setup(setupDeps);
-
-      registerLegacyApp(createLegacyApp({ id: 'app2' }));
-      expect(() =>
-        registerLegacyApp(createLegacyApp({ id: 'app2' }))
-      ).toThrowErrorMatchingInlineSnapshot(
-        `"An application is already registered with the id \\"app2\\""`
-      );
-    });
-
-    it('throws error if additional apps are registered after setup', async () => {
-      const { registerLegacyApp } = service.setup(setupDeps);
-
-      await service.start(startDeps);
-      expect(() =>
-        registerLegacyApp(createLegacyApp({ id: 'app2' }))
-      ).toThrowErrorMatchingInlineSnapshot(`"Applications cannot be registered after \\"setup\\""`);
-    });
-
-    it('throws an error if a LegacyApp with the same appRoute is registered', () => {
-      const { register, registerLegacyApp } = service.setup(setupDeps);
-
-      registerLegacyApp(createLegacyApp({ id: 'app1' }));
-
-      expect(() =>
-        register(Symbol(), createApp({ id: 'app2', appRoute: '/app/app1' }))
-      ).toThrowErrorMatchingInlineSnapshot(
-        `"An application is already registered with the appRoute \\"/app/app1\\""`
-      );
-      expect(() => registerLegacyApp(createLegacyApp({ id: 'app1:other' }))).not.toThrow();
     });
   });
 
@@ -258,7 +192,6 @@ describe('#setup()', () => {
       expect(applications.get('app1')).toEqual(
         expect.objectContaining({
           id: 'app1',
-          legacy: false,
           navLinkStatus: AppNavLinkStatus.disabled,
           status: AppStatus.inaccessible,
           tooltip: 'App inaccessible due to reason',
@@ -267,8 +200,7 @@ describe('#setup()', () => {
       expect(applications.get('app2')).toEqual(
         expect.objectContaining({
           id: 'app2',
-          legacy: false,
-          navLinkStatus: AppNavLinkStatus.default,
+          navLinkStatus: AppNavLinkStatus.visible,
           status: AppStatus.accessible,
           tooltip: 'App accessible',
         })
@@ -307,7 +239,6 @@ describe('#setup()', () => {
       expect(applications.get('app1')).toEqual(
         expect.objectContaining({
           id: 'app1',
-          legacy: false,
           navLinkStatus: AppNavLinkStatus.disabled,
           status: AppStatus.inaccessible,
           tooltip: 'App inaccessible due to reason',
@@ -316,7 +247,6 @@ describe('#setup()', () => {
       expect(applications.get('app2')).toEqual(
         expect.objectContaining({
           id: 'app2',
-          legacy: false,
           status: AppStatus.inaccessible,
           navLinkStatus: AppNavLinkStatus.hidden,
         })
@@ -352,7 +282,6 @@ describe('#setup()', () => {
       expect(applications.get('app1')).toEqual(
         expect.objectContaining({
           id: 'app1',
-          legacy: false,
           navLinkStatus: AppNavLinkStatus.disabled,
           status: AppStatus.inaccessible,
         })
@@ -374,10 +303,7 @@ describe('#setup()', () => {
       setup.registerAppUpdater(statusUpdater);
 
       const start = await service.start(startDeps);
-      let latestValue: ReadonlyMap<string, PublicAppInfo | PublicLegacyAppInfo> = new Map<
-        string,
-        PublicAppInfo | PublicLegacyAppInfo
-      >();
+      let latestValue: ReadonlyMap<string, PublicAppInfo> = new Map<string, PublicAppInfo>();
       start.applications$.subscribe((apps) => {
         latestValue = apps;
       });
@@ -385,7 +311,6 @@ describe('#setup()', () => {
       expect(latestValue.get('app1')).toEqual(
         expect.objectContaining({
           id: 'app1',
-          legacy: false,
           status: AppStatus.inaccessible,
           navLinkStatus: AppNavLinkStatus.disabled,
         })
@@ -401,39 +326,8 @@ describe('#setup()', () => {
       expect(latestValue.get('app1')).toEqual(
         expect.objectContaining({
           id: 'app1',
-          legacy: false,
           status: AppStatus.accessible,
           navLinkStatus: AppNavLinkStatus.hidden,
-        })
-      );
-    });
-
-    it('also updates legacy apps', async () => {
-      const setup = service.setup(setupDeps);
-
-      setup.registerLegacyApp(createLegacyApp({ id: 'app1' }));
-
-      setup.registerAppUpdater(
-        new BehaviorSubject<AppUpdater>((app) => {
-          return {
-            status: AppStatus.inaccessible,
-            navLinkStatus: AppNavLinkStatus.hidden,
-            tooltip: 'App inaccessible due to reason',
-          };
-        })
-      );
-
-      const start = await service.start(startDeps);
-      const applications = await start.applications$.pipe(take(1)).toPromise();
-
-      expect(applications.size).toEqual(1);
-      expect(applications.get('app1')).toEqual(
-        expect.objectContaining({
-          id: 'app1',
-          legacy: true,
-          status: AppStatus.inaccessible,
-          navLinkStatus: AppNavLinkStatus.hidden,
-          tooltip: 'App inaccessible due to reason',
         })
       );
     });
@@ -468,16 +362,6 @@ describe('#setup()', () => {
       MockHistory.push.mockClear();
     });
   });
-
-  it("`registerMountContext` calls context container's registerContext", () => {
-    const { registerMountContext } = service.setup(setupDeps);
-    const container = setupDeps.context.createContextContainer.mock.results[0].value;
-    const pluginId = Symbol();
-
-    const appMount = () => () => undefined;
-    registerMountContext(pluginId, 'test' as any, appMount);
-    expect(container.registerContext).toHaveBeenCalledWith(pluginId, 'test', appMount);
-  });
 });
 
 describe('#start()', () => {
@@ -485,11 +369,8 @@ describe('#start()', () => {
     const http = httpServiceMock.createSetupContract({ basePath: '/base-path' });
     setupDeps = {
       http,
-      context: contextServiceMock.createSetupContract(),
-      injectedMetadata: injectedMetadataServiceMock.createSetupContract(),
       redirectTo: jest.fn(),
     };
-    setupDeps.injectedMetadata.getLegacyMode.mockReturnValue(false);
     startDeps = { http, overlays: overlayServiceMock.createStartContract() };
     service = new ApplicationService();
   });
@@ -507,11 +388,10 @@ describe('#start()', () => {
   });
 
   it('exposes available apps', async () => {
-    setupDeps.injectedMetadata.getLegacyMode.mockReturnValue(true);
-    const { register, registerLegacyApp } = service.setup(setupDeps);
+    const { register } = service.setup(setupDeps);
 
     register(Symbol(), createApp({ id: 'app1' }));
-    registerLegacyApp(createLegacyApp({ id: 'app2' }));
+    register(Symbol(), createApp({ id: 'app2' }));
 
     const { applications$ } = await service.start(startDeps);
     const availableApps = await applications$.pipe(take(1)).toPromise();
@@ -522,17 +402,15 @@ describe('#start()', () => {
       expect.objectContaining({
         appRoute: '/app/app1',
         id: 'app1',
-        legacy: false,
-        navLinkStatus: AppNavLinkStatus.default,
+        navLinkStatus: AppNavLinkStatus.visible,
         status: AppStatus.accessible,
       })
     );
     expect(availableApps.get('app2')).toEqual(
       expect.objectContaining({
-        appUrl: '/my-url',
+        appRoute: '/app/app2',
         id: 'app2',
-        legacy: true,
-        navLinkStatus: AppNavLinkStatus.default,
+        navLinkStatus: AppNavLinkStatus.visible,
         status: AppStatus.accessible,
       })
     );
@@ -558,39 +436,19 @@ describe('#start()', () => {
         navLinks: {
           app1: true,
           app2: false,
-          legacyApp1: true,
-          legacyApp2: false,
         },
       },
     } as any);
 
-    const { register, registerLegacyApp } = service.setup(setupDeps);
+    const { register } = service.setup(setupDeps);
 
     register(Symbol(), createApp({ id: 'app1' }));
-    registerLegacyApp(createLegacyApp({ id: 'legacyApp1' }));
     register(Symbol(), createApp({ id: 'app2' }));
-    registerLegacyApp(createLegacyApp({ id: 'legacyApp2' }));
 
     const { applications$ } = await service.start(startDeps);
     const availableApps = await applications$.pipe(take(1)).toPromise();
 
-    expect([...availableApps.keys()]).toEqual(['app1', 'legacyApp1']);
-  });
-
-  describe('currentAppId$', () => {
-    it('emits the legacy app id when in legacy mode', async () => {
-      setupDeps.injectedMetadata.getLegacyMode.mockReturnValue(true);
-      setupDeps.injectedMetadata.getLegacyMetadata.mockReturnValue({
-        app: {
-          id: 'legacy',
-          title: 'Legacy App',
-        },
-      } as any);
-      await service.setup(setupDeps);
-      const { currentAppId$ } = await service.start(startDeps);
-
-      expect(await currentAppId$.pipe(take(1)).toPromise()).toEqual('legacy');
-    });
+    expect([...availableApps.keys()]).toEqual(['app1']);
   });
 
   describe('getComponent', () => {
@@ -601,16 +459,6 @@ describe('#start()', () => {
 
       expect(() => shallow(createElement(getComponent))).not.toThrow();
       expect(getComponent()).toMatchSnapshot();
-    });
-
-    it('renders null when in legacy mode', async () => {
-      setupDeps.injectedMetadata.getLegacyMode.mockReturnValue(true);
-      service.setup(setupDeps);
-
-      const { getComponent } = await service.start(startDeps);
-
-      expect(() => shallow(createElement(getComponent))).not.toThrow();
-      expect(getComponent()).toBe(null);
     });
   });
 
@@ -624,16 +472,14 @@ describe('#start()', () => {
     });
 
     it('creates URL for registered appId', async () => {
-      const { register, registerLegacyApp } = service.setup(setupDeps);
+      const { register } = service.setup(setupDeps);
 
       register(Symbol(), createApp({ id: 'app1' }));
-      registerLegacyApp(createLegacyApp({ id: 'legacyApp1' }));
       register(Symbol(), createApp({ id: 'app2', appRoute: '/custom/path' }));
 
       const { getUrlForApp } = await service.start(startDeps);
 
       expect(getUrlForApp('app1')).toBe('/base-path/app/app1');
-      expect(getUrlForApp('legacyApp1')).toBe('/base-path/app/legacyApp1');
       expect(getUrlForApp('app2')).toBe('/base-path/custom/path');
     });
 
@@ -800,16 +646,6 @@ describe('#start()', () => {
       expect(MockHistory.push).toHaveBeenCalledWith('/custom/path', 'my-state');
     });
 
-    it('redirects when in legacyMode', async () => {
-      setupDeps.injectedMetadata.getLegacyMode.mockReturnValue(true);
-      service.setup(setupDeps);
-
-      const { navigateToApp } = await service.start(startDeps);
-
-      await navigateToApp('myTestApp');
-      expect(setupDeps.redirectTo).toHaveBeenCalledWith('/base-path/app/myTestApp');
-    });
-
     it('updates currentApp$ after mounting', async () => {
       service.setup(setupDeps);
 
@@ -845,7 +681,7 @@ describe('#start()', () => {
       // Create an app and a promise that allows us to control when the app completes mounting
       const createWaitingApp = (props: Partial<App>): [App, () => void] => {
         let finishMount: () => void;
-        const mountPromise = new Promise((resolve) => (finishMount = resolve));
+        const mountPromise = new Promise<void>((resolve) => (finishMount = resolve));
         const app = {
           id: 'some-id',
           title: 'some-title',
@@ -903,29 +739,17 @@ describe('#start()', () => {
       `);
     });
 
-    it('sets window.location.href when navigating to legacy apps', async () => {
-      setupDeps.http = httpServiceMock.createSetupContract({ basePath: '/test' });
-      setupDeps.injectedMetadata.getLegacyMode.mockReturnValue(true);
+    it('should call private function shouldNavigate with overlays and the nextAppId', async () => {
       service.setup(setupDeps);
+      const shouldNavigateSpy = jest.spyOn(service as any, 'shouldNavigate');
 
       const { navigateToApp } = await service.start(startDeps);
 
-      await navigateToApp('alpha');
-      expect(setupDeps.redirectTo).toHaveBeenCalledWith('/test/app/alpha');
-    });
+      await navigateToApp('myTestApp');
+      expect(shouldNavigateSpy).toHaveBeenCalledWith(startDeps.overlays, 'myTestApp');
 
-    it('handles legacy apps with subapps', async () => {
-      setupDeps.http = httpServiceMock.createSetupContract({ basePath: '/test' });
-      setupDeps.injectedMetadata.getLegacyMode.mockReturnValue(true);
-
-      const { registerLegacyApp } = service.setup(setupDeps);
-
-      registerLegacyApp(createLegacyApp({ id: 'baseApp:legacyApp1' }));
-
-      const { navigateToApp } = await service.start(startDeps);
-
-      await navigateToApp('baseApp:legacyApp1');
-      expect(setupDeps.redirectTo).toHaveBeenCalledWith('/test/app/baseApp');
+      await navigateToApp('myOtherApp');
+      expect(shouldNavigateSpy).toHaveBeenCalledWith(startDeps.overlays, 'myOtherApp');
     });
 
     describe('when `replace` option is true', () => {
@@ -972,16 +796,6 @@ describe('#start()', () => {
           '/custom/path/deep/link/to/location/2',
           undefined
         );
-      });
-      it('do not change the behavior when in legacy mode', async () => {
-        setupDeps.http = httpServiceMock.createSetupContract({ basePath: '/test' });
-        setupDeps.injectedMetadata.getLegacyMode.mockReturnValue(true);
-        service.setup(setupDeps);
-
-        const { navigateToApp } = await service.start(startDeps);
-
-        await navigateToApp('alpha', { replace: true });
-        expect(setupDeps.redirectTo).toHaveBeenCalledWith('/test/app/alpha');
       });
     });
 
@@ -1039,10 +853,7 @@ describe('#stop()', () => {
     const http = httpServiceMock.createSetupContract({ basePath: '/test' });
     setupDeps = {
       http,
-      context: contextServiceMock.createSetupContract(),
-      injectedMetadata: injectedMetadataServiceMock.createSetupContract(),
     };
-    setupDeps.injectedMetadata.getLegacyMode.mockReturnValue(false);
     startDeps = { http, overlays: overlayServiceMock.createStartContract() };
     service = new ApplicationService();
   });

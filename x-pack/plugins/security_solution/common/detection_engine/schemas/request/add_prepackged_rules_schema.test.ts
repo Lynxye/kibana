@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import {
@@ -10,13 +11,14 @@ import {
   AddPrepackagedRulesSchema,
 } from './add_prepackaged_rules_schema';
 
-import { exactCheck } from '../../../exact_check';
+import { exactCheck, foldLeftRight, getPaths } from '@kbn/securitysolution-io-ts-utils';
 import { pipe } from 'fp-ts/lib/pipeable';
-import { foldLeftRight, getPaths } from '../../../test_utils';
 import { left } from 'fp-ts/lib/Either';
 import {
   getAddPrepackagedRulesSchemaMock,
   getAddPrepackagedRulesSchemaDecodedMock,
+  getAddPrepackagedThreatMatchRulesSchemaMock,
+  getAddPrepackagedThreatMatchRulesSchemaDecodedMock,
 } from './add_prepackaged_rules_schema.mock';
 import { DEFAULT_MAX_SIGNALS } from '../../../constants';
 import { getListArrayMock } from '../types/lists.mock';
@@ -618,6 +620,7 @@ describe('add prepackaged rules schema', () => {
 
   test('rule_id is required', () => {
     const payload: AddPrepackagedRulesSchema = getAddPrepackagedRulesSchemaMock();
+    // @ts-expect-error
     delete payload.rule_id;
 
     const decoded = addPrepackagedRulesSchema.decode(payload);
@@ -920,7 +923,7 @@ describe('add prepackaged rules schema', () => {
     expect(message.schema).toEqual({});
   });
 
-  test('You cannot send in an array of threat that are missing "technique"', () => {
+  test('You can send in an array of threat that are missing "technique"', () => {
     const payload: Omit<AddPrepackagedRulesSchema, 'threat'> & {
       threat: Array<Partial<Omit<AddPrepackagedRulesSchema['threat'], 'technique'>>>;
     } = {
@@ -940,10 +943,21 @@ describe('add prepackaged rules schema', () => {
     const decoded = addPrepackagedRulesSchema.decode(payload);
     const checked = exactCheck(payload, decoded);
     const message = pipe(checked, foldLeftRight);
-    expect(getPaths(left(message.errors))).toEqual([
-      'Invalid value "undefined" supplied to "threat,technique"',
-    ]);
-    expect(message.schema).toEqual({});
+    expect(getPaths(left(message.errors))).toEqual([]);
+    const expected: AddPrepackagedRulesSchemaDecoded = {
+      ...getAddPrepackagedRulesSchemaDecodedMock(),
+      threat: [
+        {
+          framework: 'fake',
+          tactic: {
+            id: 'fakeId',
+            name: 'fakeName',
+            reference: 'fakeRef',
+          },
+        },
+      ],
+    };
+    expect(message.schema).toEqual(expected);
   });
 
   test('You can optionally send in an array of false positives', () => {
@@ -1593,6 +1607,18 @@ describe('add prepackaged rules schema', () => {
         exceptions_list: [],
         filters: [],
       };
+      expect(message.schema).toEqual(expected);
+    });
+  });
+
+  describe('threat_mapping', () => {
+    test('You can set a threat query, index, mapping, filters on a pre-packaged rule', () => {
+      const payload = getAddPrepackagedThreatMatchRulesSchemaMock();
+      const decoded = addPrepackagedRulesSchema.decode(payload);
+      const checked = exactCheck(payload, decoded);
+      const message = pipe(checked, foldLeftRight);
+      const expected = getAddPrepackagedThreatMatchRulesSchemaDecodedMock();
+      expect(getPaths(left(message.errors))).toEqual([]);
       expect(message.schema).toEqual(expected);
     });
   });

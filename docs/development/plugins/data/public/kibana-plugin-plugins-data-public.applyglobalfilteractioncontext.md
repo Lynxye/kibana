@@ -14,7 +14,8 @@ export interface ApplyGlobalFilterActionContext
 
 |  Property | Type | Description |
 |  --- | --- | --- |
-|  [embeddable](./kibana-plugin-plugins-data-public.applyglobalfilteractioncontext.embeddable.md) | <code>IEmbeddable</code> |  |
+|  [controlledBy](./kibana-plugin-plugins-data-public.applyglobalfilteractioncontext.controlledby.md) | <code>string</code> |  |
+|  [embeddable](./kibana-plugin-plugins-data-public.applyglobalfilteractioncontext.embeddable.md) | <code>unknown</code> |  |
 |  [filters](./kibana-plugin-plugins-data-public.applyglobalfilteractioncontext.filters.md) | <code>Filter[]</code> |  |
 |  [timeFieldName](./kibana-plugin-plugins-data-public.applyglobalfilteractioncontext.timefieldname.md) | <code>string</code> |  |
 

@@ -72,22 +72,17 @@ Object {
             },
           },
           Object {
+            "term": Object {
+              "service.node.name": "bar",
+            },
+          },
+          Object {
             "range": Object {
               "@timestamp": Object {
                 "format": "epoch_millis",
                 "gte": 1528113600000,
                 "lte": 1528977600000,
               },
-            },
-          },
-          Object {
-            "term": Object {
-              "service.node.name": "bar",
-            },
-          },
-          Object {
-            "term": Object {
-              "my.custom.ui.filter": "foo-bar",
             },
           },
         ],
@@ -160,22 +155,17 @@ Object {
             },
           },
           Object {
+            "term": Object {
+              "service.node.name": "bar",
+            },
+          },
+          Object {
             "range": Object {
               "@timestamp": Object {
                 "format": "epoch_millis",
                 "gte": 1528113600000,
                 "lte": 1528977600000,
               },
-            },
-          },
-          Object {
-            "term": Object {
-              "service.node.name": "bar",
-            },
-          },
-          Object {
-            "term": Object {
-              "my.custom.ui.filter": "foo-bar",
             },
           },
           Object {
@@ -203,16 +193,50 @@ Object {
       "memoryUsedAvg": Object {
         "avg": Object {
           "script": Object {
-            "lang": "expression",
-            "source": "1 - doc['system.memory.actual.free'] / doc['system.memory.total']",
+            "lang": "painless",
+            "source": "
+    /*
+      When no limit is specified in the container, docker allows the app as much memory / swap memory as it wants.
+      This number represents the max possible value for the limit field.
+    */
+    double CGROUP_LIMIT_MAX_VALUE = 9223372036854771712L;
+
+    String limitKey = 'system.process.cgroup.memory.mem.limit.bytes';
+
+    //Should use cgropLimit when value is not empty and not equals to the max limit value.
+    boolean useCgroupLimit = doc.containsKey(limitKey) && !doc[limitKey].empty && doc[limitKey].value != CGROUP_LIMIT_MAX_VALUE;
+
+    double total = useCgroupLimit ? doc[limitKey].value : doc['system.memory.total'].value;
+
+    double used = doc['system.process.cgroup.memory.mem.usage.bytes'].value;
+
+    return used / total;
+    ",
           },
         },
       },
       "memoryUsedMax": Object {
         "max": Object {
           "script": Object {
-            "lang": "expression",
-            "source": "1 - doc['system.memory.actual.free'] / doc['system.memory.total']",
+            "lang": "painless",
+            "source": "
+    /*
+      When no limit is specified in the container, docker allows the app as much memory / swap memory as it wants.
+      This number represents the max possible value for the limit field.
+    */
+    double CGROUP_LIMIT_MAX_VALUE = 9223372036854771712L;
+
+    String limitKey = 'system.process.cgroup.memory.mem.limit.bytes';
+
+    //Should use cgropLimit when value is not empty and not equals to the max limit value.
+    boolean useCgroupLimit = doc.containsKey(limitKey) && !doc[limitKey].empty && doc[limitKey].value != CGROUP_LIMIT_MAX_VALUE;
+
+    double total = useCgroupLimit ? doc[limitKey].value : doc['system.memory.total'].value;
+
+    double used = doc['system.process.cgroup.memory.mem.usage.bytes'].value;
+
+    return used / total;
+    ",
           },
         },
       },
@@ -221,16 +245,50 @@ Object {
           "memoryUsedAvg": Object {
             "avg": Object {
               "script": Object {
-                "lang": "expression",
-                "source": "1 - doc['system.memory.actual.free'] / doc['system.memory.total']",
+                "lang": "painless",
+                "source": "
+    /*
+      When no limit is specified in the container, docker allows the app as much memory / swap memory as it wants.
+      This number represents the max possible value for the limit field.
+    */
+    double CGROUP_LIMIT_MAX_VALUE = 9223372036854771712L;
+
+    String limitKey = 'system.process.cgroup.memory.mem.limit.bytes';
+
+    //Should use cgropLimit when value is not empty and not equals to the max limit value.
+    boolean useCgroupLimit = doc.containsKey(limitKey) && !doc[limitKey].empty && doc[limitKey].value != CGROUP_LIMIT_MAX_VALUE;
+
+    double total = useCgroupLimit ? doc[limitKey].value : doc['system.memory.total'].value;
+
+    double used = doc['system.process.cgroup.memory.mem.usage.bytes'].value;
+
+    return used / total;
+    ",
               },
             },
           },
           "memoryUsedMax": Object {
             "max": Object {
               "script": Object {
-                "lang": "expression",
-                "source": "1 - doc['system.memory.actual.free'] / doc['system.memory.total']",
+                "lang": "painless",
+                "source": "
+    /*
+      When no limit is specified in the container, docker allows the app as much memory / swap memory as it wants.
+      This number represents the max possible value for the limit field.
+    */
+    double CGROUP_LIMIT_MAX_VALUE = 9223372036854771712L;
+
+    String limitKey = 'system.process.cgroup.memory.mem.limit.bytes';
+
+    //Should use cgropLimit when value is not empty and not equals to the max limit value.
+    boolean useCgroupLimit = doc.containsKey(limitKey) && !doc[limitKey].empty && doc[limitKey].value != CGROUP_LIMIT_MAX_VALUE;
+
+    double total = useCgroupLimit ? doc[limitKey].value : doc['system.memory.total'].value;
+
+    double used = doc['system.process.cgroup.memory.mem.usage.bytes'].value;
+
+    return used / total;
+    ",
               },
             },
           },
@@ -255,6 +313,11 @@ Object {
             },
           },
           Object {
+            "term": Object {
+              "service.node.name": "bar",
+            },
+          },
+          Object {
             "range": Object {
               "@timestamp": Object {
                 "format": "epoch_millis",
@@ -264,23 +327,8 @@ Object {
             },
           },
           Object {
-            "term": Object {
-              "service.node.name": "bar",
-            },
-          },
-          Object {
-            "term": Object {
-              "my.custom.ui.filter": "foo-bar",
-            },
-          },
-          Object {
             "exists": Object {
-              "field": "system.memory.actual.free",
-            },
-          },
-          Object {
-            "exists": Object {
-              "field": "system.memory.total",
+              "field": "system.process.cgroup.memory.mem.usage.bytes",
             },
           },
         ],
@@ -353,22 +401,17 @@ Object {
             },
           },
           Object {
+            "term": Object {
+              "service.node.name": "bar",
+            },
+          },
+          Object {
             "range": Object {
               "@timestamp": Object {
                 "format": "epoch_millis",
                 "gte": 1528113600000,
                 "lte": 1528977600000,
               },
-            },
-          },
-          Object {
-            "term": Object {
-              "service.node.name": "bar",
-            },
-          },
-          Object {
-            "term": Object {
-              "my.custom.ui.filter": "foo-bar",
             },
           },
           Object {
@@ -436,22 +479,17 @@ Object {
             },
           },
           Object {
+            "term": Object {
+              "service.node.name": "bar",
+            },
+          },
+          Object {
             "range": Object {
               "@timestamp": Object {
                 "format": "epoch_millis",
                 "gte": 1528113600000,
                 "lte": 1528977600000,
               },
-            },
-          },
-          Object {
-            "term": Object {
-              "service.node.name": "bar",
-            },
-          },
-          Object {
-            "term": Object {
-              "my.custom.ui.filter": "foo-bar",
             },
           },
           Object {
@@ -539,15 +577,6 @@ Object {
             },
           },
           Object {
-            "range": Object {
-              "@timestamp": Object {
-                "format": "epoch_millis",
-                "gte": 1528113600000,
-                "lte": 1528977600000,
-              },
-            },
-          },
-          Object {
             "bool": Object {
               "must_not": Array [
                 Object {
@@ -559,8 +588,12 @@ Object {
             },
           },
           Object {
-            "term": Object {
-              "my.custom.ui.filter": "foo-bar",
+            "range": Object {
+              "@timestamp": Object {
+                "format": "epoch_millis",
+                "gte": 1528113600000,
+                "lte": 1528977600000,
+              },
             },
           },
         ],
@@ -633,15 +666,6 @@ Object {
             },
           },
           Object {
-            "range": Object {
-              "@timestamp": Object {
-                "format": "epoch_millis",
-                "gte": 1528113600000,
-                "lte": 1528977600000,
-              },
-            },
-          },
-          Object {
             "bool": Object {
               "must_not": Array [
                 Object {
@@ -653,8 +677,12 @@ Object {
             },
           },
           Object {
-            "term": Object {
-              "my.custom.ui.filter": "foo-bar",
+            "range": Object {
+              "@timestamp": Object {
+                "format": "epoch_millis",
+                "gte": 1528113600000,
+                "lte": 1528977600000,
+              },
             },
           },
           Object {
@@ -682,16 +710,50 @@ Object {
       "memoryUsedAvg": Object {
         "avg": Object {
           "script": Object {
-            "lang": "expression",
-            "source": "1 - doc['system.memory.actual.free'] / doc['system.memory.total']",
+            "lang": "painless",
+            "source": "
+    /*
+      When no limit is specified in the container, docker allows the app as much memory / swap memory as it wants.
+      This number represents the max possible value for the limit field.
+    */
+    double CGROUP_LIMIT_MAX_VALUE = 9223372036854771712L;
+
+    String limitKey = 'system.process.cgroup.memory.mem.limit.bytes';
+
+    //Should use cgropLimit when value is not empty and not equals to the max limit value.
+    boolean useCgroupLimit = doc.containsKey(limitKey) && !doc[limitKey].empty && doc[limitKey].value != CGROUP_LIMIT_MAX_VALUE;
+
+    double total = useCgroupLimit ? doc[limitKey].value : doc['system.memory.total'].value;
+
+    double used = doc['system.process.cgroup.memory.mem.usage.bytes'].value;
+
+    return used / total;
+    ",
           },
         },
       },
       "memoryUsedMax": Object {
         "max": Object {
           "script": Object {
-            "lang": "expression",
-            "source": "1 - doc['system.memory.actual.free'] / doc['system.memory.total']",
+            "lang": "painless",
+            "source": "
+    /*
+      When no limit is specified in the container, docker allows the app as much memory / swap memory as it wants.
+      This number represents the max possible value for the limit field.
+    */
+    double CGROUP_LIMIT_MAX_VALUE = 9223372036854771712L;
+
+    String limitKey = 'system.process.cgroup.memory.mem.limit.bytes';
+
+    //Should use cgropLimit when value is not empty and not equals to the max limit value.
+    boolean useCgroupLimit = doc.containsKey(limitKey) && !doc[limitKey].empty && doc[limitKey].value != CGROUP_LIMIT_MAX_VALUE;
+
+    double total = useCgroupLimit ? doc[limitKey].value : doc['system.memory.total'].value;
+
+    double used = doc['system.process.cgroup.memory.mem.usage.bytes'].value;
+
+    return used / total;
+    ",
           },
         },
       },
@@ -700,16 +762,50 @@ Object {
           "memoryUsedAvg": Object {
             "avg": Object {
               "script": Object {
-                "lang": "expression",
-                "source": "1 - doc['system.memory.actual.free'] / doc['system.memory.total']",
+                "lang": "painless",
+                "source": "
+    /*
+      When no limit is specified in the container, docker allows the app as much memory / swap memory as it wants.
+      This number represents the max possible value for the limit field.
+    */
+    double CGROUP_LIMIT_MAX_VALUE = 9223372036854771712L;
+
+    String limitKey = 'system.process.cgroup.memory.mem.limit.bytes';
+
+    //Should use cgropLimit when value is not empty and not equals to the max limit value.
+    boolean useCgroupLimit = doc.containsKey(limitKey) && !doc[limitKey].empty && doc[limitKey].value != CGROUP_LIMIT_MAX_VALUE;
+
+    double total = useCgroupLimit ? doc[limitKey].value : doc['system.memory.total'].value;
+
+    double used = doc['system.process.cgroup.memory.mem.usage.bytes'].value;
+
+    return used / total;
+    ",
               },
             },
           },
           "memoryUsedMax": Object {
             "max": Object {
               "script": Object {
-                "lang": "expression",
-                "source": "1 - doc['system.memory.actual.free'] / doc['system.memory.total']",
+                "lang": "painless",
+                "source": "
+    /*
+      When no limit is specified in the container, docker allows the app as much memory / swap memory as it wants.
+      This number represents the max possible value for the limit field.
+    */
+    double CGROUP_LIMIT_MAX_VALUE = 9223372036854771712L;
+
+    String limitKey = 'system.process.cgroup.memory.mem.limit.bytes';
+
+    //Should use cgropLimit when value is not empty and not equals to the max limit value.
+    boolean useCgroupLimit = doc.containsKey(limitKey) && !doc[limitKey].empty && doc[limitKey].value != CGROUP_LIMIT_MAX_VALUE;
+
+    double total = useCgroupLimit ? doc[limitKey].value : doc['system.memory.total'].value;
+
+    double used = doc['system.process.cgroup.memory.mem.usage.bytes'].value;
+
+    return used / total;
+    ",
               },
             },
           },
@@ -734,15 +830,6 @@ Object {
             },
           },
           Object {
-            "range": Object {
-              "@timestamp": Object {
-                "format": "epoch_millis",
-                "gte": 1528113600000,
-                "lte": 1528977600000,
-              },
-            },
-          },
-          Object {
             "bool": Object {
               "must_not": Array [
                 Object {
@@ -754,18 +841,17 @@ Object {
             },
           },
           Object {
-            "term": Object {
-              "my.custom.ui.filter": "foo-bar",
+            "range": Object {
+              "@timestamp": Object {
+                "format": "epoch_millis",
+                "gte": 1528113600000,
+                "lte": 1528977600000,
+              },
             },
           },
           Object {
             "exists": Object {
-              "field": "system.memory.actual.free",
-            },
-          },
-          Object {
-            "exists": Object {
-              "field": "system.memory.total",
+              "field": "system.process.cgroup.memory.mem.usage.bytes",
             },
           },
         ],
@@ -838,15 +924,6 @@ Object {
             },
           },
           Object {
-            "range": Object {
-              "@timestamp": Object {
-                "format": "epoch_millis",
-                "gte": 1528113600000,
-                "lte": 1528977600000,
-              },
-            },
-          },
-          Object {
             "bool": Object {
               "must_not": Array [
                 Object {
@@ -858,8 +935,12 @@ Object {
             },
           },
           Object {
-            "term": Object {
-              "my.custom.ui.filter": "foo-bar",
+            "range": Object {
+              "@timestamp": Object {
+                "format": "epoch_millis",
+                "gte": 1528113600000,
+                "lte": 1528977600000,
+              },
             },
           },
           Object {
@@ -927,15 +1008,6 @@ Object {
             },
           },
           Object {
-            "range": Object {
-              "@timestamp": Object {
-                "format": "epoch_millis",
-                "gte": 1528113600000,
-                "lte": 1528977600000,
-              },
-            },
-          },
-          Object {
             "bool": Object {
               "must_not": Array [
                 Object {
@@ -947,8 +1019,12 @@ Object {
             },
           },
           Object {
-            "term": Object {
-              "my.custom.ui.filter": "foo-bar",
+            "range": Object {
+              "@timestamp": Object {
+                "format": "epoch_millis",
+                "gte": 1528113600000,
+                "lte": 1528977600000,
+              },
             },
           },
           Object {
@@ -1044,11 +1120,6 @@ Object {
               },
             },
           },
-          Object {
-            "term": Object {
-              "my.custom.ui.filter": "foo-bar",
-            },
-          },
         ],
       },
     },
@@ -1129,11 +1200,6 @@ Object {
           },
           Object {
             "term": Object {
-              "my.custom.ui.filter": "foo-bar",
-            },
-          },
-          Object {
-            "term": Object {
               "agent.name": "java",
             },
           },
@@ -1157,16 +1223,50 @@ Object {
       "memoryUsedAvg": Object {
         "avg": Object {
           "script": Object {
-            "lang": "expression",
-            "source": "1 - doc['system.memory.actual.free'] / doc['system.memory.total']",
+            "lang": "painless",
+            "source": "
+    /*
+      When no limit is specified in the container, docker allows the app as much memory / swap memory as it wants.
+      This number represents the max possible value for the limit field.
+    */
+    double CGROUP_LIMIT_MAX_VALUE = 9223372036854771712L;
+
+    String limitKey = 'system.process.cgroup.memory.mem.limit.bytes';
+
+    //Should use cgropLimit when value is not empty and not equals to the max limit value.
+    boolean useCgroupLimit = doc.containsKey(limitKey) && !doc[limitKey].empty && doc[limitKey].value != CGROUP_LIMIT_MAX_VALUE;
+
+    double total = useCgroupLimit ? doc[limitKey].value : doc['system.memory.total'].value;
+
+    double used = doc['system.process.cgroup.memory.mem.usage.bytes'].value;
+
+    return used / total;
+    ",
           },
         },
       },
       "memoryUsedMax": Object {
         "max": Object {
           "script": Object {
-            "lang": "expression",
-            "source": "1 - doc['system.memory.actual.free'] / doc['system.memory.total']",
+            "lang": "painless",
+            "source": "
+    /*
+      When no limit is specified in the container, docker allows the app as much memory / swap memory as it wants.
+      This number represents the max possible value for the limit field.
+    */
+    double CGROUP_LIMIT_MAX_VALUE = 9223372036854771712L;
+
+    String limitKey = 'system.process.cgroup.memory.mem.limit.bytes';
+
+    //Should use cgropLimit when value is not empty and not equals to the max limit value.
+    boolean useCgroupLimit = doc.containsKey(limitKey) && !doc[limitKey].empty && doc[limitKey].value != CGROUP_LIMIT_MAX_VALUE;
+
+    double total = useCgroupLimit ? doc[limitKey].value : doc['system.memory.total'].value;
+
+    double used = doc['system.process.cgroup.memory.mem.usage.bytes'].value;
+
+    return used / total;
+    ",
           },
         },
       },
@@ -1175,16 +1275,50 @@ Object {
           "memoryUsedAvg": Object {
             "avg": Object {
               "script": Object {
-                "lang": "expression",
-                "source": "1 - doc['system.memory.actual.free'] / doc['system.memory.total']",
+                "lang": "painless",
+                "source": "
+    /*
+      When no limit is specified in the container, docker allows the app as much memory / swap memory as it wants.
+      This number represents the max possible value for the limit field.
+    */
+    double CGROUP_LIMIT_MAX_VALUE = 9223372036854771712L;
+
+    String limitKey = 'system.process.cgroup.memory.mem.limit.bytes';
+
+    //Should use cgropLimit when value is not empty and not equals to the max limit value.
+    boolean useCgroupLimit = doc.containsKey(limitKey) && !doc[limitKey].empty && doc[limitKey].value != CGROUP_LIMIT_MAX_VALUE;
+
+    double total = useCgroupLimit ? doc[limitKey].value : doc['system.memory.total'].value;
+
+    double used = doc['system.process.cgroup.memory.mem.usage.bytes'].value;
+
+    return used / total;
+    ",
               },
             },
           },
           "memoryUsedMax": Object {
             "max": Object {
               "script": Object {
-                "lang": "expression",
-                "source": "1 - doc['system.memory.actual.free'] / doc['system.memory.total']",
+                "lang": "painless",
+                "source": "
+    /*
+      When no limit is specified in the container, docker allows the app as much memory / swap memory as it wants.
+      This number represents the max possible value for the limit field.
+    */
+    double CGROUP_LIMIT_MAX_VALUE = 9223372036854771712L;
+
+    String limitKey = 'system.process.cgroup.memory.mem.limit.bytes';
+
+    //Should use cgropLimit when value is not empty and not equals to the max limit value.
+    boolean useCgroupLimit = doc.containsKey(limitKey) && !doc[limitKey].empty && doc[limitKey].value != CGROUP_LIMIT_MAX_VALUE;
+
+    double total = useCgroupLimit ? doc[limitKey].value : doc['system.memory.total'].value;
+
+    double used = doc['system.process.cgroup.memory.mem.usage.bytes'].value;
+
+    return used / total;
+    ",
               },
             },
           },
@@ -1218,18 +1352,8 @@ Object {
             },
           },
           Object {
-            "term": Object {
-              "my.custom.ui.filter": "foo-bar",
-            },
-          },
-          Object {
             "exists": Object {
-              "field": "system.memory.actual.free",
-            },
-          },
-          Object {
-            "exists": Object {
-              "field": "system.memory.total",
+              "field": "system.process.cgroup.memory.mem.usage.bytes",
             },
           },
         ],
@@ -1312,11 +1436,6 @@ Object {
           },
           Object {
             "term": Object {
-              "my.custom.ui.filter": "foo-bar",
-            },
-          },
-          Object {
-            "term": Object {
               "agent.name": "java",
             },
           },
@@ -1386,11 +1505,6 @@ Object {
                 "gte": 1528113600000,
                 "lte": 1528977600000,
               },
-            },
-          },
-          Object {
-            "term": Object {
-              "my.custom.ui.filter": "foo-bar",
             },
           },
           Object {

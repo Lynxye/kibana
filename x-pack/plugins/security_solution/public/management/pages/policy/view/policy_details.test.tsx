@@ -1,25 +1,39 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React from 'react';
 import { mount } from 'enzyme';
 
 import { PolicyDetails } from './policy_details';
+import '../../../../common/mock/match_media.ts';
 import { EndpointDocGenerator } from '../../../../../common/endpoint/generate_data';
 import { AppContextTestRender, createAppRootMockRenderer } from '../../../../common/mock/endpoint';
-import { getPolicyDetailPath, getHostListPath } from '../../../common/routing';
-import { policyListApiPathHandlers } from '../store/policy_list/test_mock_utils';
+import { getPolicyDetailPath, getEndpointListPath } from '../../../common/routing';
+import { policyListApiPathHandlers } from '../store/test_mock_utils';
+import { licenseService } from '../../../../common/hooks/use_license';
 
 jest.mock('../../../../common/components/link_to');
+jest.mock('../../../../common/hooks/use_license', () => {
+  const licenseServiceInstance = {
+    isPlatinumPlus: jest.fn(),
+  };
+  return {
+    licenseService: licenseServiceInstance,
+    useLicense: () => {
+      return licenseServiceInstance;
+    },
+  };
+});
 
 describe('Policy Details', () => {
   type FindReactWrapperResponse = ReturnType<ReturnType<typeof render>['find']>;
 
   const policyDetailsPathUrl = getPolicyDetailPath('1');
-  const hostListPath = getHostListPath({ name: 'hostList' });
+  const endpointListPath = getEndpointListPath({ name: 'endpointList' });
   const sleep = (ms = 100) => new Promise((wakeup) => setTimeout(wakeup, ms));
   const generator = new EndpointDocGenerator();
   let history: AppContextTestRender['history'];
@@ -27,7 +41,7 @@ describe('Policy Details', () => {
   let middlewareSpy: AppContextTestRender['middlewareSpy'];
   let http: typeof coreStart.http;
   let render: (ui: Parameters<typeof mount>[0]) => ReturnType<typeof mount>;
-  let policyPackageConfig: ReturnType<typeof generator.generatePolicyPackageConfig>;
+  let policyPackagePolicy: ReturnType<typeof generator.generatePolicyPackagePolicy>;
   let policyView: ReturnType<typeof render>;
 
   beforeEach(() => {
@@ -77,8 +91,8 @@ describe('Policy Details', () => {
     let asyncActions: Promise<unknown> = Promise.resolve();
 
     beforeEach(() => {
-      policyPackageConfig = generator.generatePolicyPackageConfig();
-      policyPackageConfig.id = '1';
+      policyPackagePolicy = generator.generatePolicyPackagePolicy();
+      policyPackagePolicy.id = '1';
 
       const policyListApiHandlers = policyListApiPathHandlers();
 
@@ -86,16 +100,16 @@ describe('Policy Details', () => {
         const [path] = args;
         if (typeof path === 'string') {
           // GET datasouce
-          if (path === '/api/ingest_manager/package_configs/1') {
+          if (path === '/api/fleet/package_policies/1') {
             asyncActions = asyncActions.then<unknown>(async (): Promise<unknown> => sleep());
             return Promise.resolve({
-              item: policyPackageConfig,
+              item: policyPackagePolicy,
               success: true,
             });
           }
 
-          // GET Agent status for agent config
-          if (path === '/api/ingest_manager/fleet/agent-status') {
+          // GET Agent status for agent policy
+          if (path === '/api/fleet/agent-status') {
             asyncActions = asyncActions.then(async () => sleep());
             return Promise.resolve({
               results: { events: 0, total: 5, online: 3, error: 1, offline: 1 },
@@ -123,37 +137,31 @@ describe('Policy Details', () => {
 
     it('should display back to list button and policy title', () => {
       policyView.update();
-      const pageHeaderLeft = policyView.find(
-        'EuiPageHeaderSection[data-test-subj="pageViewHeaderLeft"]'
-      );
 
-      const backToListButton = pageHeaderLeft.find('EuiButtonEmpty');
-      expect(backToListButton.prop('iconType')).toBe('arrowLeft');
-      expect(backToListButton.prop('href')).toBe(hostListPath);
-      expect(backToListButton.text()).toBe('Back to endpoint hosts');
+      const backToListLink = policyView.find('LinkIcon[dataTestSubj="policyDetailsBackLink"]');
+      expect(backToListLink.prop('iconType')).toBe('arrowLeft');
+      expect(backToListLink.prop('href')).toBe(endpointListPath);
+      expect(backToListLink.text()).toBe('Back to endpoint hosts');
 
-      const pageTitle = pageHeaderLeft.find('[data-test-subj="pageViewHeaderLeftTitle"]');
+      const pageTitle = policyView.find('h1[data-test-subj="header-page-title"]');
       expect(pageTitle).toHaveLength(1);
-      expect(pageTitle.text()).toEqual(policyPackageConfig.name);
+      expect(pageTitle.text()).toEqual(policyPackagePolicy.name);
     });
     it('should navigate to list if back to link is clicked', async () => {
       policyView.update();
-      const backToListButton = policyView.find(
-        'EuiPageHeaderSection[data-test-subj="pageViewHeaderLeft"] EuiButtonEmpty'
-      );
+
+      const backToListLink = policyView.find('a[data-test-subj="policyDetailsBackLink"]');
       expect(history.location.pathname).toEqual(policyDetailsPathUrl);
-      backToListButton.simulate('click', { button: 0 });
-      expect(history.location.pathname).toEqual(hostListPath);
+      backToListLink.simulate('click', { button: 0 });
+      expect(history.location.pathname).toEqual(endpointListPath);
     });
     it('should display agent stats', async () => {
       await asyncActions;
       policyView.update();
-      const headerRight = policyView.find(
-        'EuiPageHeaderSection[data-test-subj="pageViewHeaderRight"]'
-      );
-      const agentsSummary = headerRight.find('EuiFlexGroup[data-test-subj="policyAgentsSummary"]');
+
+      const agentsSummary = policyView.find('EuiFlexGroup[data-test-subj="policyAgentsSummary"]');
       expect(agentsSummary).toHaveLength(1);
-      expect(agentsSummary.text()).toBe('Hosts5Online3Offline1Error1');
+      expect(agentsSummary.text()).toBe('Agents5Healthy3Unhealthy1Offline1');
     });
     it('should display cancel button', async () => {
       await asyncActions;
@@ -175,7 +183,7 @@ describe('Policy Details', () => {
       const navigateToAppMockedCalls = coreStart.application.navigateToApp.mock.calls;
       expect(navigateToAppMockedCalls[navigateToAppMockedCalls.length - 1]).toEqual([
         'securitySolution:administration',
-        { path: hostListPath },
+        { path: endpointListPath },
       ]);
     });
     it('should display save button', async () => {
@@ -208,9 +216,9 @@ describe('Policy Details', () => {
           asyncActions = asyncActions.then(async () => sleep());
           const [path] = args;
           if (typeof path === 'string') {
-            if (path === '/api/ingest_manager/package_configs/1') {
+            if (path === '/api/fleet/package_policies/1') {
               return Promise.resolve({
-                item: policyPackageConfig,
+                item: policyPackagePolicy,
                 success: true,
               });
             }
@@ -234,7 +242,7 @@ describe('Policy Details', () => {
         );
         expect(warningCallout).toHaveLength(1);
         expect(warningCallout.text()).toEqual(
-          'This action will update 5 hostsSaving these changes will apply updates to all endpoints assigned to this agent configuration.'
+          'This action will update 5 hostsSaving these changes will apply updates to all endpoints assigned to this agent policy.'
         );
       });
       it('should close dialog if cancel button is clicked', () => {
@@ -253,7 +261,7 @@ describe('Policy Details', () => {
 
         // API should be called
         await asyncActions;
-        expect(http.put.mock.calls[0][0]).toEqual(`/api/ingest_manager/package_configs/1`);
+        expect(http.put.mock.calls[0][0]).toEqual(`/api/fleet/package_policies/1`);
         policyView.update();
 
         // Toast notification should be shown
@@ -265,7 +273,7 @@ describe('Policy Details', () => {
         });
       });
       it('should show an error notification toast if update fails', async () => {
-        policyPackageConfig.id = 'invalid';
+        policyPackagePolicy.id = 'invalid';
         modalConfirmButton.simulate('click');
 
         await asyncActions;
@@ -278,6 +286,60 @@ describe('Policy Details', () => {
           title: 'Failed!',
           text: expect.any(String),
         });
+      });
+    });
+    describe('when the subscription tier is platinum or higher', () => {
+      beforeEach(() => {
+        (licenseService.isPlatinumPlus as jest.Mock).mockReturnValue(true);
+        policyView = render(<PolicyDetails />);
+      });
+
+      it('malware popup, message customization options and tooltip are shown', () => {
+        // use query for finding stuff, if it doesn't find it, just returns null
+        const userNotificationCheckbox = policyView.find(
+          'EuiCheckbox[data-test-subj="malwareUserNotificationCheckbox"]'
+        );
+        const userNotificationCustomMessageTextArea = policyView.find(
+          'EuiTextArea[data-test-subj="malwareUserNotificationCustomMessage"]'
+        );
+        const tooltip = policyView.find('EuiIconTip[data-test-subj="malwareTooltip"]');
+        expect(userNotificationCheckbox).toHaveLength(1);
+        expect(userNotificationCustomMessageTextArea).toHaveLength(1);
+        expect(tooltip).toHaveLength(1);
+      });
+
+      it('ransomware card is shown', () => {
+        const ransomware = policyView.find('EuiPanel[data-test-subj="ransomwareProtectionsForm"]');
+        expect(ransomware).toHaveLength(1);
+      });
+    });
+    describe('when the subscription tier is gold or lower', () => {
+      beforeEach(() => {
+        (licenseService.isPlatinumPlus as jest.Mock).mockReturnValue(false);
+        policyView = render(<PolicyDetails />);
+      });
+
+      it('malware popup, message customization options, and tooltip are hidden', () => {
+        const userNotificationCheckbox = policyView.find(
+          'EuiCheckbox[data-test-subj="malwareUserNotificationCheckbox"]'
+        );
+        const userNotificationCustomMessageTextArea = policyView.find(
+          'EuiTextArea[data-test-subj="malwareUserNotificationCustomMessage"]'
+        );
+        const tooltip = policyView.find('EuiIconTip[data-test-subj="malwareTooltip"]');
+        expect(userNotificationCheckbox).toHaveLength(0);
+        expect(userNotificationCustomMessageTextArea).toHaveLength(0);
+        expect(tooltip).toHaveLength(0);
+      });
+
+      it('ransomware card is hidden', () => {
+        const ransomware = policyView.find('EuiPanel[data-test-subj="ransomwareProtectionsForm"]');
+        expect(ransomware).toHaveLength(0);
+      });
+
+      it('shows the locked card in place of 1 paid feature', () => {
+        const lockedCard = policyView.find('EuiCard[data-test-subj="lockedPolicyCard"]');
+        expect(lockedCard).toHaveLength(1);
       });
     });
   });

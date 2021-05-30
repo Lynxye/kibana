@@ -1,11 +1,14 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { UMElasticsearchQueryFn } from '../adapters';
-import { GetMonitorAvailabilityParams } from '../../../common/runtime_types';
+import { GetMonitorAvailabilityParams, Ping } from '../../../common/runtime_types';
+import { asMutableArray } from '../../../common/utils/as_mutable_array';
+import { AfterKey } from './get_monitor_status';
 
 export interface AvailabilityKey {
   monitorId: string;
@@ -14,20 +17,18 @@ export interface AvailabilityKey {
 
 export interface GetMonitorAvailabilityResult {
   monitorId: string;
-  location: string;
-  name: string;
-  url: string;
   up: number;
   down: number;
+  location: string;
   availabilityRatio: number | null;
+  monitorInfo: Ping;
 }
 
 export const formatBuckets = async (buckets: any[]): Promise<GetMonitorAvailabilityResult[]> =>
   // eslint-disable-next-line @typescript-eslint/naming-convention
   buckets.map(({ key, fields, up_sum, down_sum, ratio }: any) => ({
     ...key,
-    name: fields?.hits?.hits?.[0]?._source?.monitor.name,
-    url: fields?.hits?.hits?.[0]?._source?.url.full,
+    monitorInfo: fields?.hits?.hits?.[0]?._source,
     up: up_sum.value,
     down: down_sum.value,
     availabilityRatio: ratio.value,
@@ -36,9 +37,9 @@ export const formatBuckets = async (buckets: any[]): Promise<GetMonitorAvailabil
 export const getMonitorAvailability: UMElasticsearchQueryFn<
   GetMonitorAvailabilityParams,
   GetMonitorAvailabilityResult[]
-> = async ({ callES, dynamicSettings, range, rangeUnit, threshold: thresholdString, filters }) => {
+> = async ({ uptimeEsClient, range, rangeUnit, threshold: thresholdString, filters }) => {
   const queryResults: Array<Promise<GetMonitorAvailabilityResult[]>> = [];
-  let afterKey: AvailabilityKey | undefined;
+  let afterKey: AfterKey;
 
   const threshold = Number(thresholdString) / 100;
   if (threshold <= 0 || threshold > 1.0) {
@@ -49,92 +50,96 @@ export const getMonitorAvailability: UMElasticsearchQueryFn<
 
   const gte = `now-${range}${rangeUnit}`;
 
+  let parsedFilters: any;
+  if (filters) {
+    parsedFilters = JSON.parse(filters);
+  }
+
   do {
-    const esParams: any = {
-      index: dynamicSettings.heartbeatIndices,
-      body: {
-        query: {
-          bool: {
-            filter: [
-              {
-                range: {
-                  '@timestamp': {
-                    gte,
-                    lte: 'now',
-                  },
+    const esParams = {
+      query: {
+        bool: {
+          filter: [
+            {
+              range: {
+                '@timestamp': {
+                  gte,
+                  lte: 'now',
                 },
               },
-            ],
-          },
-        },
-        size: 0,
-        aggs: {
-          monitors: {
-            composite: {
-              size: 2000,
-              sources: [
-                {
-                  monitorId: {
-                    terms: {
-                      field: 'monitor.id',
-                    },
-                  },
-                },
-                {
-                  location: {
-                    terms: {
-                      field: 'observer.geo.name',
-                      missing_bucket: true,
-                    },
-                  },
-                },
-              ],
             },
-            aggs: {
-              fields: {
-                top_hits: {
-                  size: 1,
-                  _source: ['monitor.name', 'url.full'],
-                  sort: [
-                    {
-                      '@timestamp': {
-                        order: 'desc',
-                      },
-                    },
-                  ],
-                },
-              },
-              up_sum: {
-                sum: {
-                  field: 'summary.up',
-                  missing: 0,
-                },
-              },
-              down_sum: {
-                sum: {
-                  field: 'summary.down',
-                  missing: 0,
-                },
-              },
-              ratio: {
-                bucket_script: {
-                  buckets_path: {
-                    upTotal: 'up_sum',
-                    downTotal: 'down_sum',
+            // append user filters, if defined
+            ...(parsedFilters?.bool ? [parsedFilters] : []),
+          ],
+        },
+      },
+      size: 0,
+      aggs: {
+        monitors: {
+          composite: {
+            size: 2000,
+            ...(afterKey ? { after: afterKey } : {}),
+            sources: asMutableArray([
+              {
+                monitorId: {
+                  terms: {
+                    field: 'monitor.id',
                   },
-                  script: `
+                },
+              },
+              {
+                location: {
+                  terms: {
+                    field: 'observer.geo.name',
+                    missing_bucket: true,
+                  },
+                },
+              },
+            ] as const),
+          },
+          aggs: {
+            fields: {
+              top_hits: {
+                size: 1,
+                sort: [
+                  {
+                    '@timestamp': {
+                      order: 'desc' as const,
+                    },
+                  },
+                ],
+              },
+            },
+            up_sum: {
+              sum: {
+                field: 'summary.up',
+                missing: 0,
+              },
+            },
+            down_sum: {
+              sum: {
+                field: 'summary.down',
+                missing: 0,
+              },
+            },
+            ratio: {
+              bucket_script: {
+                buckets_path: {
+                  upTotal: 'up_sum',
+                  downTotal: 'down_sum',
+                },
+                script: `
                 if (params.upTotal + params.downTotal > 0) {
                   return params.upTotal / (params.upTotal + params.downTotal);
                 } return null;`,
-                },
               },
-              filtered: {
-                bucket_selector: {
-                  buckets_path: {
-                    threshold: 'ratio.value',
-                  },
-                  script: `params.threshold < ${threshold}`,
+            },
+            filtered: {
+              bucket_selector: {
+                buckets_path: {
+                  threshold: 'ratio.value',
                 },
+                script: `params.threshold < ${threshold}`,
               },
             },
           },
@@ -142,17 +147,9 @@ export const getMonitorAvailability: UMElasticsearchQueryFn<
       },
     };
 
-    if (filters) {
-      const parsedFilters = JSON.parse(filters);
-      esParams.body.query.bool = { ...esParams.body.query.bool, ...parsedFilters.bool };
-    }
+    const { body: result } = await uptimeEsClient.search({ body: esParams });
 
-    if (afterKey) {
-      esParams.body.aggs.monitors.composite.after = afterKey;
-    }
-
-    const result = await callES('search', esParams);
-    afterKey = result?.aggregations?.monitors?.after_key;
+    afterKey = result?.aggregations?.monitors?.after_key as AfterKey;
 
     queryResults.push(formatBuckets(result?.aggregations?.monitors?.buckets || []));
   } while (afterKey !== undefined);

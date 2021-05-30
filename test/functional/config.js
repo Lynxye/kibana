@@ -1,20 +1,9 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import { pageObjects } from './page_objects';
@@ -25,6 +14,7 @@ export default async function ({ readConfigFile }) {
 
   return {
     testFiles: [
+      require.resolve('./apps/status_page'),
       require.resolve('./apps/bundles'),
       require.resolve('./apps/console'),
       require.resolve('./apps/context'),
@@ -34,7 +24,6 @@ export default async function ({ readConfigFile }) {
       require.resolve('./apps/home'),
       require.resolve('./apps/management'),
       require.resolve('./apps/saved_objects_management'),
-      require.resolve('./apps/status_page'),
       require.resolve('./apps/timelion'),
       require.resolve('./apps/visualize'),
     ],
@@ -43,14 +32,19 @@ export default async function ({ readConfigFile }) {
 
     servers: commonConfig.get('servers'),
 
-    esTestCluster: commonConfig.get('esTestCluster'),
+    esTestCluster: {
+      ...commonConfig.get('esTestCluster'),
+      serverArgs: ['xpack.security.enabled=false'],
+    },
 
     kbnTestServer: {
       ...commonConfig.get('kbnTestServer'),
       serverArgs: [
         ...commonConfig.get('kbnTestServer.serverArgs'),
-        '--oss',
         '--telemetry.optIn=false',
+        '--xpack.security.enabled=false',
+        '--savedObjects.maxImportPayloadBytes=10485760',
+        '--xpack.maps.showMapVisualizationTypes=true',
       ],
     },
 
@@ -58,6 +52,7 @@ export default async function ({ readConfigFile }) {
       defaults: {
         'accessibility:disableAnimations': true,
         'dateFormat:tz': 'UTC',
+        'visualization:visualize:legacyChartsLibrary': true,
       },
     },
 
@@ -184,6 +179,21 @@ export default async function ({ readConfigFile }) {
           kibana: [],
         },
 
+        kibana_sample_read: {
+          elasticsearch: {
+            cluster: [],
+            indices: [
+              {
+                names: ['kibana_sample*'],
+                privileges: ['read', 'view_index_metadata'],
+                field_security: { grant: ['*'], except: [] },
+              },
+            ],
+            run_as: [],
+          },
+          kibana: [],
+        },
+
         kibana_date_nanos: {
           elasticsearch: {
             cluster: [],
@@ -229,6 +239,21 @@ export default async function ({ readConfigFile }) {
           kibana: [],
         },
 
+        kibana_timefield: {
+          elasticsearch: {
+            cluster: [],
+            indices: [
+              {
+                names: ['without-timefield', 'with-timefield'],
+                privileges: ['read', 'view_index_metadata'],
+                field_security: { grant: ['*'], except: [] },
+              },
+            ],
+            run_as: [],
+          },
+          kibana: [],
+        },
+
         kibana_large_strings: {
           elasticsearch: {
             cluster: [],
@@ -264,7 +289,7 @@ export default async function ({ readConfigFile }) {
             cluster: [],
             indices: [
               {
-                names: ['animals-*'],
+                names: ['animals-*', 'dogbreeds'],
                 privileges: ['read', 'view_index_metadata'],
                 field_security: { grant: ['*'], except: [] },
               },
@@ -272,6 +297,18 @@ export default async function ({ readConfigFile }) {
             run_as: [],
           },
           kibana: [],
+        },
+
+        test_alias1_reader: {
+          elasticsearch: {
+            cluster: [],
+            indices: [
+              {
+                names: ['alias1'],
+                privileges: ['read', 'view_index_metadata'],
+              },
+            ],
+          },
         },
       },
       defaultRoles: ['test_logstash_reader', 'kibana_admin'],

@@ -1,13 +1,13 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { EMSFileSource } from './ems_file_source';
 
-jest.mock('ui/new_platform');
-jest.mock('../../layers/vector_layer/vector_layer', () => {});
+jest.mock('../../layers/vector_layer', () => {});
 
 function makeEMSFileSource(tooltipProperties: string[]) {
   const emsFileSource = new EMSFileSource({ tooltipProperties });
@@ -18,10 +18,10 @@ function makeEMSFileSource(tooltipProperties: string[]) {
 }
 
 describe('EMS file source', () => {
-  describe('filterAndFormatPropertiesToHtml', () => {
+  describe('getTooltipProperties', () => {
     it('should create tooltip-properties with human readable label', async () => {
       const mockEMSFileSource = makeEMSFileSource(['iso2']);
-      const out = await mockEMSFileSource.filterAndFormatPropertiesToHtml({
+      const out = await mockEMSFileSource.getTooltipProperties({
         iso2: 'US',
       });
 
@@ -34,7 +34,7 @@ describe('EMS file source', () => {
     it('should order tooltip-properties', async () => {
       const tooltipProperties = ['iso3', 'iso2', 'name'];
       const mockEMSFileSource = makeEMSFileSource(tooltipProperties);
-      const out = await mockEMSFileSource.filterAndFormatPropertiesToHtml({
+      const out = await mockEMSFileSource.getTooltipProperties({
         name: 'United States',
         iso3: 'USA',
         iso2: 'US',

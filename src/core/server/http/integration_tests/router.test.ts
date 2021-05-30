@@ -1,34 +1,24 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
+
 import { Stream } from 'stream';
-import Boom from 'boom';
+import Boom from '@hapi/boom';
 import supertest from 'supertest';
 import { schema } from '@kbn/config-schema';
-
-import { HttpService } from '../http_service';
 
 import { contextServiceMock } from '../../context/context_service.mock';
 import { loggingSystemMock } from '../../logging/logging_system.mock';
 import { createHttpServer } from '../test_utils';
+import { HttpService } from '../http_service';
+import { Router } from '../router';
+import { loggerMock } from '@kbn/logging/target/mocks';
 
 let server: HttpService;
-
 let logger: ReturnType<typeof loggingSystemMock.create>;
 const contextSetup = contextServiceMock.createSetupContract();
 
@@ -38,7 +28,6 @@ const setupDeps = {
 
 beforeEach(() => {
   logger = loggingSystemMock.create();
-
   server = createHttpServer({ logger });
 });
 
@@ -124,19 +113,30 @@ describe('Options', () => {
         });
       });
 
-      it('User with invalid credentials cannot access a route', async () => {
-        const { server: innerServer, createRouter, registerAuth } = await server.setup(setupDeps);
+      it('User with invalid credentials can access a route', async () => {
+        const { server: innerServer, createRouter, registerAuth, auth } = await server.setup(
+          setupDeps
+        );
         const router = createRouter('/');
 
         registerAuth((req, res, toolkit) => res.unauthorized());
 
         router.get(
           { path: '/', validate: false, options: { authRequired: 'optional' } },
-          (context, req, res) => res.ok({ body: 'ok' })
+          (context, req, res) =>
+            res.ok({
+              body: {
+                httpAuthIsAuthenticated: auth.isAuthenticated(req),
+                requestIsAuthenticated: req.auth.isAuthenticated,
+              },
+            })
         );
         await server.start();
 
-        await supertest(innerServer.listener).get('/').expect(401);
+        await supertest(innerServer.listener).get('/').expect(200, {
+          httpAuthIsAuthenticated: false,
+          requestIsAuthenticated: false,
+        });
       });
 
       it('does not redirect user and allows access to a resource', async () => {
@@ -304,126 +304,204 @@ describe('Options', () => {
   });
 
   describe('timeout', () => {
-    it('should timeout if configured with a small timeout value for a POST', async () => {
-      const { server: innerServer, createRouter } = await server.setup(setupDeps);
-      const router = createRouter('/');
+    const writeBodyCharAtATime = (request: supertest.Test, body: string, interval: number) => {
+      return new Promise((resolve, reject) => {
+        let i = 0;
+        const intervalId = setInterval(() => {
+          if (i < body.length) {
+            request.write(body[i++]);
+          } else {
+            clearInterval(intervalId);
+            request.end((err, res) => {
+              resolve(res);
+            });
+          }
+        }, interval);
+        request.on('error', (err) => {
+          clearInterval(intervalId);
+          reject(err);
+        });
+      });
+    };
 
-      router.post(
-        { path: '/a', validate: false, options: { timeout: 1000 } },
-        async (context, req, res) => {
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-          return res.ok({});
-        }
-      );
-      router.post({ path: '/b', validate: false }, (context, req, res) => res.ok({}));
-      await server.start();
-      expect(supertest(innerServer.listener).post('/a')).rejects.toThrow('socket hang up');
-      await supertest(innerServer.listener).post('/b').expect(200, {});
+    describe('payload', () => {
+      it('should timeout if POST payload sending is too slow', async () => {
+        const { server: innerServer, createRouter } = await server.setup(setupDeps);
+        const router = createRouter('/');
+
+        router.post(
+          {
+            options: {
+              body: {
+                accepts: ['application/json'],
+              },
+              timeout: { payload: 100 },
+            },
+            path: '/a',
+            validate: false,
+          },
+          async (context, req, res) => {
+            return res.ok({});
+          }
+        );
+        await server.start();
+
+        // start the request
+        const request = supertest(innerServer.listener)
+          .post('/a')
+          .set('Content-Type', 'application/json')
+          .set('Transfer-Encoding', 'chunked');
+
+        const result = writeBodyCharAtATime(request, '{"foo":"bar"}', 10);
+
+        await expect(result).rejects.toMatchInlineSnapshot(`[Error: Request Timeout]`);
+      });
+
+      it('should not timeout if POST payload sending is quick', async () => {
+        const { server: innerServer, createRouter } = await server.setup(setupDeps);
+        const router = createRouter('/');
+
+        router.post(
+          {
+            path: '/a',
+            validate: false,
+            options: { body: { accepts: 'application/json' }, timeout: { payload: 10000 } },
+          },
+          async (context, req, res) => res.ok({})
+        );
+        await server.start();
+
+        // start the request
+        const request = supertest(innerServer.listener)
+          .post('/a')
+          .set('Content-Type', 'application/json')
+          .set('Transfer-Encoding', 'chunked');
+
+        const result = writeBodyCharAtATime(request, '{}', 10);
+
+        await expect(result).resolves.toHaveProperty('status', 200);
+      });
     });
 
-    it('should timeout if configured with a small timeout value for a PUT', async () => {
-      const { server: innerServer, createRouter } = await server.setup(setupDeps);
-      const router = createRouter('/');
+    describe('idleSocket', () => {
+      it.skip('should timeout if payload sending has too long of an idle period', async () => {
+        const { server: innerServer, createRouter } = await server.setup(setupDeps);
+        const router = createRouter('/');
 
-      router.put(
-        { path: '/a', validate: false, options: { timeout: 1000 } },
-        async (context, req, res) => {
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-          return res.ok({});
-        }
-      );
-      router.put({ path: '/b', validate: false }, (context, req, res) => res.ok({}));
-      await server.start();
+        router.post(
+          {
+            path: '/a',
+            validate: false,
+            options: {
+              body: {
+                accepts: ['application/json'],
+              },
+              timeout: { idleSocket: 10 },
+            },
+          },
+          async (context, req, res) => {
+            return res.ok({});
+          }
+        );
 
-      expect(supertest(innerServer.listener).put('/a')).rejects.toThrow('socket hang up');
-      await supertest(innerServer.listener).put('/b').expect(200, {});
-    });
+        await server.start();
 
-    it('should timeout if configured with a small timeout value for a DELETE', async () => {
-      const { server: innerServer, createRouter } = await server.setup(setupDeps);
-      const router = createRouter('/');
+        // start the request
+        const request = supertest(innerServer.listener)
+          .post('/a')
+          .set('Content-Type', 'application/json')
+          .set('Transfer-Encoding', 'chunked');
 
-      router.delete(
-        { path: '/a', validate: false, options: { timeout: 1000 } },
-        async (context, req, res) => {
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-          return res.ok({});
-        }
-      );
-      router.delete({ path: '/b', validate: false }, (context, req, res) => res.ok({}));
-      await server.start();
-      expect(supertest(innerServer.listener).delete('/a')).rejects.toThrow('socket hang up');
-      await supertest(innerServer.listener).delete('/b').expect(200, {});
-    });
+        const result = writeBodyCharAtATime(request, '{}', 20);
 
-    it('should timeout if configured with a small timeout value for a GET', async () => {
-      const { server: innerServer, createRouter } = await server.setup(setupDeps);
-      const router = createRouter('/');
+        await expect(result).rejects.toThrow('socket hang up');
+      });
 
-      router.get(
-        // Note: There is a bug within Hapi Server where it cannot set the payload timeout for a GET call but it also cannot configure a timeout less than the payload body
-        // so the least amount of possible time to configure the timeout is 10 seconds.
-        { path: '/a', validate: false, options: { timeout: 100000 } },
-        async (context, req, res) => {
-          // Cause a wait of 20 seconds to cause the socket hangup
-          await new Promise((resolve) => setTimeout(resolve, 200000));
-          return res.ok({});
-        }
-      );
-      router.get({ path: '/b', validate: false }, (context, req, res) => res.ok({}));
-      await server.start();
+      it(`should not timeout if payload sending doesn't have too long of an idle period`, async () => {
+        const { server: innerServer, createRouter } = await server.setup(setupDeps);
+        const router = createRouter('/');
 
-      expect(supertest(innerServer.listener).get('/a')).rejects.toThrow('socket hang up');
-      await supertest(innerServer.listener).get('/b').expect(200, {});
-    });
+        router.post(
+          {
+            path: '/a',
+            validate: false,
+            options: {
+              body: {
+                accepts: ['application/json'],
+              },
+              timeout: { idleSocket: 1000 },
+            },
+          },
+          async (context, req, res) => {
+            return res.ok({});
+          }
+        );
 
-    it('should not timeout if configured with a 5 minute timeout value for a POST', async () => {
-      const { server: innerServer, createRouter } = await server.setup(setupDeps);
-      const router = createRouter('/');
+        await server.start();
 
-      router.post(
-        { path: '/a', validate: false, options: { timeout: 300000 } },
-        async (context, req, res) => res.ok({})
-      );
-      await server.start();
-      await supertest(innerServer.listener).post('/a').expect(200, {});
-    });
+        // start the request
+        const request = supertest(innerServer.listener)
+          .post('/a')
+          .set('Content-Type', 'application/json')
+          .set('Transfer-Encoding', 'chunked');
 
-    it('should not timeout if configured with a 5 minute timeout value for a PUT', async () => {
-      const { server: innerServer, createRouter } = await server.setup(setupDeps);
-      const router = createRouter('/');
+        const result = writeBodyCharAtATime(request, '{}', 10);
 
-      router.put(
-        { path: '/a', validate: false, options: { timeout: 300000 } },
-        async (context, req, res) => res.ok({})
-      );
-      await server.start();
+        await expect(result).resolves.toHaveProperty('status', 200);
+      });
 
-      await supertest(innerServer.listener).put('/a').expect(200, {});
-    });
+      it('should timeout if servers response is too slow', async () => {
+        const { server: innerServer, createRouter } = await server.setup(setupDeps);
+        const router = createRouter('/');
 
-    it('should not timeout if configured with a 5 minute timeout value for a DELETE', async () => {
-      const { server: innerServer, createRouter } = await server.setup(setupDeps);
-      const router = createRouter('/');
+        router.post(
+          {
+            path: '/a',
+            validate: false,
+            options: {
+              body: {
+                accepts: ['application/json'],
+              },
+              timeout: { idleSocket: 1000, payload: 100 },
+            },
+          },
+          async (context, req, res) => {
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+            return res.ok({});
+          }
+        );
 
-      router.delete(
-        { path: '/a', validate: false, options: { timeout: 300000 } },
-        async (context, req, res) => res.ok({})
-      );
-      await server.start();
-      await supertest(innerServer.listener).delete('/a').expect(200, {});
-    });
+        await server.start();
+        await expect(supertest(innerServer.listener).post('/a')).rejects.toThrow('socket hang up');
+      });
 
-    it('should not timeout if configured with a 5 minute timeout value for a GET', async () => {
-      const { server: innerServer, createRouter } = await server.setup(setupDeps);
-      const router = createRouter('/');
+      it('should not timeout if servers response is quick', async () => {
+        const { server: innerServer, createRouter } = await server.setup(setupDeps);
+        const router = createRouter('/');
 
-      router.get(
-        { path: '/a', validate: false, options: { timeout: 300000 } },
-        async (context, req, res) => res.ok({})
-      );
-      await server.start();
-      await supertest(innerServer.listener).get('/a').expect(200, {});
+        router.post(
+          {
+            path: '/a',
+            validate: false,
+            options: {
+              body: {
+                accepts: ['application/json'],
+              },
+              timeout: { idleSocket: 2000, payload: 100 },
+            },
+          },
+          async (context, req, res) => {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            return res.ok({});
+          }
+        );
+
+        await server.start();
+        await expect(supertest(innerServer.listener).post('/a')).resolves.toHaveProperty(
+          'status',
+          200
+        );
+      });
     });
   });
 });
@@ -691,7 +769,7 @@ describe('Response factory', () => {
       await supertest(innerServer.listener).get('/').expect(200);
     });
 
-    it('supports answering with Stream', async () => {
+    it('supports answering with Stream (without custom Content-Type)', async () => {
       const { server: innerServer, createRouter } = await server.setup(setupDeps);
       const router = createRouter('/');
 
@@ -712,8 +790,39 @@ describe('Response factory', () => {
 
       const result = await supertest(innerServer.listener).get('/').expect(200);
 
+      expect(result.text).toBe(undefined);
+      expect(result.body.toString()).toBe('abc');
+      expect(result.header['content-type']).toBe('application/octet-stream');
+    });
+
+    it('supports answering with Stream (with custom Content-Type)', async () => {
+      const { server: innerServer, createRouter } = await server.setup(setupDeps);
+      const router = createRouter('/');
+
+      router.get({ path: '/', validate: false }, (context, req, res) => {
+        const stream = new Stream.Readable({
+          read() {
+            this.push('a');
+            this.push('b');
+            this.push('c');
+            this.push(null);
+          },
+        });
+
+        return res.ok({
+          body: stream,
+          headers: {
+            'Content-Type': 'text/plain',
+          },
+        });
+      });
+
+      await server.start();
+
+      const result = await supertest(innerServer.listener).get('/').expect(200);
+
       expect(result.text).toBe('abc');
-      expect(result.header['content-type']).toBe(undefined);
+      expect(result.header['content-type']).toBe('text/plain; charset=utf-8');
     });
 
     it('supports answering with chunked Stream', async () => {
@@ -729,7 +838,12 @@ describe('Response factory', () => {
           stream.end();
         }, 100);
 
-        return res.ok({ body: stream });
+        return res.ok({
+          body: stream,
+          headers: {
+            'Content-Type': 'text/plain',
+          },
+        });
       });
 
       await server.start();
@@ -796,7 +910,7 @@ describe('Response factory', () => {
         return res.ok({
           body: 'value',
           headers: {
-            etag: '1234',
+            age: '42',
           },
         });
       });
@@ -806,7 +920,7 @@ describe('Response factory', () => {
       const result = await supertest(innerServer.listener).get('/').expect(200);
 
       expect(result.text).toEqual('value');
-      expect(result.header.etag).toBe('1234');
+      expect(result.header.age).toBe('42');
     });
 
     it('supports configuring non-standard headers', async () => {
@@ -817,7 +931,7 @@ describe('Response factory', () => {
         return res.ok({
           body: 'value',
           headers: {
-            etag: '1234',
+            age: '42',
             'x-kibana': 'key',
           },
         });
@@ -828,7 +942,7 @@ describe('Response factory', () => {
       const result = await supertest(innerServer.listener).get('/').expect(200);
 
       expect(result.text).toEqual('value');
-      expect(result.header.etag).toBe('1234');
+      expect(result.header.age).toBe('42');
       expect(result.header['x-kibana']).toBe('key');
     });
 
@@ -840,7 +954,7 @@ describe('Response factory', () => {
         return res.ok({
           body: 'value',
           headers: {
-            ETag: '1234',
+            AgE: '42',
           },
         });
       });
@@ -849,7 +963,7 @@ describe('Response factory', () => {
 
       const result = await supertest(innerServer.listener).get('/').expect(200);
 
-      expect(result.header.etag).toBe('1234');
+      expect(result.header.age).toBe('42');
     });
 
     it('accept array of headers', async () => {
@@ -1568,7 +1682,11 @@ describe('Response factory', () => {
 
       const result = await supertest(innerServer.listener).get('/').expect(500);
 
-      expect(result.body.message).toBe('reason');
+      expect(result.body).toEqual({
+        error: 'Internal Server Error',
+        message: 'reason',
+        statusCode: 500,
+      });
       expect(loggingSystemMock.collect(logger).error).toHaveLength(0);
     });
 
@@ -1666,5 +1784,111 @@ describe('Response factory', () => {
         ]
       `);
     });
+  });
+});
+
+describe('ETag', () => {
+  it('returns the `etag` header', async () => {
+    const { server: innerServer, createRouter } = await server.setup(setupDeps);
+
+    const router = createRouter('');
+    router.get(
+      {
+        path: '/route',
+        validate: false,
+      },
+      (context, req, res) =>
+        res.ok({
+          body: { foo: 'bar' },
+          headers: {
+            etag: 'etag-1',
+          },
+        })
+    );
+
+    await server.start();
+    const response = await supertest(innerServer.listener)
+      .get('/route')
+      .expect(200, { foo: 'bar' });
+    expect(response.get('etag')).toEqual('"etag-1"');
+  });
+
+  it('returns a 304 when the etag value matches', async () => {
+    const { server: innerServer, createRouter } = await server.setup(setupDeps);
+
+    const router = createRouter('');
+    router.get(
+      {
+        path: '/route',
+        validate: false,
+      },
+      (context, req, res) =>
+        res.ok({
+          body: { foo: 'bar' },
+          headers: {
+            etag: 'etag-1',
+          },
+        })
+    );
+
+    await server.start();
+    await supertest(innerServer.listener)
+      .get('/route')
+      .set('If-None-Match', '"etag-1"')
+      .expect(304, '');
+  });
+});
+
+describe('registerRouterAfterListening', () => {
+  it('allows a router to be registered before server has started listening', async () => {
+    const { server: innerServer, createRouter, registerRouterAfterListening } = await server.setup(
+      setupDeps
+    );
+    const router = createRouter('/');
+
+    router.get({ path: '/', validate: false }, (context, req, res) => {
+      return res.ok({ body: 'hello' });
+    });
+
+    const enhanceWithContext = (fn: (...args: any[]) => any) => fn.bind(null, {});
+
+    const otherRouter = new Router('/test', loggerMock.create(), enhanceWithContext);
+    otherRouter.get({ path: '/afterListening', validate: false }, (context, req, res) => {
+      return res.ok({ body: 'hello from other router' });
+    });
+
+    registerRouterAfterListening(otherRouter);
+
+    await server.start();
+
+    await supertest(innerServer.listener).get('/').expect(200);
+    await supertest(innerServer.listener).get('/test/afterListening').expect(200);
+  });
+
+  it('allows a router to be registered after server has started listening', async () => {
+    const { server: innerServer, createRouter, registerRouterAfterListening } = await server.setup(
+      setupDeps
+    );
+    const router = createRouter('/');
+
+    router.get({ path: '/', validate: false }, (context, req, res) => {
+      return res.ok({ body: 'hello' });
+    });
+
+    await server.start();
+
+    await supertest(innerServer.listener).get('/').expect(200);
+    await supertest(innerServer.listener).get('/test/afterListening').expect(404);
+
+    const enhanceWithContext = (fn: (...args: any[]) => any) => fn.bind(null, {});
+
+    const otherRouter = new Router('/test', loggerMock.create(), enhanceWithContext);
+    otherRouter.get({ path: '/afterListening', validate: false }, (context, req, res) => {
+      return res.ok({ body: 'hello from other router' });
+    });
+
+    registerRouterAfterListening(otherRouter);
+
+    await supertest(innerServer.listener).get('/test/afterListening').expect(200);
   });
 });

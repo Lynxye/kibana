@@ -1,14 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React from 'react';
 import { act } from 'react-dom/test-utils';
 
 import * as fixtures from '../../../test/fixtures';
-import { setupEnvironment, nextTick } from '../helpers';
+import { setupEnvironment, BRANCH } from '../helpers';
 
 import { TEMPLATE_NAME, SETTINGS, ALIASES, MAPPINGS as DEFAULT_MAPPING } from './constants';
 import { setup } from './template_edit.helpers';
@@ -52,51 +53,96 @@ jest.mock('@elastic/eui', () => {
   };
 });
 
-// FLAKY: https://github.com/elastic/kibana/issues/65567
-describe.skip('<TemplateEdit />', () => {
+describe('<TemplateEdit />', () => {
   let testBed: TemplateFormTestBed;
 
   const { server, httpRequestsMockHelpers } = setupEnvironment();
 
+  beforeAll(() => {
+    jest.useFakeTimers();
+    httpRequestsMockHelpers.setLoadComponentTemplatesResponse([]);
+  });
+
   afterAll(() => {
     server.restore();
+    jest.useRealTimers();
   });
 
   describe('without mappings', () => {
     const templateToEdit = fixtures.getTemplate({
       name: 'index_template_without_mappings',
       indexPatterns: ['indexPattern1'],
-      isLegacy: true,
+      dataStream: {
+        hidden: true,
+        anyUnknownKey: 'should_be_kept',
+      },
+    });
+
+    beforeAll(() => {
+      httpRequestsMockHelpers.setLoadTemplateResponse(templateToEdit);
     });
 
     beforeEach(async () => {
-      httpRequestsMockHelpers.setLoadTemplateResponse(templateToEdit);
-
-      testBed = await setup();
-
       await act(async () => {
-        await nextTick();
-        testBed.component.update();
+        testBed = await setup();
       });
+
+      testBed.component.update();
     });
 
-    it('allows you to add mappings', async () => {
+    test('allows you to add mappings', async () => {
       const { actions, find } = testBed;
+      // Logistics
+      await actions.completeStepOne();
+      // Component templates
+      await actions.completeStepTwo();
+      // Index settings
+      await actions.completeStepThree();
+      // Mappings
+      await actions.mappings.addField('field_1', 'text');
+
+      expect(find('fieldsListItem').length).toBe(1);
+    });
+
+    test('should keep data stream configuration', async () => {
+      const { actions } = testBed;
+      // Logistics
+      await actions.completeStepOne({
+        name: 'test',
+        indexPatterns: ['myPattern*'],
+        version: 1,
+      });
+      // Component templates
+      await actions.completeStepTwo();
+      // Index settings
+      await actions.completeStepThree();
+      // Mappings
+      await actions.completeStepFour();
+      // Aliases
+      await actions.completeStepFive();
 
       await act(async () => {
-        // Complete step 1 (logistics)
-        await actions.completeStepOne();
-
-        // Step 2 (index settings)
-        await actions.completeStepTwo();
-
-        // Step 3 (mappings)
-        await act(async () => {
-          await actions.addMappingField('field_1', 'text');
-        });
-
-        expect(find('fieldsListItem').length).toBe(1);
+        actions.clickNextButton();
       });
+
+      const latestRequest = server.requests[server.requests.length - 1];
+
+      const expected = {
+        name: 'test',
+        indexPatterns: ['myPattern*'],
+        dataStream: {
+          hidden: true,
+          anyUnknownKey: 'should_be_kept',
+        },
+        version: 1,
+        _kbnMeta: {
+          type: 'default',
+          isLegacy: false,
+          hasDatastream: true,
+        },
+      };
+
+      expect(JSON.parse(JSON.parse(latestRequest.requestBody).body)).toEqual(expected);
     });
   });
 
@@ -107,16 +153,17 @@ describe.skip('<TemplateEdit />', () => {
       template: {
         mappings: MAPPING,
       },
-      isLegacy: true,
+    });
+
+    beforeAll(() => {
+      httpRequestsMockHelpers.setLoadTemplateResponse(templateToEdit);
     });
 
     beforeEach(async () => {
-      httpRequestsMockHelpers.setLoadTemplateResponse(templateToEdit);
-
       await act(async () => {
         testBed = await setup();
-        await testBed.waitFor('templateForm');
       });
+      testBed.component.update();
     });
 
     test('should set the correct page title', () => {
@@ -138,64 +185,64 @@ describe.skip('<TemplateEdit />', () => {
       beforeEach(async () => {
         const { actions } = testBed;
 
-        await act(async () => {
-          // Complete step 1 (logistics)
-          await actions.completeStepOne({
-            indexPatterns: UPDATED_INDEX_PATTERN,
-          });
-
-          // Step 2 (index settings)
-          await actions.completeStepTwo(JSON.stringify(SETTINGS));
+        // Logistics
+        await actions.completeStepOne({
+          indexPatterns: UPDATED_INDEX_PATTERN,
+          priority: 3,
         });
+        // Component templates
+        await actions.completeStepTwo();
+        // Index settings
+        await actions.completeStepThree(JSON.stringify(SETTINGS));
       });
 
       it('should send the correct payload with changed values', async () => {
-        const { actions, component, find, form } = testBed;
+        const { actions, component, exists, form } = testBed;
 
+        // Make some changes to the mappings
         await act(async () => {
-          // Make some changes to the mappings (step 3)
-
           actions.clickEditButtonAtField(0); // Select the first field to edit
-          await nextTick();
-          component.update();
+        });
+        component.update();
+
+        // Verify that the edit field flyout is opened
+        expect(exists('mappingsEditorFieldEdit')).toBe(true);
+
+        // Change the field name
+        await act(async () => {
+          form.setInputValue('nameParameterInput', UPDATED_MAPPING_TEXT_FIELD_NAME);
         });
 
-        // verify edit field flyout
-        expect(find('mappingsEditorFieldEdit').length).toEqual(1);
-
+        // Save changes on the field
         await act(async () => {
-          // change the field name
-          form.setInputValue('nameParameterInput', UPDATED_MAPPING_TEXT_FIELD_NAME);
-
-          // Save changes
           actions.clickEditFieldUpdateButton();
-          await nextTick();
-          component.update();
+        });
+        component.update();
 
-          // Proceed to the next step
+        // Proceed to the next step
+        await act(async () => {
           actions.clickNextButton();
-          await nextTick(50);
-          component.update();
+        });
+        component.update();
 
-          // Step 4 (aliases)
-          await actions.completeStepFour(JSON.stringify(ALIASES));
+        // Aliases
+        await actions.completeStepFive(JSON.stringify(ALIASES));
 
-          // Submit the form
-          actions.clickSubmitButton();
-          await nextTick();
+        // Submit the form
+        await act(async () => {
+          actions.clickNextButton();
         });
 
         const latestRequest = server.requests[server.requests.length - 1];
-        const { version, order } = templateToEdit;
+        const { version } = templateToEdit;
 
         const expected = {
           name: TEMPLATE_NAME,
           version,
-          order,
+          priority: 3,
           indexPatterns: UPDATED_INDEX_PATTERN,
           template: {
             mappings: {
-              ...MAPPING,
               properties: {
                 [UPDATED_MAPPING_TEXT_FIELD_NAME]: {
                   type: 'text',
@@ -215,6 +262,7 @@ describe.skip('<TemplateEdit />', () => {
           _kbnMeta: {
             type: 'default',
             isLegacy: templateToEdit._kbnMeta.isLegacy,
+            hasDatastream: false,
           },
         };
 
@@ -222,4 +270,69 @@ describe.skip('<TemplateEdit />', () => {
       });
     });
   });
+
+  // @ts-expect-error
+  if (BRANCH === '7.x') {
+    describe('legacy index templates', () => {
+      const legacyTemplateToEdit = fixtures.getTemplate({
+        name: 'legacy_index_template',
+        indexPatterns: ['indexPattern1'],
+        isLegacy: true,
+        template: {
+          mappings: {
+            my_mapping_type: {},
+          },
+        },
+      });
+
+      beforeAll(() => {
+        httpRequestsMockHelpers.setLoadTemplateResponse(legacyTemplateToEdit);
+      });
+
+      beforeEach(async () => {
+        await act(async () => {
+          testBed = await setup();
+        });
+
+        testBed.component.update();
+      });
+
+      it('persists mappings type', async () => {
+        const { actions } = testBed;
+        // Logistics
+        await actions.completeStepOne();
+        // Note: "step 2" (component templates) doesn't exist for legacy templates
+        // Index settings
+        await actions.completeStepThree();
+        // Mappings
+        await actions.completeStepFour();
+        // Aliases
+        await actions.completeStepFive();
+
+        // Submit the form
+        await act(async () => {
+          actions.clickNextButton();
+        });
+
+        const latestRequest = server.requests[server.requests.length - 1];
+
+        const { version, template, name, indexPatterns, _kbnMeta, order } = legacyTemplateToEdit;
+
+        const expected = {
+          name,
+          indexPatterns,
+          version,
+          order,
+          template: {
+            aliases: undefined,
+            mappings: template!.mappings,
+            settings: undefined,
+          },
+          _kbnMeta,
+        };
+
+        expect(JSON.parse(JSON.parse(latestRequest.requestBody).body)).toEqual(expected);
+      });
+    });
+  }
 });

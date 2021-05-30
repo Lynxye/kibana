@@ -1,68 +1,60 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
+
 import React from 'react';
 import { mount } from 'enzyme';
-// @ts-ignore
 import { findTestSubject } from '@elastic/eui/lib/test';
 import { DocViewTable } from './table';
 import { indexPatterns, IndexPattern } from '../../../../../data/public';
+import { ElasticSearchHit } from '../../doc_views/doc_views_types';
 
-const indexPattern = {
-  fields: [
-    {
-      name: '_index',
-      type: 'string',
-      scripted: false,
-      filterable: true,
-    },
-    {
-      name: 'message',
-      type: 'string',
-      scripted: false,
-      filterable: false,
-    },
-    {
-      name: 'extension',
-      type: 'string',
-      scripted: false,
-      filterable: true,
-    },
-    {
-      name: 'bytes',
-      type: 'number',
-      scripted: false,
-      filterable: true,
-    },
-    {
-      name: 'scripted',
-      type: 'number',
-      scripted: true,
-      filterable: false,
-    },
-  ],
+const indexPattern = ({
+  fields: {
+    getAll: () => [
+      {
+        name: '_index',
+        type: 'string',
+        scripted: false,
+        filterable: true,
+      },
+      {
+        name: 'message',
+        type: 'string',
+        scripted: false,
+        filterable: false,
+      },
+      {
+        name: 'extension',
+        type: 'string',
+        scripted: false,
+        filterable: true,
+      },
+      {
+        name: 'bytes',
+        type: 'number',
+        scripted: false,
+        filterable: true,
+      },
+      {
+        name: 'scripted',
+        type: 'number',
+        scripted: true,
+        filterable: false,
+      },
+    ],
+  },
   metaFields: ['_index', '_score'],
   flattenHit: undefined,
   formatHit: jest.fn((hit) => hit._source),
-} as IndexPattern;
+} as unknown) as IndexPattern;
 
 indexPattern.fields.getByName = (name: string) => {
-  return indexPattern.fields.find((field) => field.name === name);
+  return indexPattern.fields.getAll().find((field) => field.name === name);
 };
 
 indexPattern.flattenHit = indexPatterns.flattenHitWrapper(indexPattern, indexPattern.metaFields);
@@ -73,6 +65,8 @@ describe('DocViewTable at Discover', () => {
 
   const hit = {
     _index: 'logstash-2014.09.09',
+    _type: 'doc',
+    _id: 'id123',
     _score: 1,
     _source: {
       message:
@@ -94,7 +88,7 @@ describe('DocViewTable at Discover', () => {
       scripted: 123,
       _underscore: 123,
     },
-  };
+  } as ElasticSearchHit;
 
   const props = {
     hit,
@@ -162,7 +156,7 @@ describe('DocViewTable at Discover', () => {
       const elementExist = check[element];
 
       if (typeof elementExist === 'boolean') {
-        const btn = findTestSubject(rowComponent, element);
+        const btn = findTestSubject(rowComponent, element, '^=');
 
         it(`renders ${element} for '${check._property}' correctly`, () => {
           const disabled = btn.length ? btn.props().disabled : true;
@@ -171,40 +165,6 @@ describe('DocViewTable at Discover', () => {
         });
       }
     });
-
-    (['noMappingWarning'] as const).forEach((element) => {
-      const elementExist = check[element];
-
-      if (typeof elementExist === 'boolean') {
-        const el = findTestSubject(rowComponent, element);
-
-        it(`renders ${element} for '${check._property}' correctly`, () => {
-          expect(el.length).toBe(elementExist ? 1 : 0);
-        });
-      }
-    });
-  });
-});
-
-describe('DocViewTable at Discover Doc', () => {
-  const hit = {
-    _index: 'logstash-2014.09.09',
-    _score: 1,
-    _source: {
-      extension: 'html',
-      not_mapped: 'yes',
-    },
-  };
-  // here no action buttons are rendered
-  const props = {
-    hit,
-    indexPattern,
-  };
-  const component = mount(<DocViewTable {...props} />);
-  const foundLength = findTestSubject(component, 'addInclusiveFilterButton').length;
-
-  it(`renders no action buttons`, () => {
-    expect(foundLength).toBe(0);
   });
 });
 
@@ -212,6 +172,9 @@ describe('DocViewTable at Discover Context', () => {
   // here no toggleColumnButtons  are rendered
   const hit = {
     _index: 'logstash-2014.09.09',
+    _type: 'doc',
+    _id: 'id123',
+    _score: 1,
     _source: {
       message:
         'Lorem ipsum dolor sit amet, consectetuer adipiscing elit. \
@@ -223,7 +186,7 @@ describe('DocViewTable at Discover Context', () => {
         Integer tincidunt. Cras dapibus. Vivamus elementum semper nisi. Aenean vulputate eleifend tellus. \
         Phasellus ullamcorper ipsum rutrum nunc. Nunc nonummy metus. Vestibulum volutpat pretium libero. Cras id dui. Aenean ut',
     },
-  };
+  } as ElasticSearchHit;
   const props = {
     hit,
     columns: ['extension'],
@@ -255,5 +218,173 @@ describe('DocViewTable at Discover Context', () => {
     expect(btn.length).toBe(1);
     btn.simulate('click');
     expect(component.html() !== html).toBeTruthy();
+  });
+});
+
+describe('DocViewTable at Discover Doc', () => {
+  const hit = {
+    _index: 'logstash-2014.09.09',
+    _score: 1,
+    _type: 'doc',
+    _id: 'id123',
+    _source: {
+      extension: 'html',
+      not_mapped: 'yes',
+    },
+  };
+  // here no action buttons are rendered
+  const props = {
+    hit,
+    indexPattern,
+  };
+  const component = mount(<DocViewTable {...props} />);
+  const foundLength = findTestSubject(component, 'addInclusiveFilterButton').length;
+
+  it(`renders no action buttons`, () => {
+    expect(foundLength).toBe(0);
+  });
+});
+
+describe('DocViewTable at Discover Doc with Fields API', () => {
+  const indexPatterneCommerce = ({
+    fields: {
+      getAll: () => [
+        {
+          name: '_index',
+          type: 'string',
+          scripted: false,
+          filterable: true,
+        },
+        {
+          name: 'category',
+          type: 'string',
+          scripted: false,
+          filterable: true,
+        },
+        {
+          name: 'category.keyword',
+          displayName: 'category.keyword',
+          type: 'string',
+          scripted: false,
+          filterable: true,
+          spec: {
+            subType: {
+              multi: {
+                parent: 'category',
+              },
+            },
+          },
+        },
+        {
+          name: 'customer_first_name',
+          type: 'string',
+          scripted: false,
+          filterable: true,
+        },
+        {
+          name: 'customer_first_name.keyword',
+          displayName: 'customer_first_name.keyword',
+          type: 'string',
+          scripted: false,
+          filterable: false,
+          spec: {
+            subType: {
+              multi: {
+                parent: 'customer_first_name',
+              },
+            },
+          },
+        },
+        {
+          name: 'customer_first_name.nickname',
+          displayName: 'customer_first_name.nickname',
+          type: 'string',
+          scripted: false,
+          filterable: false,
+          spec: {
+            subType: {
+              multi: {
+                parent: 'customer_first_name',
+              },
+            },
+          },
+        },
+      ],
+    },
+    metaFields: ['_index', '_type', '_score', '_id'],
+    flattenHit: jest.fn((hit) => {
+      const result = {} as Record<string, unknown>;
+      Object.keys(hit).forEach((key) => {
+        if (key !== 'fields') {
+          result[key] = hit[key];
+        } else {
+          Object.keys(hit.fields).forEach((field) => {
+            result[field] = hit.fields[field];
+          });
+        }
+      });
+      return result;
+    }),
+    formatHit: jest.fn((hit) => {
+      const result = {} as Record<string, unknown>;
+      Object.keys(hit).forEach((key) => {
+        if (key !== 'fields') {
+          result[key] = hit[key];
+        } else {
+          Object.keys(hit.fields).forEach((field) => {
+            result[field] = hit.fields[field];
+          });
+        }
+      });
+      return result;
+    }),
+  } as unknown) as IndexPattern;
+
+  indexPatterneCommerce.fields.getByName = (name: string) => {
+    return indexPatterneCommerce.fields.getAll().find((field) => field.name === name);
+  };
+
+  const fieldsHit = {
+    _index: 'logstash-2014.09.09',
+    _type: 'doc',
+    _id: 'id123',
+    _score: 1.0,
+    fields: {
+      category: "Women's Clothing",
+      'category.keyword': "Women's Clothing",
+      customer_first_name: 'Betty',
+      'customer_first_name.keyword': 'Betty',
+      'customer_first_name.nickname': 'Betsy',
+    },
+  };
+  const props = {
+    hit: fieldsHit,
+    columns: ['Document'],
+    indexPattern: indexPatterneCommerce,
+    filter: jest.fn(),
+    onAddColumn: jest.fn(),
+    onRemoveColumn: jest.fn(),
+  };
+  const component = mount(<DocViewTable {...props} />);
+  it('renders multifield rows', () => {
+    const categoryMultifieldRow = findTestSubject(
+      component,
+      'tableDocViewRow-multifieldsTitle-category'
+    );
+    expect(categoryMultifieldRow.length).toBe(1);
+    const categoryKeywordRow = findTestSubject(component, 'tableDocViewRow-category.keyword');
+    expect(categoryKeywordRow.length).toBe(1);
+
+    const customerNameMultiFieldRow = findTestSubject(
+      component,
+      'tableDocViewRow-multifieldsTitle-customer_first_name'
+    );
+    expect(customerNameMultiFieldRow.length).toBe(1);
+    expect(findTestSubject(component, 'tableDocViewRow-customer_first_name.keyword').length).toBe(
+      1
+    );
+    expect(findTestSubject(component, 'tableDocViewRow-customer_first_name.nickname').length).toBe(
+      1
+    );
   });
 });

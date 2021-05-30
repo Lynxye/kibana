@@ -1,36 +1,54 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { TypeOf } from '@kbn/config-schema';
-import { RequestHandler, Logger } from 'kibana/server';
-import { eventsIndexPattern, alertsIndexPattern } from '../../../../common/endpoint/constants';
+import { RequestHandler } from 'kibana/server';
+import { ResolverPaginatedEvents, SafeResolverEvent } from '../../../../common/endpoint/types';
 import { validateEvents } from '../../../../common/endpoint/schema/resolver';
-import { Fetcher } from './utils/fetch';
-import { EndpointAppContext } from '../../types';
+import { EventsQuery } from './queries/events';
+import { PaginationBuilder } from './utils/pagination';
 
-export function handleEvents(
-  log: Logger,
-  endpointAppContext: EndpointAppContext
-): RequestHandler<TypeOf<typeof validateEvents.params>, TypeOf<typeof validateEvents.query>> {
+/**
+ * Creates an object that the events handler would return
+ *
+ * @param events array of events
+ * @param nextEvent the cursor to retrieve the next event
+ */
+function createEvents(
+  events: SafeResolverEvent[] = [],
+  nextEvent: string | null = null
+): ResolverPaginatedEvents {
+  return { events, nextEvent };
+}
+
+/**
+ * This function handles the `/events` api and returns an array of events and a cursor if more events exist than were
+ * requested.
+ */
+export function handleEvents(): RequestHandler<
+  unknown,
+  TypeOf<typeof validateEvents.query>,
+  TypeOf<typeof validateEvents.body>
+> {
   return async (context, req, res) => {
     const {
-      params: { id },
-      query: { events, afterEvent, legacyEndpointID: endpointID },
+      query: { limit, afterEvent },
+      body,
     } = req;
-    try {
-      const client = context.core.elasticsearch.legacy.client;
+    const client = context.core.elasticsearch.client;
+    const query = new EventsQuery({
+      pagination: PaginationBuilder.createBuilder(limit, afterEvent),
+      indexPatterns: body.indexPatterns,
+      timeRange: body.timeRange,
+    });
+    const results = await query.search(client, body.filter);
 
-      const fetcher = new Fetcher(client, id, eventsIndexPattern, alertsIndexPattern, endpointID);
-
-      return res.ok({
-        body: await fetcher.events(events, afterEvent),
-      });
-    } catch (err) {
-      log.warn(err);
-      return res.internalError({ body: err });
-    }
+    return res.ok({
+      body: createEvents(results, PaginationBuilder.buildCursorRequestLimit(limit, results)),
+    });
   };
 }

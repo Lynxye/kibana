@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React, { ReactElement } from 'react';
@@ -11,11 +12,11 @@ import { VectorIcon } from './vector_icon';
 
 interface Props {
   styleName: VECTOR_STYLES;
-  label: ReactElement<any> | string;
+  label: ReactElement<any> | string | number;
   color: string;
   isLinesOnly: boolean;
   isPointsOnly: boolean;
-  symbolId: string;
+  symbolId?: string;
 }
 
 export function Category({ styleName, label, color, isLinesOnly, isPointsOnly, symbolId }: Props) {

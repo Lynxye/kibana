@@ -1,14 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import expect from '@kbn/expect';
 
 import { FtrProviderContext } from '../../../ftr_provider_context';
 import { USER } from '../../../../functional/services/ml/security_common';
-import { COMMON_REQUEST_HEADERS } from '../../../../functional/services/ml/common';
+import { COMMON_REQUEST_HEADERS } from '../../../../functional/services/ml/common_api';
 
 export default ({ getService }: FtrProviderContext) => {
   const supertest = getService('supertestWithoutAuth');
@@ -64,9 +65,9 @@ export default ({ getService }: FtrProviderContext) => {
         .delete(`/api/ml/filters/${filterId}`)
         .auth(USER.ML_VIEWER, ml.securityCommon.getPasswordForUser(USER.ML_VIEWER))
         .set(COMMON_REQUEST_HEADERS)
-        .expect(404);
+        .expect(403);
 
-      expect(body.error).to.eql('Not Found');
+      expect(body.error).to.eql('Forbidden');
       await ml.api.waitForFilterToExist(filterId);
     });
 
@@ -76,9 +77,9 @@ export default ({ getService }: FtrProviderContext) => {
         .delete(`/api/ml/filters/${filterId}`)
         .auth(USER.ML_UNAUTHORIZED, ml.securityCommon.getPasswordForUser(USER.ML_UNAUTHORIZED))
         .set(COMMON_REQUEST_HEADERS)
-        .expect(404);
+        .expect(403);
 
-      expect(body.error).to.eql('Not Found');
+      expect(body.error).to.eql('Forbidden');
       await ml.api.waitForFilterToExist(filterId);
     });
 

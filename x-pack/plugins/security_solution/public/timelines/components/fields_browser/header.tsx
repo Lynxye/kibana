@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import {
@@ -18,7 +19,12 @@ import styled from 'styled-components';
 import { BrowserFields } from '../../../common/containers/source';
 import { OnUpdateColumns } from '../timeline/events';
 
-import { getFieldBrowserSearchInputClassName, getFieldCount, SEARCH_INPUT_WIDTH } from './helpers';
+import {
+  getFieldBrowserSearchInputClassName,
+  getFieldCount,
+  RESET_FIELDS_CLASS_NAME,
+  SEARCH_INPUT_WIDTH,
+} from './helpers';
 
 import * as i18n from './translations';
 import { useManageTimeline } from '../manage_timeline';
@@ -37,7 +43,7 @@ CountFlexItem.displayName = 'CountFlexItem';
 
 // background-color: ${props => props.theme.eui.euiColorLightestShade};
 const HeaderContainer = styled.div`
-  padding: 16px;
+  padding: 0 16px 16px 16px;
   margin-bottom: 8px;
 `;
 
@@ -54,7 +60,6 @@ SearchContainer.displayName = 'SearchContainer';
 
 interface Props {
   filteredBrowserFields: BrowserFields;
-  isEventViewer?: boolean;
   isSearching: boolean;
   onOutsideClick: () => void;
   onSearchInputChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
@@ -93,11 +98,11 @@ CountRow.displayName = 'CountRow';
 
 const TitleRow = React.memo<{
   id: string;
-  isEventViewer?: boolean;
   onOutsideClick: () => void;
   onUpdateColumns: OnUpdateColumns;
 }>(({ id, onOutsideClick, onUpdateColumns }) => {
   const { getManageTimelineById } = useManageTimeline();
+
   const handleResetColumns = useCallback(() => {
     const timeline = getManageTimelineById(id);
     onUpdateColumns(timeline.defaultModel.columns);
@@ -118,7 +123,11 @@ const TitleRow = React.memo<{
       </EuiFlexItem>
 
       <EuiFlexItem grow={false}>
-        <EuiButtonEmpty data-test-subj="reset-fields" onClick={handleResetColumns}>
+        <EuiButtonEmpty
+          className={RESET_FIELDS_CLASS_NAME}
+          data-test-subj="reset-fields"
+          onClick={handleResetColumns}
+        >
           {i18n.RESET_FIELDS}
         </EuiButtonEmpty>
       </EuiFlexItem>
@@ -130,7 +139,6 @@ TitleRow.displayName = 'TitleRow';
 
 export const Header = React.memo<Props>(
   ({
-    isEventViewer,
     isSearching,
     filteredBrowserFields,
     onOutsideClick,
@@ -140,12 +148,7 @@ export const Header = React.memo<Props>(
     timelineId,
   }) => (
     <HeaderContainer>
-      <TitleRow
-        id={timelineId}
-        isEventViewer={isEventViewer}
-        onUpdateColumns={onUpdateColumns}
-        onOutsideClick={onOutsideClick}
-      />
+      <TitleRow id={timelineId} onUpdateColumns={onUpdateColumns} onOutsideClick={onOutsideClick} />
       <SearchContainer>
         <EuiFieldSearch
           className={getFieldBrowserSearchInputClassName(timelineId)}
@@ -154,6 +157,7 @@ export const Header = React.memo<Props>(
           onChange={onSearchInputChange}
           placeholder={i18n.FILTER_PLACEHOLDER}
           value={searchInput}
+          fullWidth
         />
       </SearchContainer>
       <CountRow filteredBrowserFields={filteredBrowserFields} />

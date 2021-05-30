@@ -1,24 +1,14 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
+import { i18n } from '@kbn/i18n';
 
 import PropTypes from 'prop-types';
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { DataFormatPicker } from '../../data_format_picker';
 import { createSelectHandler } from '../../lib/create_select_handler';
 import { YesNo } from '../../yes_no';
@@ -34,13 +24,11 @@ import {
   EuiCode,
   EuiHorizontalRule,
   EuiFieldNumber,
-  EuiFormLabel,
-  EuiSpacer,
 } from '@elastic/eui';
 import { FormattedMessage, injectI18n } from '@kbn/i18n/react';
-import { getDefaultQueryLanguage } from '../../lib/get_default_query_language';
-import { QueryBarWrapper } from '../../query_bar_wrapper';
-
+import { SeriesConfigQueryBarWithIgnoreGlobalFilter } from '../../series_config_query_bar_with_ignore_global_filter';
+import { PalettePicker } from '../../palette_picker';
+import { getChartsSetup } from '../../../../services';
 import { isPercentDisabled } from '../../lib/stacked';
 import { STACKED_OPTIONS } from '../../../visualizations/constants/chart';
 
@@ -48,12 +36,8 @@ export const TimeseriesConfig = injectI18n(function (props) {
   const handleSelectChange = createSelectHandler(props.onChange);
   const handleTextChange = createTextHandler(props.onChange);
   const defaults = {
-    fill: '',
-    line_width: '',
-    point_size: '',
     value_template: '{{value}}',
     offset_time: '',
-    split_color_mode: 'kibana',
     axis_min: '',
     axis_max: '',
     stacked: STACKED_OPTIONS.NONE,
@@ -136,33 +120,23 @@ export const TimeseriesConfig = injectI18n(function (props) {
   const selectedChartTypeOption = chartTypeOptions.find((option) => {
     return model.chart_type === option.value;
   });
+  const { palettes } = getChartsSetup();
+  const [palettesRegistry, setPalettesRegistry] = useState(null);
 
-  const splitColorOptions = [
-    {
-      label: intl.formatMessage({
-        id: 'visTypeTimeseries.timeSeries.defaultPaletteLabel',
-        defaultMessage: 'Default palette',
-      }),
-      value: 'kibana',
-    },
-    {
-      label: intl.formatMessage({
-        id: 'visTypeTimeseries.timeSeries.rainbowLabel',
-        defaultMessage: 'Rainbow',
-      }),
-      value: 'rainbow',
-    },
-    {
-      label: intl.formatMessage({
-        id: 'visTypeTimeseries.timeSeries.gradientLabel',
-        defaultMessage: 'Gradient',
-      }),
-      value: 'gradient',
-    },
-  ];
-  const selectedSplitColorOption = splitColorOptions.find((option) => {
-    return model.split_color_mode === option.value;
-  });
+  useEffect(() => {
+    const fetchPalettes = async () => {
+      const palettesService = await palettes.getPalettes();
+      setPalettesRegistry(palettesService);
+    };
+    fetchPalettes();
+  }, [palettes]);
+
+  const handlePaletteChange = (val) => {
+    props.onChange({
+      split_color_mode: null,
+      palette: val,
+    });
+  };
 
   let type;
 
@@ -257,14 +231,13 @@ export const TimeseriesConfig = injectI18n(function (props) {
           </EuiFormRow>
         </EuiFlexItem>
         <EuiFlexItem grow={false}>
-          <EuiFormLabel>
-            <FormattedMessage
-              id="visTypeTimeseries.timeSeries.chartLine.stepsLabel"
-              defaultMessage="Steps"
-            />
-          </EuiFormLabel>
-          <EuiSpacer size="s" />
-          <YesNo value={model.steps} name="steps" onChange={props.onChange} />
+          <EuiFormRow
+            label={i18n.translate('visTypeTimeseries.timeSeries.chartLine.stepsLabel', {
+              defaultMessage: 'Steps',
+            })}
+          >
+            <YesNo value={model.steps} name="steps" onChange={props.onChange} />
+          </EuiFormRow>
         </EuiFlexItem>
       </EuiFlexGroup>
     );
@@ -349,10 +322,22 @@ export const TimeseriesConfig = injectI18n(function (props) {
 
   const disableSeparateYaxis = model.separate_axis ? false : true;
 
-  const seriesIndexPattern =
-    props.model.override_index_pattern && props.model.series_index_pattern
-      ? props.model.series_index_pattern
-      : props.indexPatternForQuery;
+  const seriesIndexPattern = props.model.override_index_pattern
+    ? props.model.series_index_pattern
+    : props.indexPatternForQuery;
+
+  const initialPalette = model.palette ?? {
+    type: 'palette',
+    name: 'default',
+  };
+
+  const palette = {
+    ...initialPalette,
+    name:
+      model.split_color_mode === 'kibana'
+        ? 'kibana_palette'
+        : model.split_color_mode || initialPalette.name,
+  };
 
   return (
     <div className="tvbAggRow">
@@ -391,30 +376,12 @@ export const TimeseriesConfig = injectI18n(function (props) {
       </EuiFlexGroup>
 
       <EuiHorizontalRule margin="s" />
-      <EuiFlexItem>
-        <EuiFormRow
-          id={htmlId('series_filter')}
-          label={
-            <FormattedMessage
-              id="visTypeTimeseries.timeSeries.filterLabel"
-              defaultMessage="Filter"
-            />
-          }
-          fullWidth
-        >
-          <QueryBarWrapper
-            query={{
-              language:
-                model.filter && model.filter.language
-                  ? model.filter.language
-                  : getDefaultQueryLanguage(),
-              query: model.filter && model.filter.query ? model.filter.query : '',
-            }}
-            onChange={(filter) => props.onChange({ filter })}
-            indexPatterns={[seriesIndexPattern]}
-          />
-        </EuiFormRow>
-      </EuiFlexItem>
+      <SeriesConfigQueryBarWithIgnoreGlobalFilter
+        model={model}
+        onChange={props.onChange}
+        panel={props.panel}
+        indexPatternForQuery={seriesIndexPattern}
+      />
       <EuiHorizontalRule margin="s" />
 
       {type}
@@ -441,48 +408,47 @@ export const TimeseriesConfig = injectI18n(function (props) {
           </EuiFormRow>
         </EuiFlexItem>
         <EuiFlexItem grow={true}>
-          <EuiFormLabel>
-            <FormattedMessage
-              id="visTypeTimeseries.timeSeries.hideInLegendLabel"
-              defaultMessage="Hide in legend"
-            />
-          </EuiFormLabel>
-          <EuiSpacer size="s" />
-          <YesNo value={model.hide_in_legend} name="hide_in_legend" onChange={props.onChange} />
-        </EuiFlexItem>
-        <EuiFlexItem grow={true}>
           <EuiFormRow
-            id={htmlId('splitColor')}
-            label={
-              <FormattedMessage
-                id="visTypeTimeseries.timeSeries.splitColorThemeLabel"
-                defaultMessage="Split color theme"
-              />
-            }
+            label={i18n.translate('visTypeTimeseries.timeSeries.hideInLegendLabel', {
+              defaultMessage: 'Hide in legend',
+            })}
           >
-            <EuiComboBox
-              isClearable={false}
-              options={splitColorOptions}
-              selectedOptions={selectedSplitColorOption ? [selectedSplitColorOption] : []}
-              onChange={handleSelectChange('split_color_mode')}
-              singleSelection={{ asPlainText: true }}
-            />
+            <YesNo value={model.hide_in_legend} name="hide_in_legend" onChange={props.onChange} />
           </EuiFormRow>
         </EuiFlexItem>
+        {palettesRegistry && (
+          <EuiFlexItem grow={true}>
+            <EuiFormRow
+              id={htmlId('splitColor')}
+              label={
+                <FormattedMessage
+                  id="visTypeTimeseries.timeSeries.splitColorThemeLabel"
+                  defaultMessage="Split color theme"
+                />
+              }
+            >
+              <PalettePicker
+                palettes={palettesRegistry}
+                activePalette={palette}
+                setPalette={handlePaletteChange}
+                color={model.color}
+              />
+            </EuiFormRow>
+          </EuiFlexItem>
+        )}
       </EuiFlexGroup>
 
       <EuiHorizontalRule margin="s" />
 
       <EuiFlexGroup responsive={false} wrap={true}>
         <EuiFlexItem grow={false}>
-          <EuiFormLabel>
-            <FormattedMessage
-              id="visTypeTimeseries.timeSeries.separateAxisLabel"
-              defaultMessage="Separate axis?"
-            />
-          </EuiFormLabel>
-          <EuiSpacer size="s" />
-          <YesNo value={model.separate_axis} name="separate_axis" onChange={props.onChange} />
+          <EuiFormRow
+            label={i18n.translate('visTypeTimeseries.timeSeries.separateAxisLabel', {
+              defaultMessage: 'Separate axis?',
+            })}
+          >
+            <YesNo value={model.separate_axis} name="separate_axis" onChange={props.onChange} />
+          </EuiFormRow>
         </EuiFlexItem>
         <EuiFlexItem grow={false}>
           <EuiFormRow
@@ -555,25 +521,24 @@ export const TimeseriesConfig = injectI18n(function (props) {
 
       <EuiFlexGroup gutterSize="s" responsive={false} wrap={true}>
         <EuiFlexItem grow={false}>
-          <EuiFormLabel>
-            <FormattedMessage
-              id="visTypeTimeseries.timeSeries.overrideIndexPatternLabel"
-              defaultMessage="Override Index Pattern?"
+          <EuiFormRow
+            label={i18n.translate('visTypeTimeseries.timeSeries.overrideIndexPatternLabel', {
+              defaultMessage: 'Override Index Pattern?',
+            })}
+          >
+            <YesNo
+              value={model.override_index_pattern}
+              name="override_index_pattern"
+              onChange={props.onChange}
             />
-          </EuiFormLabel>
-          <EuiSpacer size="s" />
-          <YesNo
-            value={model.override_index_pattern}
-            name="override_index_pattern"
-            onChange={props.onChange}
-          />
+          </EuiFormRow>
         </EuiFlexItem>
         <EuiFlexItem>
           <IndexPattern
             {...props}
             prefix="series_"
             disabled={!model.override_index_pattern}
-            with-interval={true}
+            allowLevelOfDetail={true}
           />
         </EuiFlexItem>
       </EuiFlexGroup>
@@ -584,7 +549,8 @@ export const TimeseriesConfig = injectI18n(function (props) {
 TimeseriesConfig.propTypes = {
   fields: PropTypes.object,
   model: PropTypes.object,
+  panel: PropTypes.object,
   onChange: PropTypes.func,
-  indexPatternForQuery: PropTypes.string,
+  indexPatternForQuery: PropTypes.oneOfType([PropTypes.object, PropTypes.string]),
   seriesQuantity: PropTypes.object,
 };

@@ -1,30 +1,36 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { cryptoFactory } from '../../lib';
-import { ESQueueCreateJobFn, ScheduleTaskFnFactory } from '../../types';
-import { JobParamsDiscoverCsv } from './types';
+import { CreateJobFn, CreateJobFnFactory } from '../../types';
+import {
+  IndexPatternSavedObjectDeprecatedCSV,
+  JobParamsDeprecatedCSV,
+  TaskPayloadDeprecatedCSV,
+} from './types';
 
-export const scheduleTaskFnFactory: ScheduleTaskFnFactory<ESQueueCreateJobFn<
-  JobParamsDiscoverCsv
->> = function createJobFactoryFn(reporting) {
+export const createJobFnFactory: CreateJobFnFactory<
+  CreateJobFn<JobParamsDeprecatedCSV, TaskPayloadDeprecatedCSV>
+> = function createJobFactoryFn(reporting, logger) {
   const config = reporting.getConfig();
   const crypto = cryptoFactory(config.get('encryptionKey'));
 
-  return async function scheduleTask(jobParams, context, request) {
+  return async function createJob(jobParams, context, request) {
     const serializedEncryptedHeaders = await crypto.encrypt(request.headers);
 
     const savedObjectsClient = context.core.savedObjects.client;
-    const indexPatternSavedObject = await savedObjectsClient.get(
+    const indexPatternSavedObject = ((await savedObjectsClient.get(
       'index-pattern',
       jobParams.indexPatternId
-    );
+    )) as unknown) as IndexPatternSavedObjectDeprecatedCSV;
 
     return {
       headers: serializedEncryptedHeaders,
+      spaceId: reporting.getSpaceId(request, logger),
       indexPatternSavedObject,
       ...jobParams,
     };

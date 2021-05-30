@@ -92,14 +92,12 @@ exports[`should enable sort order select when sort field provided 1`] = `
   />
   <EuiPanel>
     <ScalingForm
+      clusteringDisabledReason={null}
       filterByMapBounds={true}
       indexPatternId="indexPattern1"
       onChange={[Function]}
       scalingType="LIMIT"
       supportsClustering={false}
-      termFields={null}
-      topHitsSize={1}
-      topHitsSplitField="trackId"
     />
   </EuiPanel>
   <EuiSpacer
@@ -199,14 +197,12 @@ exports[`should render update source editor 1`] = `
   />
   <EuiPanel>
     <ScalingForm
+      clusteringDisabledReason={null}
       filterByMapBounds={true}
       indexPatternId="indexPattern1"
       onChange={[Function]}
       scalingType="LIMIT"
       supportsClustering={false}
-      termFields={null}
-      topHitsSize={1}
-      topHitsSplitField="trackId"
     />
   </EuiPanel>
   <EuiSpacer

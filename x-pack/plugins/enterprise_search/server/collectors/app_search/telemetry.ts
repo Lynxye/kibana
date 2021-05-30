@@ -1,22 +1,25 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { get } from 'lodash';
+
 import { SavedObjectsServiceStart, Logger } from 'src/core/server';
 import { UsageCollectionSetup } from 'src/plugins/usage_collection/server';
 
 import { getSavedObjectAttributesFromRepo } from '../lib/telemetry';
 
-interface ITelemetry {
+interface Telemetry {
   ui_viewed: {
     setup_guide: number;
     engines_overview: number;
   };
   ui_error: {
     cannot_connect: number;
+    not_found: number;
   };
   ui_clicked: {
     create_first_engine_button: number;
@@ -36,7 +39,7 @@ export const registerTelemetryUsageCollector = (
   savedObjects: SavedObjectsServiceStart,
   log: Logger
 ) => {
-  const telemetryUsageCollector = usageCollection.makeUsageCollector<ITelemetry>({
+  const telemetryUsageCollector = usageCollection.makeUsageCollector<Telemetry>({
     type: 'app_search',
     fetch: async () => fetchTelemetryMetrics(savedObjects, log),
     isReady: () => true,
@@ -47,6 +50,7 @@ export const registerTelemetryUsageCollector = (
       },
       ui_error: {
         cannot_connect: { type: 'long' },
+        not_found: { type: 'long' },
       },
       ui_clicked: {
         create_first_engine_button: { type: 'long' },
@@ -70,13 +74,14 @@ const fetchTelemetryMetrics = async (savedObjects: SavedObjectsServiceStart, log
     log
   );
 
-  const defaultTelemetrySavedObject: ITelemetry = {
+  const defaultTelemetrySavedObject: Telemetry = {
     ui_viewed: {
       setup_guide: 0,
       engines_overview: 0,
     },
     ui_error: {
       cannot_connect: 0,
+      not_found: 0,
     },
     ui_clicked: {
       create_first_engine_button: 0,
@@ -97,6 +102,7 @@ const fetchTelemetryMetrics = async (savedObjects: SavedObjectsServiceStart, log
     },
     ui_error: {
       cannot_connect: get(savedObjectAttributes, 'ui_error.cannot_connect', 0),
+      not_found: get(savedObjectAttributes, 'ui_error.not_found', 0),
     },
     ui_clicked: {
       create_first_engine_button: get(
@@ -107,5 +113,5 @@ const fetchTelemetryMetrics = async (savedObjects: SavedObjectsServiceStart, log
       header_launch_button: get(savedObjectAttributes, 'ui_clicked.header_launch_button', 0),
       engine_table_link: get(savedObjectAttributes, 'ui_clicked.engine_table_link', 0),
     },
-  } as ITelemetry;
+  } as Telemetry;
 };

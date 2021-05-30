@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 export enum API_URLS {
@@ -24,6 +25,10 @@ export enum API_URLS {
   ML_DELETE_JOB = `/api/ml/jobs/delete_jobs`,
   ML_CAPABILITIES = '/api/ml/ml_capabilities',
   ML_ANOMALIES_RESULT = `/api/ml/results/anomalies_table_data`,
+
+  ALERT_ACTIONS = '/api/actions',
+  CREATE_ALERT = '/api/alerts/alert',
   ALERT = '/api/alerts/alert/',
   ALERTS_FIND = '/api/alerts/_find',
+  ACTION_TYPES = '/api/actions/list_action_types',
 }

@@ -1,37 +1,30 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { isJobStatusWithResults } from '../../../../common/log_analysis';
 import { LoadingPage } from '../../../components/loading_page';
 import {
   LogAnalysisSetupStatusUnknownPrompt,
   MissingResultsPrivilegesPrompt,
   MissingSetupPrivilegesPrompt,
-  SubscriptionSplashContent,
 } from '../../../components/logging/log_analysis_setup';
-import { SourceErrorPage } from '../../../components/source_error_page';
-import { SourceLoadingPage } from '../../../components/source_loading_page';
+import {
+  LogAnalysisSetupFlyout,
+  useLogAnalysisSetupFlyoutStateContext,
+} from '../../../components/logging/log_analysis_setup/setup_flyout';
+import { SubscriptionSplashContent } from '../../../components/subscription_splash_content';
 import { useLogAnalysisCapabilitiesContext } from '../../../containers/logs/log_analysis';
 import { useLogEntryCategoriesModuleContext } from '../../../containers/logs/log_analysis/modules/log_entry_categories';
-import { useLogSourceContext } from '../../../containers/logs/log_source';
 import { LogEntryCategoriesResultsContent } from './page_results_content';
 import { LogEntryCategoriesSetupContent } from './page_setup_content';
-import { LogEntryCategoriesSetupFlyout } from './setup_flyout';
 
 export const LogEntryCategoriesPageContent = () => {
-  const {
-    hasFailedLoadingSource,
-    isLoading,
-    isUninitialized,
-    loadSource,
-    loadSourceFailureMessage,
-  } = useLogSourceContext();
-
   const {
     hasLogAnalysisCapabilites,
     hasLogAnalysisReadCapabilities,
@@ -40,9 +33,10 @@ export const LogEntryCategoriesPageContent = () => {
 
   const { fetchJobStatus, setupStatus, jobStatus } = useLogEntryCategoriesModuleContext();
 
-  const [isFlyoutOpen, setIsFlyoutOpen] = useState<boolean>(false);
-  const openFlyout = useCallback(() => setIsFlyoutOpen(true), []);
-  const closeFlyout = useCallback(() => setIsFlyoutOpen(false), []);
+  const { showModuleSetup } = useLogAnalysisSetupFlyoutStateContext();
+  const showCategoriesModuleSetup = useCallback(() => showModuleSetup('logs_ui_categories'), [
+    showModuleSetup,
+  ]);
 
   useEffect(() => {
     if (hasLogAnalysisReadCapabilities) {
@@ -50,11 +44,7 @@ export const LogEntryCategoriesPageContent = () => {
     }
   }, [fetchJobStatus, hasLogAnalysisReadCapabilities]);
 
-  if (isLoading || isUninitialized) {
-    return <SourceLoadingPage />;
-  } else if (hasFailedLoadingSource) {
-    return <SourceErrorPage errorMessage={loadSourceFailureMessage ?? ''} retry={loadSource} />;
-  } else if (!hasLogAnalysisCapabilites) {
+  if (!hasLogAnalysisCapabilites) {
     return <SubscriptionSplashContent />;
   } else if (!hasLogAnalysisReadCapabilities) {
     return <MissingResultsPrivilegesPrompt />;
@@ -71,8 +61,8 @@ export const LogEntryCategoriesPageContent = () => {
   } else if (isJobStatusWithResults(jobStatus['log-entry-categories-count'])) {
     return (
       <>
-        <LogEntryCategoriesResultsContent onOpenSetup={openFlyout} />
-        <LogEntryCategoriesSetupFlyout isOpen={isFlyoutOpen} onClose={closeFlyout} />
+        <LogEntryCategoriesResultsContent onOpenSetup={showCategoriesModuleSetup} />
+        <LogAnalysisSetupFlyout allowedModules={allowedSetupModules} />
       </>
     );
   } else if (!hasLogAnalysisSetupCapabilities) {
@@ -80,9 +70,11 @@ export const LogEntryCategoriesPageContent = () => {
   } else {
     return (
       <>
-        <LogEntryCategoriesSetupContent onOpenSetup={openFlyout} />
-        <LogEntryCategoriesSetupFlyout isOpen={isFlyoutOpen} onClose={closeFlyout} />
+        <LogEntryCategoriesSetupContent onOpenSetup={showCategoriesModuleSetup} />
+        <LogAnalysisSetupFlyout allowedModules={allowedSetupModules} />
       </>
     );
   }
 };
+
+const allowedSetupModules = ['logs_ui_categories' as const];

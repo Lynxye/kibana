@@ -1,10 +1,11 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { FlowTarget, UsersItem } from '../../../graphql/types';
+import { FlowTarget, NetworkUsersItem } from '../../../../common/search_strategy';
 import { defaultToEmptyTag } from '../../../common/components/empty_value';
 import { Columns } from '../../../common/components/paginated_table';
 
@@ -15,11 +16,11 @@ import {
 } from '../../../common/components/tables/helpers';
 
 export type UsersColumns = [
-  Columns<UsersItem['name']>,
-  Columns<UsersItem['id']>,
-  Columns<UsersItem['groupName']>,
-  Columns<UsersItem['groupId']>,
-  Columns<UsersItem['count']>
+  Columns<NetworkUsersItem['name']>,
+  Columns<NetworkUsersItem['id']>,
+  Columns<NetworkUsersItem['groupName']>,
+  Columns<NetworkUsersItem['groupId']>,
+  Columns<NetworkUsersItem['count']>
 ];
 
 export const getUsersColumns = (flowTarget: FlowTarget, tableId: string): UsersColumns => [

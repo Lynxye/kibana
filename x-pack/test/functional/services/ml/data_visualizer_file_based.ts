@@ -1,17 +1,18 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import expect from '@kbn/expect';
 
 import { FtrProviderContext } from '../../ftr_provider_context';
-import { MlCommon } from './common';
+import { MlCommonUI } from './common_ui';
 
 export function MachineLearningDataVisualizerFileBasedProvider(
   { getService, getPageObjects }: FtrProviderContext,
-  mlCommon: MlCommon
+  mlCommonUI: MlCommonUI
 ) {
   const log = getService('log');
   const retry = getService('retry');
@@ -54,6 +55,24 @@ export function MachineLearningDataVisualizerFileBasedProvider(
       await testSubjects.existOrFail('mlFileDataVisFileStatsPanel');
     },
 
+    async assertNumberOfFieldCards(number: number) {
+      const cards = await testSubjects.findAll('mlPageFileDataVisFieldDataCard');
+      expect(cards.length).to.eql(
+        number,
+        `expected ${number} field cards to exist, but found ${cards.length}`
+      );
+    },
+
+    async assertImportButtonEnabled(expectedValue: boolean) {
+      const isEnabled = await testSubjects.isEnabled('mlFileDataVisOpenImportPageButton');
+      expect(isEnabled).to.eql(
+        expectedValue,
+        `Expected "import" button to be '${expectedValue ? 'enabled' : 'disabled'}' (got '${
+          isEnabled ? 'enabled' : 'disabled'
+        }')`
+      );
+    },
+
     async navigateToFileImport() {
       await testSubjects.click('mlFileDataVisOpenImportPageButton');
       await testSubjects.existOrFail('mlPageFileDataVisImport');
@@ -75,7 +94,7 @@ export function MachineLearningDataVisualizerFileBasedProvider(
     },
 
     async setIndexName(indexName: string) {
-      await mlCommon.setValueWithChecks('mlFileDataVisIndexNameInput', indexName, {
+      await mlCommonUI.setValueWithChecks('mlFileDataVisIndexNameInput', indexName, {
         clearWithKeyboard: true,
       });
       await this.assertIndexNameValue(indexName);
@@ -105,6 +124,12 @@ export function MachineLearningDataVisualizerFileBasedProvider(
       await retry.tryForTime(60 * 1000, async () => {
         await testSubjects.existOrFail('mlFileImportSuccessCallout');
       });
+    },
+
+    async selectCreateFilebeatConfig() {
+      await testSubjects.scrollIntoView('fileDataVisFilebeatConfigLink');
+      await testSubjects.click('fileDataVisFilebeatConfigLink');
+      await testSubjects.existOrFail('fileDataVisFilebeatConfigPanel');
     },
   };
 }

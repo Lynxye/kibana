@@ -1,11 +1,12 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React from 'react';
-import { shallow } from 'enzyme';
+import { renderWithTheme } from '../../../utils/testHelpers';
 import { LibraryStacktrace } from './LibraryStacktrace';
 
 describe('LibraryStacktrace', () => {
@@ -13,8 +14,13 @@ describe('LibraryStacktrace', () => {
     describe('with no stack frames', () => {
       it('renders null', () => {
         const props = { id: 'testId', stackframes: [] };
+        const { queryByTestId } = renderWithTheme(
+          <LibraryStacktrace {...props} />
+        );
 
-        expect(shallow(<LibraryStacktrace {...props} />).html()).toBeNull();
+        expect(
+          queryByTestId('LibraryStacktraceAccordion')
+        ).not.toBeInTheDocument();
       });
     });
 
@@ -24,10 +30,11 @@ describe('LibraryStacktrace', () => {
           id: 'testId',
           stackframes: [{ filename: 'testFilename', line: { number: 1 } }],
         };
+        const { queryByTestId } = renderWithTheme(
+          <LibraryStacktrace {...props} />
+        );
 
-        expect(
-          shallow(<LibraryStacktrace {...props} />).find('EuiAccordion')
-        ).toHaveLength(1);
+        expect(queryByTestId('LibraryStacktraceAccordion')).toBeInTheDocument();
       });
     });
   });

@@ -1,164 +1,221 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { getOr } from 'lodash/fp';
-import React from 'react';
-import { Query } from 'react-apollo';
-import { connect } from 'react-redux';
-import { compose } from 'redux';
+import { noop } from 'lodash/fp';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import deepEqual from 'fast-deep-equal';
+import { Subscription } from 'rxjs';
 
-import { DEFAULT_INDEX_KEY } from '../../../../common/constants';
+import { ESTermQuery } from '../../../../common/typed_json';
+import { inputsModel } from '../../../common/store';
+import { useDeepEqualSelector } from '../../../common/hooks/use_selector';
+import { useKibana } from '../../../common/lib/kibana';
+import { createFilter } from '../../../common/containers/helpers';
+import { generateTablePaginationOptions } from '../../../common/components/paginated_table/helpers';
+import { networkModel, networkSelectors } from '../../store';
 import {
   FlowTargetSourceDest,
-  GetNetworkTopNFlowQuery,
+  NetworkQueries,
   NetworkTopNFlowEdges,
-  NetworkTopTablesSortField,
+  NetworkTopNFlowRequestOptions,
+  NetworkTopNFlowStrategyResponse,
   PageInfoPaginated,
-} from '../../../graphql/types';
-import { withKibana, WithKibanaProps } from '../../../common/lib/kibana';
-import { inputsModel, inputsSelectors, State } from '../../../common/store';
-import { generateTablePaginationOptions } from '../../../common/components/paginated_table/helpers';
-import { createFilter, getDefaultFetchPolicy } from '../../../common/containers/helpers';
-import {
-  QueryTemplatePaginated,
-  QueryTemplatePaginatedProps,
-} from '../../../common/containers/query_template_paginated';
-import { networkTopNFlowQuery } from './index.gql_query';
-import { networkModel, networkSelectors } from '../../store';
+} from '../../../../common/search_strategy';
+import { isCompleteResponse, isErrorResponse } from '../../../../../../../src/plugins/data/common';
+import { getInspectResponse } from '../../../helpers';
+import { InspectResponse } from '../../../types';
+import * as i18n from './translations';
+import { useTransforms } from '../../../transforms/containers/use_transforms';
+import { useAppToasts } from '../../../common/hooks/use_app_toasts';
 
 const ID = 'networkTopNFlowQuery';
 
 export interface NetworkTopNFlowArgs {
   id: string;
-  ip?: string;
-  inspect: inputsModel.InspectQuery;
+  inspect: InspectResponse;
   isInspected: boolean;
-  loading: boolean;
   loadPage: (newActivePage: number) => void;
-  networkTopNFlow: NetworkTopNFlowEdges[];
   pageInfo: PageInfoPaginated;
   refetch: inputsModel.Refetch;
+  networkTopNFlow: NetworkTopNFlowEdges[];
   totalCount: number;
 }
 
-export interface OwnProps extends QueryTemplatePaginatedProps {
-  children: (args: NetworkTopNFlowArgs) => React.ReactNode;
+interface UseNetworkTopNFlow {
   flowTarget: FlowTargetSourceDest;
   ip?: string;
+  indexNames: string[];
   type: networkModel.NetworkType;
+  filterQuery?: ESTermQuery | string;
+  endDate: string;
+  startDate: string;
+  skip: boolean;
 }
 
-export interface NetworkTopNFlowComponentReduxProps {
-  activePage: number;
-  isInspected: boolean;
-  limit: number;
-  sort: NetworkTopTablesSortField;
-}
+export const useNetworkTopNFlow = ({
+  endDate,
+  filterQuery,
+  flowTarget,
+  indexNames,
+  ip,
+  skip,
+  startDate,
+  type,
+}: UseNetworkTopNFlow): [boolean, NetworkTopNFlowArgs] => {
+  const getTopNFlowSelector = useMemo(() => networkSelectors.topNFlowSelector(), []);
+  const { activePage, limit, sort } = useDeepEqualSelector((state) =>
+    getTopNFlowSelector(state, type, flowTarget)
+  );
+  const { data } = useKibana().services;
+  const refetch = useRef<inputsModel.Refetch>(noop);
+  const abortCtrl = useRef(new AbortController());
+  const searchSubscription$ = useRef(new Subscription());
+  const [loading, setLoading] = useState(false);
+  const { getTransformChangesIfTheyExist } = useTransforms();
 
-type NetworkTopNFlowProps = OwnProps & NetworkTopNFlowComponentReduxProps & WithKibanaProps;
+  const [
+    networkTopNFlowRequest,
+    setTopNFlowRequest,
+  ] = useState<NetworkTopNFlowRequestOptions | null>(null);
 
-class NetworkTopNFlowComponentQuery extends QueryTemplatePaginated<
-  NetworkTopNFlowProps,
-  GetNetworkTopNFlowQuery.Query,
-  GetNetworkTopNFlowQuery.Variables
-> {
-  public render() {
-    const {
-      activePage,
-      children,
-      endDate,
-      flowTarget,
-      filterQuery,
-      kibana,
-      id = `${ID}-${flowTarget}`,
-      ip,
-      isInspected,
-      limit,
-      skip,
-      sourceId,
-      startDate,
-      sort,
-    } = this.props;
-    const variables: GetNetworkTopNFlowQuery.Variables = {
-      defaultIndex: kibana.services.uiSettings.get<string[]>(DEFAULT_INDEX_KEY),
-      filterQuery: createFilter(filterQuery),
-      flowTarget,
-      inspect: isInspected,
-      ip,
-      pagination: generateTablePaginationOptions(activePage, limit),
-      sort,
-      sourceId,
-      timerange: {
-        interval: '12h',
-        from: startDate!,
-        to: endDate!,
-      },
-    };
-    return (
-      <Query<GetNetworkTopNFlowQuery.Query, GetNetworkTopNFlowQuery.Variables>
-        fetchPolicy={getDefaultFetchPolicy()}
-        notifyOnNetworkStatusChange
-        query={networkTopNFlowQuery}
-        skip={skip}
-        variables={variables}
-      >
-        {({ data, loading, fetchMore, networkStatus, refetch }) => {
-          const networkTopNFlow = getOr([], `source.NetworkTopNFlow.edges`, data);
-          this.setFetchMore(fetchMore);
-          this.setFetchMoreOptions((newActivePage: number) => ({
-            variables: {
-              pagination: generateTablePaginationOptions(newActivePage, limit),
-            },
-            updateQuery: (prev, { fetchMoreResult }) => {
-              if (!fetchMoreResult) {
-                return prev;
+  const wrappedLoadMore = useCallback(
+    (newActivePage: number) => {
+      setTopNFlowRequest((prevRequest) => {
+        if (!prevRequest) {
+          return prevRequest;
+        }
+
+        return {
+          ...prevRequest,
+          pagination: generateTablePaginationOptions(newActivePage, limit),
+        };
+      });
+    },
+    [limit]
+  );
+
+  const [networkTopNFlowResponse, setNetworkTopNFlowResponse] = useState<NetworkTopNFlowArgs>({
+    networkTopNFlow: [],
+    id: `${ID}-${flowTarget}`,
+    inspect: {
+      dsl: [],
+      response: [],
+    },
+    isInspected: false,
+    loadPage: wrappedLoadMore,
+    pageInfo: {
+      activePage: 0,
+      fakeTotalCount: 0,
+      showMorePagesIndicator: false,
+    },
+    refetch: refetch.current,
+    totalCount: -1,
+  });
+  const { addError, addWarning } = useAppToasts();
+
+  const networkTopNFlowSearch = useCallback(
+    (request: NetworkTopNFlowRequestOptions | null) => {
+      if (request == null || skip) {
+        return;
+      }
+
+      const asyncSearch = async () => {
+        abortCtrl.current = new AbortController();
+        setLoading(true);
+
+        searchSubscription$.current = data.search
+          .search<NetworkTopNFlowRequestOptions, NetworkTopNFlowStrategyResponse>(request, {
+            strategy: 'securitySolutionSearchStrategy',
+            abortSignal: abortCtrl.current.signal,
+          })
+          .subscribe({
+            next: (response) => {
+              if (isCompleteResponse(response)) {
+                setLoading(false);
+                setNetworkTopNFlowResponse((prevResponse) => ({
+                  ...prevResponse,
+                  networkTopNFlow: response.edges,
+                  inspect: getInspectResponse(response, prevResponse.inspect),
+                  pageInfo: response.pageInfo,
+                  refetch: refetch.current,
+                  totalCount: response.totalCount,
+                }));
+                searchSubscription$.current.unsubscribe();
+              } else if (isErrorResponse(response)) {
+                setLoading(false);
+                addWarning(i18n.ERROR_NETWORK_TOP_N_FLOW);
+                searchSubscription$.current.unsubscribe();
               }
-              return {
-                ...fetchMoreResult,
-                source: {
-                  ...fetchMoreResult.source,
-                  NetworkTopNFlow: {
-                    ...fetchMoreResult.source.NetworkTopNFlow,
-                    edges: [...fetchMoreResult.source.NetworkTopNFlow.edges],
-                  },
-                },
-              };
             },
-          }));
-          const isLoading = this.isItAValidLoading(loading, variables, networkStatus);
-          return children({
-            id,
-            inspect: getOr(null, 'source.NetworkTopNFlow.inspect', data),
-            isInspected,
-            loading: isLoading,
-            loadPage: this.wrappedLoadMore,
-            networkTopNFlow,
-            pageInfo: getOr({}, 'source.NetworkTopNFlow.pageInfo', data),
-            refetch: this.memoizedRefetchQuery(variables, limit, refetch),
-            totalCount: getOr(-1, 'source.NetworkTopNFlow.totalCount', data),
+            error: (msg) => {
+              setLoading(false);
+              addError(msg, {
+                title: i18n.FAIL_NETWORK_TOP_N_FLOW,
+              });
+              searchSubscription$.current.unsubscribe();
+            },
           });
-        }}
-      </Query>
-    );
-  }
-}
+      };
+      searchSubscription$.current.unsubscribe();
+      abortCtrl.current.abort();
+      asyncSearch();
+      refetch.current = asyncSearch;
+    },
+    [data.search, addError, addWarning, skip]
+  );
 
-const makeMapStateToProps = () => {
-  const getTopNFlowSelector = networkSelectors.topNFlowSelector();
-  const getQuery = inputsSelectors.globalQueryByIdSelector();
-  return (state: State, { flowTarget, id = `${ID}-${flowTarget}`, type }: OwnProps) => {
-    const { isInspected } = getQuery(state, id);
-    return {
-      ...getTopNFlowSelector(state, type, flowTarget),
-      isInspected,
+  useEffect(() => {
+    setTopNFlowRequest((prevRequest) => {
+      const { indices, factoryQueryType, timerange } = getTransformChangesIfTheyExist({
+        factoryQueryType: NetworkQueries.topNFlow,
+        indices: indexNames,
+        filterQuery,
+        timerange: {
+          interval: '12h',
+          from: startDate,
+          to: endDate,
+        },
+      });
+      const myRequest = {
+        ...(prevRequest ?? {}),
+        defaultIndex: indices,
+        factoryQueryType,
+        filterQuery: createFilter(filterQuery),
+        flowTarget,
+        ip,
+        pagination: generateTablePaginationOptions(activePage, limit),
+        timerange,
+        sort,
+      };
+      if (!deepEqual(prevRequest, myRequest)) {
+        return myRequest;
+      }
+      return prevRequest;
+    });
+  }, [
+    activePage,
+    endDate,
+    filterQuery,
+    indexNames,
+    ip,
+    limit,
+    startDate,
+    sort,
+    flowTarget,
+    getTransformChangesIfTheyExist,
+  ]);
+
+  useEffect(() => {
+    networkTopNFlowSearch(networkTopNFlowRequest);
+    return () => {
+      searchSubscription$.current.unsubscribe();
+      abortCtrl.current.abort();
     };
-  };
-};
+  }, [networkTopNFlowRequest, networkTopNFlowSearch]);
 
-export const NetworkTopNFlowQuery = compose<React.ComponentClass<OwnProps>>(
-  connect(makeMapStateToProps),
-  withKibana
-)(NetworkTopNFlowComponentQuery);
+  return [loading, networkTopNFlowResponse];
+};

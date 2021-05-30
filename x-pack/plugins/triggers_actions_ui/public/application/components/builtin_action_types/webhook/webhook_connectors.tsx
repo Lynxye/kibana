@@ -1,9 +1,11 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
-import React, { Fragment, useState } from 'react';
+
+import React, { useEffect, useState } from 'react';
 import { FormattedMessage } from '@kbn/i18n/react';
 
 import {
@@ -25,18 +27,26 @@ import {
 import { i18n } from '@kbn/i18n';
 import { ActionConnectorFieldsProps } from '../../../../types';
 import { WebhookActionConnector } from '../types';
+import { getEncryptedFieldNotifyLabel } from '../../get_encrypted_field_notify_label';
 
 const HTTP_VERBS = ['post', 'put'];
 
-const WebhookActionConnectorFields: React.FunctionComponent<ActionConnectorFieldsProps<
-  WebhookActionConnector
->> = ({ action, editActionConfig, editActionSecrets, errors, readOnly }) => {
+const WebhookActionConnectorFields: React.FunctionComponent<
+  ActionConnectorFieldsProps<WebhookActionConnector>
+> = ({ action, editActionConfig, editActionSecrets, errors, readOnly }) => {
   const { user, password } = action.secrets;
-  const { method, url, headers } = action.config;
+  const { method, url, headers, hasAuth } = action.config;
 
   const [httpHeaderKey, setHttpHeaderKey] = useState<string>('');
   const [httpHeaderValue, setHttpHeaderValue] = useState<string>('');
   const [hasHeaders, setHasHeaders] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!action.id) {
+      editActionConfig('hasAuth', true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!method) {
     editActionConfig('method', 'post'); // set method to POST by default
@@ -100,7 +110,7 @@ const WebhookActionConnectorFields: React.FunctionComponent<ActionConnectorField
   let headerControl;
   if (hasHeaders) {
     headerControl = (
-      <Fragment>
+      <>
         <EuiTitle size="xxs">
           <h5>
             <FormattedMessage
@@ -178,7 +188,7 @@ const WebhookActionConnectorFields: React.FunctionComponent<ActionConnectorField
             </EuiFormRow>
           </EuiFlexItem>
         </EuiFlexGroup>
-      </Fragment>
+      </>
     );
   }
 
@@ -210,7 +220,7 @@ const WebhookActionConnectorFields: React.FunctionComponent<ActionConnectorField
   });
 
   return (
-    <Fragment>
+    <>
       <EuiFlexGroup justifyContent="spaceBetween">
         <EuiFlexItem grow={false}>
           <EuiFormRow
@@ -252,7 +262,6 @@ const WebhookActionConnectorFields: React.FunctionComponent<ActionConnectorField
               fullWidth
               readOnly={readOnly}
               value={url || ''}
-              placeholder="https://<site-url> or http://<site-url>"
               data-test-subj="webhookUrlText"
               onChange={(e) => {
                 editActionConfig('url', e.target.value);
@@ -266,71 +275,117 @@ const WebhookActionConnectorFields: React.FunctionComponent<ActionConnectorField
           </EuiFormRow>
         </EuiFlexItem>
       </EuiFlexGroup>
-      <EuiFlexGroup justifyContent="spaceBetween">
+      <EuiFlexGroup>
         <EuiFlexItem>
-          <EuiFormRow
-            id="webhookUser"
-            fullWidth
-            error={errors.user}
-            isInvalid={errors.user.length > 0 && user !== undefined}
+          <EuiSpacer size="m" />
+          <EuiTitle size="xxs">
+            <h4>
+              <FormattedMessage
+                id="xpack.triggersActionsUI.components.builtinActionTypes.webhookAction.authenticationLabel"
+                defaultMessage="Authentication"
+              />
+            </h4>
+          </EuiTitle>
+          <EuiSpacer size="s" />
+          <EuiSwitch
             label={i18n.translate(
-              'xpack.triggersActionsUI.components.builtinActionTypes.webhookAction.userTextFieldLabel',
+              'xpack.triggersActionsUI.components.builtinActionTypes.webhookAction.hasAuthSwitchLabel',
               {
-                defaultMessage: 'Username',
+                defaultMessage: 'Require authentication for this webhook',
               }
             )}
-          >
-            <EuiFieldText
-              fullWidth
-              isInvalid={errors.user.length > 0 && user !== undefined}
-              name="user"
-              readOnly={readOnly}
-              value={user || ''}
-              data-test-subj="webhookUserInput"
-              onChange={(e) => {
-                editActionSecrets('user', e.target.value);
-              }}
-              onBlur={() => {
-                if (!user) {
-                  editActionSecrets('user', '');
-                }
-              }}
-            />
-          </EuiFormRow>
-        </EuiFlexItem>
-        <EuiFlexItem>
-          <EuiFormRow
-            id="webhookPassword"
-            fullWidth
-            error={errors.password}
-            isInvalid={errors.password.length > 0 && password !== undefined}
-            label={i18n.translate(
-              'xpack.triggersActionsUI.components.builtinActionTypes.webhookAction.passwordTextFieldLabel',
-              {
-                defaultMessage: 'Password',
+            disabled={readOnly}
+            checked={hasAuth}
+            onChange={(e) => {
+              editActionConfig('hasAuth', e.target.checked);
+              if (!e.target.checked) {
+                editActionSecrets('user', null);
+                editActionSecrets('password', null);
               }
-            )}
-          >
-            <EuiFieldPassword
-              fullWidth
-              name="password"
-              readOnly={readOnly}
-              isInvalid={errors.password.length > 0 && password !== undefined}
-              value={password || ''}
-              data-test-subj="webhookPasswordInput"
-              onChange={(e) => {
-                editActionSecrets('password', e.target.value);
-              }}
-              onBlur={() => {
-                if (!password) {
-                  editActionSecrets('password', '');
-                }
-              }}
-            />
-          </EuiFormRow>
+            }}
+          />
         </EuiFlexItem>
       </EuiFlexGroup>
-
+      {hasAuth ? (
+        <>
+          {getEncryptedFieldNotifyLabel(
+            !action.id,
+            2,
+            action.isMissingSecrets ?? false,
+            i18n.translate(
+              'xpack.triggersActionsUI.components.builtinActionTypes.webhookAction.reenterValuesLabel',
+              {
+                defaultMessage:
+                  'Username and password are encrypted. Please reenter values for these fields.',
+              }
+            )
+          )}
+          <EuiFlexGroup justifyContent="spaceBetween">
+            <EuiFlexItem>
+              <EuiFormRow
+                id="webhookUser"
+                fullWidth
+                error={errors.user}
+                isInvalid={errors.user.length > 0 && user !== undefined}
+                label={i18n.translate(
+                  'xpack.triggersActionsUI.components.builtinActionTypes.webhookAction.userTextFieldLabel',
+                  {
+                    defaultMessage: 'Username',
+                  }
+                )}
+              >
+                <EuiFieldText
+                  fullWidth
+                  isInvalid={errors.user.length > 0 && user !== undefined}
+                  name="user"
+                  readOnly={readOnly}
+                  value={user || ''}
+                  data-test-subj="webhookUserInput"
+                  onChange={(e) => {
+                    editActionSecrets('user', e.target.value);
+                  }}
+                  onBlur={() => {
+                    if (!user) {
+                      editActionSecrets('user', '');
+                    }
+                  }}
+                />
+              </EuiFormRow>
+            </EuiFlexItem>
+            <EuiFlexItem>
+              <EuiFormRow
+                id="webhookPassword"
+                fullWidth
+                error={errors.password}
+                isInvalid={errors.password.length > 0 && password !== undefined}
+                label={i18n.translate(
+                  'xpack.triggersActionsUI.components.builtinActionTypes.webhookAction.passwordTextFieldLabel',
+                  {
+                    defaultMessage: 'Password',
+                  }
+                )}
+              >
+                <EuiFieldPassword
+                  fullWidth
+                  name="password"
+                  readOnly={readOnly}
+                  isInvalid={errors.password.length > 0 && password !== undefined}
+                  value={password || ''}
+                  data-test-subj="webhookPasswordInput"
+                  onChange={(e) => {
+                    editActionSecrets('password', e.target.value);
+                  }}
+                  onBlur={() => {
+                    if (!password) {
+                      editActionSecrets('password', '');
+                    }
+                  }}
+                />
+              </EuiFormRow>
+            </EuiFlexItem>
+          </EuiFlexGroup>
+        </>
+      ) : null}
       <EuiSpacer size="m" />
       <EuiSwitch
         data-test-subj="webhookViewHeadersSwitch"
@@ -366,7 +421,7 @@ const WebhookActionConnectorFields: React.FunctionComponent<ActionConnectorField
         {hasHeaders && headerControl}
         <EuiSpacer size="m" />
       </div>
-    </Fragment>
+    </>
   );
 };
 

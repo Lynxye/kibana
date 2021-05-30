@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 /* eslint-disable react/display-name */
@@ -14,7 +15,7 @@ import { Anomaly, AnomaliesByNetwork } from '../types';
 import { getRowItemDraggable } from '../../tables/helpers';
 import { EntityDraggable } from '../entity_draggable';
 import { createCompoundNetworkKey } from './create_compound_key';
-import { IPDetailsLink } from '../../links';
+import { NetworkDetailsLink } from '../../links';
 
 import * as i18n from './translations';
 import { getEntries } from '../get_entries';
@@ -23,7 +24,7 @@ import { ExplorerLink } from '../links/create_explorer_link';
 import { FormattedRelativePreferenceDate } from '../../formatted_date';
 import { NetworkType } from '../../../../network/store/model';
 import { escapeDataProviderId } from '../../drag_and_drop/helpers';
-import { FlowTarget } from '../../../../graphql/types';
+import { FlowTarget } from '../../../../../common/search_strategy';
 
 export const getAnomaliesNetworkTableColumns = (
   startDate: string,
@@ -46,7 +47,7 @@ export const getAnomaliesNetworkTableColumns = (
         rowItem: ip,
         attrName: anomaliesByNetwork.type,
         idPrefix: `anomalies-network-table-ip-${createCompoundNetworkKey(anomaliesByNetwork)}`,
-        render: (item) => <IPDetailsLink ip={item} flowTarget={flowTarget} />,
+        render: (item) => <NetworkDetailsLink ip={item} flowTarget={flowTarget} />,
       }),
   },
   {

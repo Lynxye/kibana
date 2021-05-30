@@ -1,13 +1,16 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React from 'react';
 import { act } from 'react-dom/test-utils';
 import axiosXhrAdapter from 'axios/lib/adapters/xhr';
 import axios from 'axios';
+import { getExecuteDetails } from '../../__fixtures__';
+import { WATCH_TYPES } from '../../common/constants';
 import {
   setupEnvironment,
   pageHelpers,
@@ -16,8 +19,6 @@ import {
   unwrapBodyResponse,
 } from './helpers';
 import { WatchCreateThresholdTestBed } from './helpers/watch_create_threshold.helpers';
-import { getExecuteDetails } from '../../test/fixtures';
-import { WATCH_TYPES } from '../../common/constants';
 
 const WATCH_NAME = 'my_test_watch';
 
@@ -290,23 +291,15 @@ describe('<ThresholdWatchEdit /> create route', () => {
         });
 
         test('should simulate an index action', async () => {
-          const { form, find, actions, exists } = testBed;
-
-          const INDEX = 'my_index';
+          const { form, actions, exists } = testBed;
 
           actions.clickAddActionButton();
           actions.clickActionLink('index');
 
           expect(exists('watchActionAccordion')).toBe(true);
 
-          // First, provide invalid field and verify
+          // Verify an empty index is allowed
           form.setInputValue('indexInput', '');
-
-          expect(form.getErrorsMessages()).toContain('Index name is required.');
-          expect(find('simulateActionButton').props().disabled).toEqual(true);
-
-          // Next, provide valid field and verify
-          form.setInputValue('indexInput', INDEX);
 
           await act(async () => {
             actions.clickSimulateButton();
@@ -327,7 +320,7 @@ describe('<ThresholdWatchEdit /> create route', () => {
                 id: 'index_1',
                 type: 'index',
                 index: {
-                  index: INDEX,
+                  index: '',
                 },
               },
             ],

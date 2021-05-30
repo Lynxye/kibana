@@ -1,23 +1,11 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
-
-export const MonitorStatusTranslations = {
-  defaultActionMessage: i18n.translate('xpack.uptime.alerts.monitorStatus.defaultActionMessage', {
-    defaultMessage: '{contextMessage}\nLast triggered at: {lastTriggered}\n',
-    values: {
-      contextMessage: '{{context.message}}',
-      lastTriggered: '{{state.lastTriggeredAt}}',
-    },
-  }),
-  name: i18n.translate('xpack.uptime.alerts.monitorStatus.clientName', {
-    defaultMessage: 'Uptime monitor status',
-  }),
-};
 
 export const TlsTranslations = {
   defaultActionMessage: i18n.translate('xpack.uptime.alerts.tls.defaultActionMessage', {
@@ -48,6 +36,9 @@ Aging Certificates: {agingCommonNameAndDate}
   name: i18n.translate('xpack.uptime.alerts.tls.clientName', {
     defaultMessage: 'Uptime TLS',
   }),
+  description: i18n.translate('xpack.uptime.alerts.tls.description', {
+    defaultMessage: 'Alert when the TLS certificate of an Uptime monitor is about to expire.',
+  }),
 };
 
 export const DurationAnomalyTranslations = {
@@ -67,5 +58,8 @@ Response times as high as {slowestAnomalyResponse} have been detected from locat
   }),
   name: i18n.translate('xpack.uptime.alerts.durationAnomaly.clientName', {
     defaultMessage: 'Uptime Duration Anomaly',
+  }),
+  description: i18n.translate('xpack.uptime.alerts.durationAnomaly.description', {
+    defaultMessage: 'Alert when the Uptime monitor duration is anaomalous.',
   }),
 };

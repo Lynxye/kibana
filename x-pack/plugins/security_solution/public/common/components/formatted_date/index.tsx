@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import moment from 'moment-timezone';
@@ -21,6 +22,24 @@ export const PreferenceFormattedDate = React.memo<{ dateFormat?: string; value: 
 );
 
 PreferenceFormattedDate.displayName = 'PreferenceFormattedDate';
+
+export const PreferenceFormattedDateFromPrimitive = ({
+  value,
+}: {
+  value?: string | number | null;
+}) => {
+  if (value == null) {
+    return getOrEmptyTagFromValue(value);
+  }
+  const maybeDate = getMaybeDate(value);
+  if (!maybeDate.isValid()) {
+    return getOrEmptyTagFromValue(value);
+  }
+  const date = maybeDate.toDate();
+  return <PreferenceFormattedDate value={date} />;
+};
+
+PreferenceFormattedDateFromPrimitive.displayName = 'PreferenceFormattedDateFromPrimitive';
 
 /**
  * This function may be passed to `Array.find()` to locate the `P1DT`

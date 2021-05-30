@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
@@ -12,7 +13,7 @@ import { CSS, FONT_FAMILY, FONT_WEIGHT, BOOLEAN_FALSE } from '../../constants';
 
 export const help: FunctionHelp<FunctionFactory<typeof table>> = {
   help: i18n.translate('xpack.canvas.functions.tableHelpText', {
-    defaultMessage: 'Configures a table element',
+    defaultMessage: 'Configures a table element.',
   }),
   args: {
     font: i18n.translate('xpack.canvas.functions.table.args.fontHelpText', {
@@ -35,7 +36,7 @@ export const help: FunctionHelp<FunctionFactory<typeof table>> = {
       defaultMessage: 'The number of rows to display on each page.',
     }),
     showHeader: i18n.translate('xpack.canvas.functions.table.args.showHeaderHelpText', {
-      defaultMessage: 'Show/hide the header row with titles for each column.',
+      defaultMessage: 'Show or hide the header row with titles for each column.',
     }),
   },
 };

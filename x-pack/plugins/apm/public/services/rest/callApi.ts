@@ -1,24 +1,23 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
+import { CoreSetup, CoreStart } from 'kibana/public';
 import { isString, startsWith } from 'lodash';
 import LRU from 'lru-cache';
 import hash from 'object-hash';
-import { HttpSetup, HttpFetchOptions } from 'kibana/public';
+import { enableInspectEsQueries } from '../../../../observability/public';
+import { FetchOptions } from '../../../common/fetch_options';
 
-export type FetchOptions = Omit<HttpFetchOptions, 'body'> & {
-  pathname: string;
-  isCachable?: boolean;
-  method?: string;
-  body?: any;
-};
-
-function fetchOptionsWithDebug(fetchOptions: FetchOptions) {
+function fetchOptionsWithDebug(
+  fetchOptions: FetchOptions,
+  inspectableEsQueriesEnabled: boolean
+) {
   const debugEnabled =
-    sessionStorage.getItem('apm_debug') === 'true' &&
+    inspectableEsQueriesEnabled &&
     startsWith(fetchOptions.pathname, '/api/apm');
 
   const { body, ...rest } = fetchOptions;
@@ -28,7 +27,7 @@ function fetchOptionsWithDebug(fetchOptions: FetchOptions) {
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     query: {
       ...fetchOptions.query,
-      ...(debugEnabled ? { _debug: true } : {}),
+      ...(debugEnabled ? { _inspect: true } : {}),
     },
   };
 }
@@ -42,9 +41,12 @@ export function clearCache() {
 export type CallApi = typeof callApi;
 
 export async function callApi<T = void>(
-  http: HttpSetup,
+  { http, uiSettings }: CoreStart | CoreSetup,
   fetchOptions: FetchOptions
 ): Promise<T> {
+  const inspectableEsQueriesEnabled: boolean = uiSettings.get(
+    enableInspectEsQueries
+  );
   const cacheKey = getCacheKey(fetchOptions);
   const cacheResponse = cache.get(cacheKey);
   if (cacheResponse) {
@@ -52,7 +54,8 @@ export async function callApi<T = void>(
   }
 
   const { pathname, method = 'get', ...options } = fetchOptionsWithDebug(
-    fetchOptions
+    fetchOptions,
+    inspectableEsQueriesEnabled
   );
 
   const lowercaseMethod = method.toLowerCase() as
@@ -93,5 +96,6 @@ function isCachable(fetchOptions: FetchOptions) {
 // order the options object to make sure that two objects with the same arguments, produce produce the
 // same cache key regardless of the order of properties
 function getCacheKey(options: FetchOptions) {
-  return hash(options);
+  const { pathname, method, body, query, headers } = options;
+  return hash({ pathname, method, body, query, headers });
 }

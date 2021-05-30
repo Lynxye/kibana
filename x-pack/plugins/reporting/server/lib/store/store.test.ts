@@ -1,110 +1,104 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import sinon from 'sinon';
-import { ReportingConfig, ReportingCore } from '../..';
-import { createMockReportingCore } from '../../test_helpers';
-import { createMockLevelLogger } from '../../test_helpers/create_mock_levellogger';
+import type { DeeplyMockedKeys } from '@kbn/utility-types/jest';
+import { ElasticsearchClient } from 'src/core/server';
+import { elasticsearchServiceMock } from 'src/core/server/mocks';
+import { ReportingCore } from '../../';
+import {
+  createMockConfigSchema,
+  createMockLevelLogger,
+  createMockReportingCore,
+} from '../../test_helpers';
+import { Report, ReportDocument } from './report';
 import { ReportingStore } from './store';
-import { ElasticsearchServiceSetup } from 'src/core/server';
 
-const getMockConfig = (mockConfigGet: sinon.SinonStub) => ({
-  get: mockConfigGet,
-  kbnConfig: { get: mockConfigGet },
-});
+const { createApiResponse } = elasticsearchServiceMock;
 
 describe('ReportingStore', () => {
   const mockLogger = createMockLevelLogger();
-  let mockConfig: ReportingConfig;
   let mockCore: ReportingCore;
-
-  const callClusterStub = sinon.stub();
-  const mockElasticsearch = { legacy: { client: { callAsInternalUser: callClusterStub } } };
+  let mockEsClient: DeeplyMockedKeys<ElasticsearchClient>;
 
   beforeEach(async () => {
-    const mockConfigGet = sinon.stub();
-    mockConfigGet.withArgs('index').returns('.reporting-test');
-    mockConfigGet.withArgs('queue', 'indexInterval').returns('week');
-    mockConfig = getMockConfig(mockConfigGet);
-    mockCore = await createMockReportingCore(mockConfig);
+    const reportingConfig = {
+      index: '.reporting-test',
+      queue: { indexInterval: 'week' },
+    };
+    mockCore = await createMockReportingCore(createMockConfigSchema(reportingConfig));
+    mockEsClient = (await mockCore.getEsClient()).asInternalUser as typeof mockEsClient;
 
-    callClusterStub.withArgs('indices.exists').resolves({});
-    callClusterStub.withArgs('indices.create').resolves({});
-    callClusterStub.withArgs('index').resolves({});
-    callClusterStub.withArgs('indices.refresh').resolves({});
-    callClusterStub.withArgs('update').resolves({});
-
-    mockCore.getElasticsearchService = () =>
-      (mockElasticsearch as unknown) as ElasticsearchServiceSetup;
+    mockEsClient.indices.create.mockResolvedValue({} as any);
+    mockEsClient.indices.exists.mockResolvedValue({} as any);
+    mockEsClient.indices.refresh.mockResolvedValue({} as any);
+    mockEsClient.get.mockResolvedValue({} as any);
+    mockEsClient.index.mockResolvedValue({ body: { _id: 'stub-id', _index: 'stub-index' } } as any);
+    mockEsClient.update.mockResolvedValue({} as any);
   });
 
   describe('addReport', () => {
     it('returns Report object', async () => {
       const store = new ReportingStore(mockCore, mockLogger);
-      const reportType = 'unknowntype';
-      const reportPayload = {};
-      const reportOptions = {
-        timeout: 10000,
-        created_by: 'created_by_string',
-        browser_type: 'browser_type_string',
-        max_attempts: 1,
-      };
-      await expect(
-        store.addReport(reportType, reportPayload, reportOptions)
-      ).resolves.toMatchObject({
+      const mockReport = new Report({
+        _index: '.reporting-mock',
+        attempts: 0,
+        created_by: 'username1',
+        jobtype: 'unknowntype',
+        status: 'pending',
+        payload: {},
+        meta: {},
+      } as any);
+      await expect(store.addReport(mockReport)).resolves.toMatchObject({
         _primary_term: undefined,
         _seq_no: undefined,
-        browser_type: 'browser_type_string',
-        created_by: 'created_by_string',
+        attempts: 0,
+        completed_at: undefined,
+        created_by: 'username1',
         jobtype: 'unknowntype',
-        max_attempts: 1,
         payload: {},
-        priority: 10,
-        timeout: 10000,
+        meta: {},
+        status: 'pending',
       });
     });
 
     it('throws if options has invalid indexInterval', async () => {
-      const mockConfigGet = sinon.stub();
-      mockConfigGet.withArgs('index').returns('.reporting-test');
-      mockConfigGet.withArgs('queue', 'indexInterval').returns('centurially');
-      mockConfig = getMockConfig(mockConfigGet);
-      mockCore = await createMockReportingCore(mockConfig);
+      const reportingConfig = {
+        index: '.reporting-test',
+        queue: { indexInterval: 'centurially' },
+      };
+      mockCore = await createMockReportingCore(createMockConfigSchema(reportingConfig));
 
       const store = new ReportingStore(mockCore, mockLogger);
-      const reportType = 'unknowntype';
-      const reportPayload = {};
-      const reportOptions = {
-        timeout: 10000,
-        created_by: 'created_by_string',
-        browser_type: 'browser_type_string',
-        max_attempts: 1,
-      };
-      expect(
-        store.addReport(reportType, reportPayload, reportOptions)
-      ).rejects.toMatchInlineSnapshot(`[Error: Invalid index interval: centurially]`);
+      const mockReport = new Report({
+        _index: '.reporting-errortest',
+        jobtype: 'unknowntype',
+        payload: {},
+        meta: {},
+      } as any);
+      expect(store.addReport(mockReport)).rejects.toMatchInlineSnapshot(
+        `[Error: Report object from ES has missing fields!]`
+      );
     });
 
     it('handles error creating the index', async () => {
       // setup
-      callClusterStub.withArgs('indices.exists').resolves(false);
-      callClusterStub.withArgs('indices.create').rejects(new Error('error'));
+      mockEsClient.indices.exists.mockResolvedValue({ body: false } as any);
+      mockEsClient.indices.create.mockRejectedValue(new Error('horrible error'));
 
       const store = new ReportingStore(mockCore, mockLogger);
-      const reportType = 'unknowntype';
-      const reportPayload = {};
-      const reportOptions = {
-        timeout: 10000,
-        created_by: 'created_by_string',
-        browser_type: 'browser_type_string',
-        max_attempts: 1,
-      };
-      await expect(
-        store.addReport(reportType, reportPayload, reportOptions)
-      ).rejects.toMatchInlineSnapshot(`[Error: error]`);
+      const mockReport = new Report({
+        _index: '.reporting-errortest',
+        jobtype: 'unknowntype',
+        payload: {},
+        meta: {},
+      } as any);
+      await expect(store.addReport(mockReport)).rejects.toMatchInlineSnapshot(
+        `[Error: horrible error]`
+      );
     });
 
     /* Creating the index will fail, if there were multiple jobs staged in
@@ -115,52 +109,337 @@ describe('ReportingStore', () => {
      */
     it('ignores index creation error if the index already exists and continues adding the report', async () => {
       // setup
-      callClusterStub.withArgs('indices.exists').resolves(false);
-      callClusterStub.withArgs('indices.create').rejects(new Error('error'));
+      mockEsClient.indices.exists.mockResolvedValue({ body: false } as any);
+      mockEsClient.indices.create.mockRejectedValue(new Error('devastating error'));
 
       const store = new ReportingStore(mockCore, mockLogger);
-      const reportType = 'unknowntype';
-      const reportPayload = {};
-      const reportOptions = {
-        timeout: 10000,
-        created_by: 'created_by_string',
-        browser_type: 'browser_type_string',
-        max_attempts: 1,
-      };
-      await expect(
-        store.addReport(reportType, reportPayload, reportOptions)
-      ).rejects.toMatchInlineSnapshot(`[Error: error]`);
+      const mockReport = new Report({
+        _index: '.reporting-mock',
+        jobtype: 'unknowntype',
+        payload: {},
+        meta: {},
+      } as any);
+      await expect(store.addReport(mockReport)).rejects.toMatchInlineSnapshot(
+        `[Error: devastating error]`
+      );
     });
 
     it('skips creating the index if already exists', async () => {
       // setup
-      callClusterStub.withArgs('indices.exists').resolves(false);
-      callClusterStub
-        .withArgs('indices.create')
-        .rejects(new Error('resource_already_exists_exception')); // will be triggered but ignored
+      mockEsClient.indices.exists.mockResolvedValue({ body: false } as any);
+      // will be triggered but ignored
+      mockEsClient.indices.create.mockRejectedValue(new Error('resource_already_exists_exception'));
 
       const store = new ReportingStore(mockCore, mockLogger);
-      const reportType = 'unknowntype';
-      const reportPayload = {};
-      const reportOptions = {
-        timeout: 10000,
-        created_by: 'created_by_string',
-        browser_type: 'browser_type_string',
-        max_attempts: 1,
-      };
-      await expect(
-        store.addReport(reportType, reportPayload, reportOptions)
-      ).resolves.toMatchObject({
+      const mockReport = new Report({
+        created_by: 'user1',
+        jobtype: 'unknowntype',
+        payload: {},
+        meta: {},
+      } as any);
+      await expect(store.addReport(mockReport)).resolves.toMatchObject({
         _primary_term: undefined,
         _seq_no: undefined,
-        browser_type: 'browser_type_string',
-        created_by: 'created_by_string',
+        attempts: 0,
+        created_by: 'user1',
         jobtype: 'unknowntype',
-        max_attempts: 1,
         payload: {},
-        priority: 10,
-        timeout: 10000,
+        status: 'pending',
       });
+    });
+
+    it('allows username string to be `false`', async () => {
+      // setup
+      mockEsClient.indices.exists.mockResolvedValue({ body: false } as any);
+      // will be triggered but ignored
+      mockEsClient.indices.create.mockRejectedValue(new Error('resource_already_exists_exception'));
+
+      const store = new ReportingStore(mockCore, mockLogger);
+      const mockReport = new Report({
+        _index: '.reporting-unsecured',
+        attempts: 0,
+        created_by: false,
+        jobtype: 'unknowntype',
+        payload: {},
+        meta: {},
+        status: 'pending',
+      } as any);
+      await expect(store.addReport(mockReport)).resolves.toMatchObject({
+        _primary_term: undefined,
+        _seq_no: undefined,
+        attempts: 0,
+        created_by: false,
+        jobtype: 'unknowntype',
+        meta: {},
+        payload: {},
+        status: 'pending',
+      });
+    });
+  });
+
+  it('findReport gets a report from ES and returns a Report object', async () => {
+    // setup
+    const mockReport: ReportDocument = {
+      _id: '1234-foo-78',
+      _index: '.reporting-test-17409',
+      _primary_term: 1234,
+      _seq_no: 5678,
+      _source: {
+        kibana_name: 'test',
+        kibana_id: 'test123',
+        created_at: 'some time',
+        created_by: 'some security person',
+        jobtype: 'csv',
+        status: 'pending',
+        meta: { testMeta: 'meta' } as any,
+        payload: { testPayload: 'payload' } as any,
+        browser_type: 'browser type string',
+        attempts: 0,
+        max_attempts: 1,
+        timeout: 30000,
+        output: null,
+      },
+    };
+    mockEsClient.get.mockResolvedValue({ body: mockReport } as any);
+    const store = new ReportingStore(mockCore, mockLogger);
+    const report = new Report({
+      ...mockReport,
+      ...mockReport._source,
+    });
+
+    expect(await store.findReportFromTask(report.toReportTaskJSON())).toMatchInlineSnapshot(`
+      Report {
+        "_id": "1234-foo-78",
+        "_index": ".reporting-test-17409",
+        "_primary_term": 1234,
+        "_seq_no": 5678,
+        "attempts": 0,
+        "browser_type": "browser type string",
+        "completed_at": undefined,
+        "created_at": "some time",
+        "created_by": "some security person",
+        "jobtype": "csv",
+        "kibana_id": undefined,
+        "kibana_name": undefined,
+        "max_attempts": 1,
+        "meta": Object {
+          "testMeta": "meta",
+        },
+        "output": null,
+        "payload": Object {
+          "testPayload": "payload",
+        },
+        "process_expiration": undefined,
+        "started_at": undefined,
+        "status": "pending",
+        "timeout": 30000,
+      }
+    `);
+  });
+
+  it('setReportClaimed sets the status of a record to processing', async () => {
+    const store = new ReportingStore(mockCore, mockLogger);
+    const report = new Report({
+      _id: 'id-of-processing',
+      _index: '.reporting-test-index-12345',
+      jobtype: 'test-report',
+      created_by: 'created_by_test_string',
+      browser_type: 'browser_type_test_string',
+      max_attempts: 50,
+      payload: {
+        title: 'test report',
+        headers: 'rp_test_headers',
+        objectType: 'testOt',
+        browserTimezone: 'ABC',
+      },
+      timeout: 30000,
+    });
+
+    await store.setReportClaimed(report, { testDoc: 'test' } as any);
+
+    const [updateCall] = mockEsClient.update.mock.calls;
+    expect(updateCall).toMatchInlineSnapshot(`
+      Array [
+        Object {
+          "body": Object {
+            "doc": Object {
+              "status": "processing",
+              "testDoc": "test",
+            },
+          },
+          "id": "id-of-processing",
+          "if_primary_term": undefined,
+          "if_seq_no": undefined,
+          "index": ".reporting-test-index-12345",
+          "refresh": true,
+        },
+      ]
+    `);
+  });
+
+  it('setReportFailed sets the status of a record to failed', async () => {
+    const store = new ReportingStore(mockCore, mockLogger);
+    const report = new Report({
+      _id: 'id-of-failure',
+      _index: '.reporting-test-index-12345',
+      jobtype: 'test-report',
+      created_by: 'created_by_test_string',
+      browser_type: 'browser_type_test_string',
+      max_attempts: 50,
+      payload: {
+        title: 'test report',
+        headers: 'rp_test_headers',
+        objectType: 'testOt',
+        browserTimezone: 'BCD',
+      },
+      timeout: 30000,
+    });
+
+    await store.setReportFailed(report, { errors: 'yes' } as any);
+
+    const [updateCall] = mockEsClient.update.mock.calls;
+    expect(updateCall).toMatchInlineSnapshot(`
+      Array [
+        Object {
+          "body": Object {
+            "doc": Object {
+              "errors": "yes",
+              "status": "failed",
+            },
+          },
+          "id": "id-of-failure",
+          "if_primary_term": undefined,
+          "if_seq_no": undefined,
+          "index": ".reporting-test-index-12345",
+          "refresh": true,
+        },
+      ]
+    `);
+  });
+
+  it('setReportCompleted sets the status of a record to completed', async () => {
+    const store = new ReportingStore(mockCore, mockLogger);
+    const report = new Report({
+      _id: 'vastly-great-report-id',
+      _index: '.reporting-test-index-12345',
+      jobtype: 'test-report',
+      created_by: 'created_by_test_string',
+      browser_type: 'browser_type_test_string',
+      max_attempts: 50,
+      payload: {
+        title: 'test report',
+        headers: 'rp_test_headers',
+        objectType: 'testOt',
+        browserTimezone: 'CDE',
+      },
+      timeout: 30000,
+    });
+
+    await store.setReportCompleted(report, { certainly_completed: 'yes' } as any);
+
+    const [updateCall] = mockEsClient.update.mock.calls;
+    expect(updateCall).toMatchInlineSnapshot(`
+      Array [
+        Object {
+          "body": Object {
+            "doc": Object {
+              "certainly_completed": "yes",
+              "status": "completed",
+            },
+          },
+          "id": "vastly-great-report-id",
+          "if_primary_term": undefined,
+          "if_seq_no": undefined,
+          "index": ".reporting-test-index-12345",
+          "refresh": true,
+        },
+      ]
+    `);
+  });
+
+  it('setReportCompleted sets the status of a record to completed_with_warnings', async () => {
+    const store = new ReportingStore(mockCore, mockLogger);
+    const report = new Report({
+      _id: 'vastly-great-report-id',
+      _index: '.reporting-test-index-12345',
+      jobtype: 'test-report',
+      created_by: 'created_by_test_string',
+      browser_type: 'browser_type_test_string',
+      max_attempts: 50,
+      payload: {
+        title: 'test report',
+        headers: 'rp_test_headers',
+        objectType: 'testOt',
+        browserTimezone: 'utc',
+      },
+      timeout: 30000,
+    });
+
+    await store.setReportCompleted(report, {
+      certainly_completed: 'pretty_much',
+      output: {
+        warnings: [`those pants don't go with that shirt`],
+      },
+    } as any);
+
+    const [updateCall] = mockEsClient.update.mock.calls;
+    expect(updateCall).toMatchInlineSnapshot(`
+      Array [
+        Object {
+          "body": Object {
+            "doc": Object {
+              "certainly_completed": "pretty_much",
+              "output": Object {
+                "warnings": Array [
+                  "those pants don't go with that shirt",
+                ],
+              },
+              "status": "completed_with_warnings",
+            },
+          },
+          "id": "vastly-great-report-id",
+          "if_primary_term": undefined,
+          "if_seq_no": undefined,
+          "index": ".reporting-test-index-12345",
+          "refresh": true,
+        },
+      ]
+    `);
+  });
+
+  describe('start', () => {
+    it('creates an ILM policy for managing reporting indices if there is not already one', async () => {
+      mockEsClient.ilm.getLifecycle.mockRejectedValueOnce(createApiResponse({ statusCode: 404 }));
+      mockEsClient.ilm.putLifecycle.mockResolvedValueOnce(createApiResponse());
+
+      const store = new ReportingStore(mockCore, mockLogger);
+      await store.start();
+
+      expect(mockEsClient.ilm.getLifecycle).toHaveBeenCalledWith({ policy: 'kibana-reporting' });
+      expect(mockEsClient.ilm.putLifecycle.mock.calls[0][0]).toMatchInlineSnapshot(`
+        Object {
+          "body": Object {
+            "policy": Object {
+              "phases": Object {
+                "hot": Object {
+                  "actions": Object {},
+                },
+              },
+            },
+          },
+          "policy": "kibana-reporting",
+        }
+      `);
+    });
+
+    it('does not create an ILM policy for managing reporting indices if one already exists', async () => {
+      mockEsClient.ilm.getLifecycle.mockResolvedValueOnce(createApiResponse());
+
+      const store = new ReportingStore(mockCore, mockLogger);
+      await store.start();
+
+      expect(mockEsClient.ilm.getLifecycle).toHaveBeenCalledWith({ policy: 'kibana-reporting' });
+      expect(mockEsClient.ilm.putLifecycle).not.toHaveBeenCalled();
     });
   });
 });

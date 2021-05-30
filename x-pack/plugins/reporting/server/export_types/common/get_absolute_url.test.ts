@@ -1,13 +1,14 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { getAbsoluteUrlFactory } from './get_absolute_url';
 
 const defaultOptions = {
-  defaultBasePath: 'sbp',
+  basePath: 'sbp',
   protocol: 'http:',
   hostname: 'localhost',
   port: 5601,
@@ -64,8 +65,8 @@ test(`uses the provided hash with queryString`, () => {
 });
 
 test(`uses the provided basePath`, () => {
-  const getAbsoluteUrl = getAbsoluteUrlFactory(defaultOptions);
-  const absoluteUrl = getAbsoluteUrl({ basePath: '/s/marketing' });
+  const getAbsoluteUrl = getAbsoluteUrlFactory({ ...defaultOptions, basePath: '/s/marketing' });
+  const absoluteUrl = getAbsoluteUrl();
   expect(absoluteUrl).toBe(`http://localhost:5601/s/marketing/app/kibana`);
 });
 

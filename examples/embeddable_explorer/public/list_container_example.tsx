@@ -1,20 +1,9 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import React from 'react';
@@ -29,11 +18,7 @@ import {
   EuiText,
   EuiTitle,
 } from '@elastic/eui';
-import {
-  EmbeddableInput,
-  EmbeddableRenderer,
-  ViewMode,
-} from '../../../src/plugins/embeddable/public';
+import { EmbeddableRenderer, ViewMode } from '../../../src/plugins/embeddable/public';
 import {
   HELLO_WORLD_EMBEDDABLE,
   MULTI_TASK_TODO_EMBEDDABLE,
@@ -41,6 +26,9 @@ import {
   ListContainerFactory,
   SearchableListContainerFactory,
 } from '../../embeddable_examples/public';
+import { SearchableContainerInput } from '../../embeddable_examples/public/searchable_list_container/searchable_list_container';
+import { TodoInput } from '../../embeddable_examples/public/todo';
+import { MultiTaskTodoInput } from '../../embeddable_examples/public/multi_task_todo';
 
 interface Props {
   listContainerEmbeddableFactory: ListContainerFactory;
@@ -51,7 +39,7 @@ export function ListContainerExample({
   listContainerEmbeddableFactory,
   searchableListContainerEmbeddableFactory,
 }: Props) {
-  const listInput: EmbeddableInput = {
+  const listInput: SearchableContainerInput = {
     id: 'hello',
     title: 'My todo list',
     viewMode: ViewMode.VIEW,
@@ -69,7 +57,7 @@ export function ListContainerExample({
           task: 'Goes out on Wednesdays!',
           icon: 'broom',
           title: 'Take out the trash',
-        },
+        } as TodoInput,
       },
       '3': {
         type: TODO_EMBEDDABLE,
@@ -77,12 +65,12 @@ export function ListContainerExample({
           id: '3',
           icon: 'broom',
           title: 'Vaccum the floor',
-        },
+        } as TodoInput,
       },
     },
   };
 
-  const searchableInput: EmbeddableInput = {
+  const searchableInput: SearchableContainerInput = {
     id: '1',
     title: 'My searchable todo list',
     viewMode: ViewMode.VIEW,
@@ -101,7 +89,7 @@ export function ListContainerExample({
           task: 'Goes out on Wednesdays!',
           icon: 'broom',
           title: 'Take out the trash',
-        },
+        } as TodoInput,
       },
       '3': {
         type: MULTI_TASK_TODO_EMBEDDABLE,
@@ -110,7 +98,7 @@ export function ListContainerExample({
           icon: 'searchProfilerApp',
           title: 'Learn more',
           tasks: ['Go to school', 'Watch planet earth', 'Read the encyclopedia'],
-        },
+        } as MultiTaskTodoInput,
       },
     },
   };

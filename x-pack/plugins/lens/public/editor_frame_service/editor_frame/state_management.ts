@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { EditorFrameProps } from './index';
@@ -48,7 +49,7 @@ export type Action =
   | {
       type: 'UPDATE_VISUALIZATION_STATE';
       visualizationId: string;
-      newState: unknown;
+      updater: unknown | ((state: unknown) => unknown);
       clearStagedPreview?: boolean;
     }
   | {
@@ -96,25 +97,27 @@ export function getActiveDatasourceIdFromDoc(doc?: Document) {
     return null;
   }
 
-  const [initialDatasourceId] = Object.keys(doc.state.datasourceStates);
-  return initialDatasourceId || null;
+  const [firstDatasourceFromDoc] = Object.keys(doc.state.datasourceStates);
+  return firstDatasourceFromDoc || null;
 }
 
-function getInitialDatasourceId(props: EditorFrameProps) {
-  return props.initialDatasourceId
-    ? props.initialDatasourceId
-    : getActiveDatasourceIdFromDoc(props.doc);
-}
-
-export const getInitialState = (props: EditorFrameProps): EditorFrameState => {
+export const getInitialState = (
+  params: EditorFrameProps & { doc?: Document }
+): EditorFrameState => {
   const datasourceStates: EditorFrameState['datasourceStates'] = {};
 
-  if (props.doc) {
-    Object.entries(props.doc.state.datasourceStates).forEach(([datasourceId, state]) => {
+  const initialDatasourceId =
+    getActiveDatasourceIdFromDoc(params.doc) || Object.keys(params.datasourceMap)[0] || null;
+
+  const initialVisualizationId =
+    (params.doc && params.doc.visualizationType) || Object.keys(params.visualizationMap)[0] || null;
+
+  if (params.doc) {
+    Object.entries(params.doc.state.datasourceStates).forEach(([datasourceId, state]) => {
       datasourceStates[datasourceId] = { isLoading: true, state };
     });
-  } else if (props.initialDatasourceId) {
-    datasourceStates[props.initialDatasourceId] = {
+  } else if (initialDatasourceId) {
+    datasourceStates[initialDatasourceId] = {
       state: null,
       isLoading: true,
     };
@@ -123,10 +126,10 @@ export const getInitialState = (props: EditorFrameProps): EditorFrameState => {
   return {
     title: '',
     datasourceStates,
-    activeDatasourceId: getInitialDatasourceId(props),
+    activeDatasourceId: initialDatasourceId,
     visualization: {
       state: null,
-      activeId: props.initialVisualizationId,
+      activeId: initialVisualizationId,
     },
   };
 };
@@ -156,7 +159,7 @@ export const reducer = (state: EditorFrameState, action: Action): EditorFrameSta
     case 'VISUALIZATION_LOADED':
       return {
         ...state,
-        persistedId: action.doc.id,
+        persistedId: action.doc.savedObjectId,
         title: action.doc.title,
         description: action.doc.description,
         datasourceStates: Object.entries(action.doc.state.datasourceStates).reduce(
@@ -271,7 +274,10 @@ export const reducer = (state: EditorFrameState, action: Action): EditorFrameSta
         ...state,
         visualization: {
           ...state.visualization,
-          state: action.newState,
+          state:
+            typeof action.updater === 'function'
+              ? action.updater(state.visualization.state)
+              : action.updater,
         },
         stagedPreview: action.clearStagedPreview ? undefined : state.stagedPreview,
       };

@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React from 'react';
@@ -18,6 +19,10 @@ import {
   resp,
   createSeries,
 } from '../../../../utils/fixtures/metrics_explorer';
+import { MetricsExplorerOptions, MetricsExplorerTimeOptions } from './use_metrics_explorer_options';
+import { IIndexPattern } from '../../../../../../../../src/plugins/data/public';
+import { HttpHandler } from 'kibana/public';
+import { MetricsSourceConfigurationProperties } from '../../../../../common/metrics_sources';
 
 const mockedFetch = jest.fn();
 
@@ -31,7 +36,16 @@ const renderUseMetricsExplorerDataHook = () => {
     return <KibanaContextProvider services={services}>{children}</KibanaContextProvider>;
   };
   return renderHook(
-    (props) =>
+    (props: {
+      options: MetricsExplorerOptions;
+      source: MetricsSourceConfigurationProperties | undefined;
+      derivedIndexPattern: IIndexPattern;
+      timeRange: MetricsExplorerTimeOptions;
+      afterKey: string | null | Record<string, string | null>;
+      signal: any;
+      fetch?: HttpHandler;
+      shouldLoadImmediately?: boolean;
+    }) =>
       useMetricsExplorerData(
         props.options,
         props.source,

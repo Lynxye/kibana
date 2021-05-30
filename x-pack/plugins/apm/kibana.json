@@ -6,19 +6,24 @@
     "features",
     "apmOss",
     "data",
-    "home",
     "licensing",
-    "triggers_actions_ui"
+    "triggersActionsUi",
+    "embeddable",
+    "infra",
+    "observability",
+    "ruleRegistry"
   ],
   "optionalPlugins": [
+    "spaces",
     "cloud",
     "usageCollection",
     "taskManager",
     "actions",
-    "alerts",
-    "observability",
+    "alerting",
     "security",
-    "ml"
+    "ml",
+    "home",
+    "maps"
   ],
   "server": true,
   "ui": true,
@@ -30,8 +35,11 @@
     "public/style/variables"
   ],
   "requiredBundles": [
+    "home",
     "kibanaReact",
     "kibanaUtils",
+    "maps",
+    "ml",
     "observability"
   ]
 }

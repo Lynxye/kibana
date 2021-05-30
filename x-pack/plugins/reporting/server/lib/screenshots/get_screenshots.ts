@@ -1,16 +1,19 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
-import { HeadlessChromiumDriver } from '../../browsers';
-import { ElementsPositionAndAttribute, Screenshot } from '../../types';
 import { LevelLogger, startTrace } from '../';
+import { HeadlessChromiumDriver } from '../../browsers';
+import { LayoutInstance } from '../layouts';
+import { ElementsPositionAndAttribute, Screenshot } from './';
 
 export const getScreenshots = async (
   browser: HeadlessChromiumDriver,
+  layout: LayoutInstance,
   elementsPositionAndAttributes: ElementsPositionAndAttribute[],
   logger: LevelLogger
 ): Promise<Screenshot[]> => {
@@ -25,7 +28,12 @@ export const getScreenshots = async (
   for (let i = 0; i < elementsPositionAndAttributes.length; i++) {
     const endTrace = startTrace('get_screenshots', 'read');
     const item = elementsPositionAndAttributes[i];
+
     const base64EncodedData = await browser.screenshot(item.position);
+
+    if (!base64EncodedData) {
+      throw new Error(`Failure in getScreenshots! Base64 data is void`);
+    }
 
     screenshots.push({
       base64EncodedData,

@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
@@ -160,5 +161,13 @@ export const START_TRAIL_DESC = i18n.translate(
   {
     defaultMessage:
       'In order to access duration anomaly detection, you have to be subscribed to an Elastic Platinum license.',
+  }
+);
+
+export const ENABLE_MANAGE_JOB = i18n.translate(
+  'xpack.uptime.ml.enableAnomalyDetectionPanel.enable_or_manage_job',
+  {
+    defaultMessage:
+      'You can enable anomaly detection job or if job is already there you can manage the job or alert.',
   }
 );

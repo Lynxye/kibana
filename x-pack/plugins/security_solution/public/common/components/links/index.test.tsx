@@ -1,12 +1,14 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { mount, shallow, ShallowWrapper } from 'enzyme';
+import { mount, shallow, ReactWrapper, ShallowWrapper } from 'enzyme';
 import React from 'react';
-import { mountWithIntl } from 'test_utils/enzyme_helpers';
+import { removeExternalLinkText } from '@kbn/securitysolution-io-ts-utils';
+import { mountWithIntl } from '@kbn/test/jest';
 
 import { encodeIpv6 } from '../../lib/helpers';
 import { useUiSetting$ } from '../../lib/kibana';
@@ -14,7 +16,7 @@ import { useUiSetting$ } from '../../lib/kibana';
 import {
   GoogleLink,
   HostDetailsLink,
-  IPDetailsLink,
+  NetworkDetailsLink,
   ReputationLink,
   WhoIsLink,
   CertificateFingerprintLink,
@@ -61,9 +63,9 @@ describe('Custom Links', () => {
     });
   });
 
-  describe('IPDetailsLink', () => {
+  describe('NetworkDetailsLink', () => {
     test('should render valid link to IP Details with ipv4 as the display text', () => {
-      const wrapper = mount(<IPDetailsLink ip={ipv4} />);
+      const wrapper = mount(<NetworkDetailsLink ip={ipv4} />);
       expect(wrapper.find('EuiLink').prop('href')).toEqual(
         `/ip/${encodeURIComponent(ipv4)}/source`
       );
@@ -71,7 +73,7 @@ describe('Custom Links', () => {
     });
 
     test('should render valid link to IP Details with child text as the display text', () => {
-      const wrapper = mount(<IPDetailsLink ip={ipv4}>{hostName}</IPDetailsLink>);
+      const wrapper = mount(<NetworkDetailsLink ip={ipv4}>{hostName}</NetworkDetailsLink>);
       expect(wrapper.find('EuiLink').prop('href')).toEqual(
         `/ip/${encodeURIComponent(ipv4)}/source`
       );
@@ -79,7 +81,7 @@ describe('Custom Links', () => {
     });
 
     test('should render valid link to IP Details with ipv6 as the display text', () => {
-      const wrapper = mount(<IPDetailsLink ip={ipv6} />);
+      const wrapper = mount(<NetworkDetailsLink ip={ipv6} />);
       expect(wrapper.find('EuiLink').prop('href')).toEqual(
         `/ip/${encodeURIComponent(ipv6Encoded)}/source`
       );
@@ -92,7 +94,7 @@ describe('Custom Links', () => {
       const wrapper = mountWithIntl(
         <GoogleLink link={'http://example.com/'}>{'Example Link'}</GoogleLink>
       );
-      expect(wrapper.text()).toEqual('Example Link');
+      expect(removeExternalLinkText(wrapper.text())).toEqual('Example Link');
     });
 
     test('it renders props passed in as link', () => {
@@ -119,11 +121,11 @@ describe('Custom Links', () => {
   describe('External Link', () => {
     const mockLink = 'https://www.virustotal.com/gui/search/';
     const mockLinkName = 'Link';
-    let wrapper: ShallowWrapper;
+    let wrapper: ReactWrapper | ShallowWrapper;
 
     describe('render', () => {
       beforeAll(() => {
-        wrapper = shallow(
+        wrapper = mount(
           <ExternalLink url={mockLink} idx={0} allItemsLimit={5} overflowIndexStart={5}>
             {mockLinkName}
           </ExternalLink>
@@ -135,11 +137,13 @@ describe('Custom Links', () => {
       });
 
       test('it renders ExternalLinkIcon', () => {
-        expect(wrapper.find('[data-test-subj="externalLinkIcon"]').exists()).toBeTruthy();
+        expect(wrapper.find('span [data-euiicon-type="popout"]').length).toBe(1);
       });
 
       test('it renders correct url', () => {
-        expect(wrapper.find('[data-test-subj="externalLink"]').prop('href')).toEqual(mockLink);
+        expect(wrapper.find('[data-test-subj="externalLink"]').first().prop('href')).toEqual(
+          mockLink
+        );
       });
 
       test('it renders comma if id is given', () => {
@@ -433,14 +437,14 @@ describe('Custom Links', () => {
 
       test('it renders correct number of external icons by default', () => {
         const wrapper = mountWithIntl(<ReputationLink domain={'192.0.2.0'} />);
-        expect(wrapper.find('[data-test-subj="externalLinkIcon"]')).toHaveLength(5);
+        expect(wrapper.find('span [data-euiicon-type="popout"]')).toHaveLength(5);
       });
 
       test('it renders correct number of external icons', () => {
         const wrapper = mountWithIntl(
           <ReputationLink domain={'192.0.2.0'} overflowIndexStart={1} />
         );
-        expect(wrapper.find('[data-test-subj="externalLinkIcon"]')).toHaveLength(1);
+        expect(wrapper.find('span [data-euiicon-type="popout"]')).toHaveLength(1);
       });
     });
   });
@@ -448,7 +452,7 @@ describe('Custom Links', () => {
   describe('WhoisLink', () => {
     test('it renders ip passed in as domain', () => {
       const wrapper = mountWithIntl(<WhoIsLink domain={'192.0.2.0'}>{'Example Link'}</WhoIsLink>);
-      expect(wrapper.text()).toEqual('Example Link');
+      expect(removeExternalLinkText(wrapper.text())).toEqual('Example Link');
     });
 
     test('it renders correct href', () => {
@@ -473,7 +477,7 @@ describe('Custom Links', () => {
           {'Example Link'}
         </CertificateFingerprintLink>
       );
-      expect(wrapper.text()).toEqual('Example Link');
+      expect(removeExternalLinkText(wrapper.text())).toEqual('Example Link');
     });
 
     test('it renders correct href', () => {
@@ -504,7 +508,7 @@ describe('Custom Links', () => {
       const wrapper = mountWithIntl(
         <Ja3FingerprintLink ja3Fingerprint={'abcd'}>{'Example Link'}</Ja3FingerprintLink>
       );
-      expect(wrapper.text()).toEqual('Example Link');
+      expect(removeExternalLinkText(wrapper.text())).toEqual('Example Link');
     });
 
     test('it renders correct href', () => {
@@ -533,7 +537,7 @@ describe('Custom Links', () => {
       const wrapper = mountWithIntl(
         <PortOrServiceNameLink portOrServiceName={443}>{'Example Link'}</PortOrServiceNameLink>
       );
-      expect(wrapper.text()).toEqual('Example Link');
+      expect(removeExternalLinkText(wrapper.text())).toEqual('Example Link');
     });
 
     test('it renders correct href when port is a number', () => {

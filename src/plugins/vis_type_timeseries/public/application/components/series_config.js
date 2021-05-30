@@ -1,22 +1,12 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
-
+import { i18n } from '@kbn/i18n';
+import { FormattedMessage } from '@kbn/i18n/react';
 import PropTypes from 'prop-types';
 import React from 'react';
 import { DataFormatPicker } from './data_format_picker';
@@ -32,12 +22,8 @@ import {
   EuiFormRow,
   EuiCode,
   EuiHorizontalRule,
-  EuiFormLabel,
-  EuiSpacer,
 } from '@elastic/eui';
-import { FormattedMessage } from '@kbn/i18n/react';
-import { getDefaultQueryLanguage } from './lib/get_default_query_language';
-import { QueryBarWrapper } from './query_bar_wrapper';
+import { SeriesConfigQueryBarWithIgnoreGlobalFilter } from './series_config_query_bar_with_ignore_global_filter';
 
 export const SeriesConfig = (props) => {
   const defaults = { offset_time: '', value_template: '' };
@@ -45,10 +31,9 @@ export const SeriesConfig = (props) => {
   const handleSelectChange = createSelectHandler(props.onChange);
   const handleTextChange = createTextHandler(props.onChange);
   const htmlId = htmlIdGenerator();
-  const seriesIndexPattern =
-    props.model.override_index_pattern && props.model.series_index_pattern
-      ? props.model.series_index_pattern
-      : props.indexPatternForQuery;
+  const seriesIndexPattern = props.model.override_index_pattern
+    ? props.model.series_index_pattern
+    : props.indexPatternForQuery;
 
   return (
     <div className="tvbAggRow">
@@ -56,28 +41,12 @@ export const SeriesConfig = (props) => {
 
       <EuiHorizontalRule margin="s" />
 
-      <EuiFormRow
-        id={htmlId('series_filter')}
-        label={
-          <FormattedMessage
-            id="visTypeTimeseries.seriesConfig.filterLabel"
-            defaultMessage="Filter"
-          />
-        }
-        fullWidth
-      >
-        <QueryBarWrapper
-          query={{
-            language:
-              model.filter && model.filter.language
-                ? model.filter.language
-                : getDefaultQueryLanguage(),
-            query: model.filter && model.filter.query ? model.filter.query : '',
-          }}
-          onChange={(filter) => props.onChange({ filter })}
-          indexPatterns={[seriesIndexPattern]}
-        />
-      </EuiFormRow>
+      <SeriesConfigQueryBarWithIgnoreGlobalFilter
+        model={model}
+        onChange={props.onChange}
+        panel={props.panel}
+        indexPatternForQuery={seriesIndexPattern}
+      />
 
       <EuiHorizontalRule margin="s" />
 
@@ -133,18 +102,17 @@ export const SeriesConfig = (props) => {
 
       <EuiFlexGroup gutterSize="s" responsive={false} wrap={true}>
         <EuiFlexItem grow={false}>
-          <EuiFormLabel>
-            <FormattedMessage
-              id="visTypeTimeseries.seriesConfig.overrideIndexPatternLabel"
-              defaultMessage="Override Index Pattern?"
+          <EuiFormRow
+            label={i18n.translate('visTypeTimeseries.seriesConfig.overrideIndexPatternLabel', {
+              defaultMessage: 'Override Index Pattern?',
+            })}
+          >
+            <YesNo
+              value={model.override_index_pattern}
+              name="override_index_pattern"
+              onChange={props.onChange}
             />
-          </EuiFormLabel>
-          <EuiSpacer size="s" />
-          <YesNo
-            value={model.override_index_pattern}
-            name="override_index_pattern"
-            onChange={props.onChange}
-          />
+          </EuiFormRow>
         </EuiFlexItem>
         <EuiFlexItem>
           <IndexPattern
@@ -162,7 +130,8 @@ export const SeriesConfig = (props) => {
 
 SeriesConfig.propTypes = {
   fields: PropTypes.object,
+  panel: PropTypes.object,
   model: PropTypes.object,
   onChange: PropTypes.func,
-  indexPatternForQuery: PropTypes.string,
+  indexPatternForQuery: PropTypes.oneOfType([PropTypes.object, PropTypes.string]),
 };

@@ -1,11 +1,13 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import * as t from 'io-ts';
 import { DateRangeType } from '../common';
+import { PingErrorType } from '../monitor';
 
 export const HttpResponseBodyType = t.partial({
   bytes: t.number,
@@ -85,6 +87,10 @@ export const MonitorType = t.intersection([
 
 export type Monitor = t.TypeOf<typeof MonitorType>;
 
+export const PingHeadersType = t.record(t.string, t.union([t.string, t.array(t.string)]));
+
+export type PingHeaders = t.TypeOf<typeof PingHeadersType>;
+
 export const PingType = t.intersection([
   t.type({
     timestamp: t.string,
@@ -116,18 +122,7 @@ export const PingType = t.intersection([
     ecs: t.partial({
       version: t.string,
     }),
-    error: t.intersection([
-      t.partial({
-        code: t.string,
-        id: t.string,
-        stack_trace: t.string,
-        type: t.string,
-      }),
-      t.type({
-        // this is _always_ on the error field
-        message: t.string,
-      }),
-    ]),
+    error: PingErrorType,
     http: t.partial({
       request: t.partial({
         body: t.partial({
@@ -145,6 +140,7 @@ export const PingType = t.intersection([
         bytes: t.number,
         redirects: t.array(t.string),
         status_code: t.number,
+        headers: PingHeadersType,
       }),
       version: t.string,
     }),
@@ -180,6 +176,49 @@ export const PingType = t.intersection([
       down: t.number,
       up: t.number,
     }),
+    synthetics: t.partial({
+      index: t.number,
+      journey: t.type({
+        id: t.string,
+        name: t.string,
+      }),
+      error: t.partial({
+        message: t.string,
+        name: t.string,
+        stack: t.string,
+      }),
+      package_version: t.string,
+      step: t.type({
+        index: t.number,
+        name: t.string,
+      }),
+      type: t.string,
+      // ui-related field
+      screenshotLoading: t.boolean,
+      // ui-related field
+      screenshotExists: t.boolean,
+      blob: t.string,
+      blob_mime: t.string,
+      payload: t.partial({
+        duration: t.number,
+        index: t.number,
+        is_navigation_request: t.boolean,
+        message: t.string,
+        method: t.string,
+        name: t.string,
+        params: t.partial({
+          homepage: t.string,
+        }),
+        source: t.string,
+        start: t.number,
+        status: t.string,
+        ts: t.number,
+        type: t.string,
+        url: t.string,
+        end: t.number,
+        text: t.string,
+      }),
+    }),
     tags: t.array(t.string),
     tcp: t.partial({
       rtt: t.partial({
@@ -195,12 +234,43 @@ export const PingType = t.intersection([
       full: t.string,
       port: t.number,
       scheme: t.string,
+      path: t.string,
     }),
     service: t.partial({
       name: t.string,
     }),
   }),
 ]);
+
+export const SyntheticsJourneyApiResponseType = t.intersection([
+  t.type({
+    checkGroup: t.string,
+    steps: t.array(PingType),
+  }),
+  t.partial({
+    details: t.union([
+      t.intersection([
+        t.type({
+          timestamp: t.string,
+          journey: PingType,
+        }),
+        t.partial({
+          next: t.type({
+            timestamp: t.string,
+            checkGroup: t.string,
+          }),
+          previous: t.type({
+            timestamp: t.string,
+            checkGroup: t.string,
+          }),
+        }),
+      ]),
+      t.null,
+    ]),
+  }),
+]);
+
+export type SyntheticsJourneyApiResponse = t.TypeOf<typeof SyntheticsJourneyApiResponseType>;
 
 export type Ping = t.TypeOf<typeof PingType>;
 
@@ -214,6 +284,9 @@ export const makePing = (f: {
   ip?: string;
   status?: string;
   duration?: number;
+  location?: string;
+  name?: string;
+  url?: string;
 }): Ping => {
   return {
     docId: f.docId || 'myDocId',
@@ -224,13 +297,15 @@ export const makePing = (f: {
       ip: f.ip || '127.0.0.1',
       status: f.status || 'up',
       duration: { us: f.duration || 100000 },
+      name: f.name,
     },
+    ...(f.location ? { observer: { geo: { name: f.location } } } : {}),
+    ...(f.url ? { url: { full: f.url } } : {}),
   };
 };
 
 export const PingsResponseType = t.type({
   total: t.number,
-  locations: t.array(t.string),
   pings: t.array(PingType),
 });
 
@@ -243,7 +318,7 @@ export const GetPingsParamsType = t.intersection([
   t.partial({
     index: t.number,
     size: t.number,
-    location: t.string,
+    locations: t.string,
     monitorId: t.string,
     sort: t.string,
     status: t.string,

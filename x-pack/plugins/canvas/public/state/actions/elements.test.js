@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { getSiblingContext } from './elements';
@@ -12,7 +13,7 @@ describe('getSiblingContext', () => {
       resolvedArgs: {
         'element-foo': {
           expressionContext: {
-            '0': {
+            0: {
               state: 'ready',
               value: {
                 type: 'datatable',
@@ -28,7 +29,7 @@ describe('getSiblingContext', () => {
               },
               error: null,
             },
-            '1': {
+            1: {
               state: 'ready',
               value: {
                 type: 'datatable',
@@ -44,7 +45,7 @@ describe('getSiblingContext', () => {
               },
               error: null,
             },
-            '2': {
+            2: {
               state: 'ready',
               value: {
                 type: 'pointseries',

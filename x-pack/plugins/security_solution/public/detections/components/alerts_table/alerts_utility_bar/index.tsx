@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { isEmpty } from 'lodash/fp';
@@ -24,21 +25,23 @@ import {
 } from '../../../../common/components/utility_bar';
 import * as i18n from './translations';
 import { useUiSetting$ } from '../../../../common/lib/kibana';
-import { TimelineNonEcsData } from '../../../../graphql/types';
+import { TimelineNonEcsData } from '../../../../../common/search_strategy/timeline';
 import { UpdateAlertsStatus } from '../types';
 import { FILTER_CLOSED, FILTER_IN_PROGRESS, FILTER_OPEN } from '../alerts_filter_group';
 
 export interface AlertsUtilityBarProps {
-  canUserCRUD: boolean;
-  hasIndexWrite: boolean;
   areEventsLoading: boolean;
   clearSelection: () => void;
   currentFilter: Status;
+  hasIndexMaintenance: boolean;
+  hasIndexWrite: boolean;
+  onShowBuildingBlockAlertsChanged: (showBuildingBlockAlerts: boolean) => void;
+  onShowOnlyThreatIndicatorAlertsChanged: (showOnlyThreatIndicatorAlerts: boolean) => void;
   selectAll: () => void;
   selectedEventIds: Readonly<Record<string, TimelineNonEcsData[]>>;
   showBuildingBlockAlerts: boolean;
-  onShowBuildingBlockAlertsChanged: (showBuildingBlockAlerts: boolean) => void;
   showClearSelection: boolean;
+  showOnlyThreatIndicatorAlerts: boolean;
   totalCount: number;
   updateAlertsStatus: UpdateAlertsStatus;
 }
@@ -47,18 +50,30 @@ const UtilityBarFlexGroup = styled(EuiFlexGroup)`
   min-width: 175px;
 `;
 
+const BuildingBlockContainer = styled(EuiFlexItem)`
+  background: repeating-linear-gradient(
+    127deg,
+    rgba(245, 167, 0, 0.2),
+    rgba(245, 167, 0, 0.2) 1px,
+    rgba(245, 167, 0, 0.05) 2px,
+    rgba(245, 167, 0, 0.05) 10px
+  );
+`;
+
 const AlertsUtilityBarComponent: React.FC<AlertsUtilityBarProps> = ({
-  canUserCRUD,
-  hasIndexWrite,
   areEventsLoading,
   clearSelection,
-  totalCount,
-  selectedEventIds,
   currentFilter,
-  selectAll,
-  showBuildingBlockAlerts,
+  hasIndexMaintenance,
+  hasIndexWrite,
   onShowBuildingBlockAlertsChanged,
+  onShowOnlyThreatIndicatorAlertsChanged,
+  selectAll,
+  selectedEventIds,
+  showBuildingBlockAlerts,
   showClearSelection,
+  showOnlyThreatIndicatorAlerts,
+  totalCount,
   updateAlertsStatus,
 }) => {
   const [defaultNumberFormat] = useUiSetting$<string>(DEFAULT_NUMBER_FORMAT);
@@ -132,8 +147,8 @@ const AlertsUtilityBarComponent: React.FC<AlertsUtilityBarProps> = ({
   );
 
   const UtilityBarAdditionalFiltersContent = (closePopover: () => void) => (
-    <UtilityBarFlexGroup direction="column">
-      <EuiFlexItem>
+    <UtilityBarFlexGroup direction="column" gutterSize="m">
+      <BuildingBlockContainer>
         <EuiCheckbox
           id="showBuildingBlockAlertsCheckbox"
           aria-label="showBuildingBlockAlerts"
@@ -146,9 +161,31 @@ const AlertsUtilityBarComponent: React.FC<AlertsUtilityBarProps> = ({
           data-test-subj="showBuildingBlockAlertsCheckbox"
           label={i18n.ADDITIONAL_FILTERS_ACTIONS_SHOW_BUILDING_BLOCK}
         />
+      </BuildingBlockContainer>
+      <EuiFlexItem>
+        <EuiCheckbox
+          id="showOnlyThreatIndicatorAlertsCheckbox"
+          aria-label="showOnlyThreatIndicatorAlerts"
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+            closePopover();
+            onShowOnlyThreatIndicatorAlertsChanged(e.target.checked);
+          }}
+          checked={showOnlyThreatIndicatorAlerts}
+          color="text"
+          data-test-subj="showOnlyThreatIndicatorAlertsCheckbox"
+          label={i18n.ADDITIONAL_FILTERS_ACTIONS_SHOW_ONLY_THREAT_INDICATOR_ALERTS}
+        />
       </EuiFlexItem>
     </UtilityBarFlexGroup>
   );
+
+  const handleSelectAllAlertsClick = useCallback(() => {
+    if (!showClearSelection) {
+      selectAll();
+    } else {
+      clearSelection();
+    }
+  }, [clearSelection, selectAll, showClearSelection]);
 
   return (
     <>
@@ -161,7 +198,7 @@ const AlertsUtilityBarComponent: React.FC<AlertsUtilityBarProps> = ({
           </UtilityBarGroup>
 
           <UtilityBarGroup grow={true}>
-            {canUserCRUD && hasIndexWrite && (
+            {hasIndexWrite && hasIndexMaintenance && (
               <>
                 <UtilityBarText dataTestSubj="selectedAlerts">
                   {i18n.SELECTED_ALERTS(
@@ -184,14 +221,10 @@ const AlertsUtilityBarComponent: React.FC<AlertsUtilityBarProps> = ({
                 </UtilityBarAction>
 
                 <UtilityBarAction
+                  aria-label="selectAllAlerts"
+                  dataTestSubj="selectAllAlertsButton"
                   iconType={showClearSelection ? 'cross' : 'pagesSelect'}
-                  onClick={() => {
-                    if (!showClearSelection) {
-                      selectAll();
-                    } else {
-                      clearSelection();
-                    }
-                  }}
+                  onClick={handleSelectAllAlertsClick}
                 >
                   {showClearSelection
                     ? i18n.CLEAR_SELECTION
@@ -205,7 +238,7 @@ const AlertsUtilityBarComponent: React.FC<AlertsUtilityBarProps> = ({
               disabled={areEventsLoading}
               iconType="arrowDown"
               iconSide="right"
-              ownFocus={false}
+              ownFocus={true}
               popoverContent={UtilityBarAdditionalFiltersContent}
             >
               {i18n.ADDITIONAL_FILTERS_ACTIONS}
@@ -224,5 +257,7 @@ export const AlertsUtilityBar = React.memo(
     prevProps.selectedEventIds === nextProps.selectedEventIds &&
     prevProps.totalCount === nextProps.totalCount &&
     prevProps.showClearSelection === nextProps.showClearSelection &&
-    prevProps.showBuildingBlockAlerts === nextProps.showBuildingBlockAlerts
+    prevProps.showBuildingBlockAlerts === nextProps.showBuildingBlockAlerts &&
+    prevProps.onShowOnlyThreatIndicatorAlertsChanged ===
+      nextProps.onShowOnlyThreatIndicatorAlertsChanged
 );

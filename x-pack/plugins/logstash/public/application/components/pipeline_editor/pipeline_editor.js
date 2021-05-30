@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React from 'react';
@@ -125,11 +126,11 @@ class PipelineEditorUi extends React.Component {
 
   onPipelineSave = () => {
     const { pipelineService, toastNotifications, intl } = this.props;
-    const { id } = this.state.pipeline;
+    const { id, ...pipelineToStore } = this.state.pipeline;
     return pipelineService
       .savePipeline({
         id,
-        upstreamJSON: this.state.pipeline,
+        upstreamJSON: pipelineToStore,
       })
       .then(() => {
         toastNotifications.addSuccess(

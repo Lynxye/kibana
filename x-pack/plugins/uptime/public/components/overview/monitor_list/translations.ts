@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
@@ -62,17 +63,13 @@ export const NO_DATA_MESSAGE = i18n.translate('xpack.uptime.monitorList.noItemMe
   description: 'This message is shown if the monitors table is rendered but has no items.',
 });
 
-export const UP = i18n.translate('xpack.uptime.monitorList.statusColumn.upLabel', {
-  defaultMessage: 'Up',
-});
-
-export const DOWN = i18n.translate('xpack.uptime.monitorList.statusColumn.downLabel', {
-  defaultMessage: 'Down',
-});
-
 export const RESPONSE_ANOMALY_SCORE = i18n.translate(
   'xpack.uptime.monitorList.anomalyColumn.label',
   {
     defaultMessage: 'Response Anomaly Score',
   }
 );
+
+export const STATUS_ALERT_COLUMN = i18n.translate('xpack.uptime.monitorList.statusAlert.label', {
+  defaultMessage: 'Status alert',
+});

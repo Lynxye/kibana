@@ -1,8 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import expect from '@kbn/expect';
 
 import { FtrProviderContext } from '../../ftr_provider_context';
@@ -67,6 +69,12 @@ export function MachineLearningAnomalyExplorerProvider({ getService }: FtrProvid
       await testSubjects.existOrFail('mlAnomalyExplorerSwimlaneViewBy');
     },
 
+    async assertAnnotationsPanelExists(state: string) {
+      await testSubjects.existOrFail(`mlAnomalyExplorerAnnotationsPanel ${state}`, {
+        timeout: 30 * 1000,
+      });
+    },
+
     async openAddToDashboardControl() {
       await testSubjects.click('mlAnomalyTimelinePanelMenu');
       await testSubjects.click('mlAnomalyTimelinePanelAddToDashboardButton');
@@ -81,12 +89,17 @@ export function MachineLearningAnomalyExplorerProvider({ getService }: FtrProvid
         true
       );
       await testSubjects.clickWhenNotDisabled('mlAddAndEditDashboardButton');
-      const embeddable = await testSubjects.find('mlAnomalySwimlaneEmbeddableWrapper');
-      const swimlane = await embeddable.findByClassName('ml-swimlanes');
+      // changing to the dashboard app might take sime time
+      const embeddable = await testSubjects.find('mlAnomalySwimlaneEmbeddableWrapper', 30 * 1000);
+      const swimlane = await embeddable.findByClassName('mlSwimLaneContainer');
       expect(await swimlane.isDisplayed()).to.eql(
         true,
         'Anomaly swimlane should be displayed in dashboard'
       );
+    },
+
+    async refreshPage() {
+      await testSubjects.click('superDatePickerApplyTimeButton');
     },
 
     async waitForDashboardsToLoad() {
@@ -98,6 +111,31 @@ export function MachineLearningAnomalyExplorerProvider({ getService }: FtrProvid
       const searchBarInput = await testSubjects.find('mlDashboardsSearchBox');
       await searchBarInput.clearValueWithKeyboard();
       await searchBarInput.type(filter);
+    },
+
+    async assertClearSelectionButtonVisible(expectVisible: boolean) {
+      if (expectVisible) {
+        await testSubjects.existOrFail('mlAnomalyTimelineClearSelection');
+      } else {
+        await testSubjects.missingOrFail('mlAnomalyTimelineClearSelection');
+      }
+    },
+
+    async clearSwimLaneSelection() {
+      await this.assertClearSelectionButtonVisible(true);
+      await testSubjects.click('mlAnomalyTimelineClearSelection');
+      await this.assertClearSelectionButtonVisible(false);
+    },
+
+    async assertAnomalyExplorerChartsCount(expectedChartsCount: number) {
+      const chartsContainer = await testSubjects.find('mlExplorerChartsContainer');
+      const actualChartsCount = (
+        await chartsContainer.findAllByClassName('ml-explorer-chart-container', 3000)
+      ).length;
+      expect(actualChartsCount).to.eql(
+        expectedChartsCount,
+        `Expect ${expectedChartsCount} charts to appear, got ${actualChartsCount}`
+      );
     },
   };
 }

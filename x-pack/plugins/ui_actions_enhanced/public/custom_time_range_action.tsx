@@ -1,19 +1,19 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
 import React from 'react';
 import { IEmbeddable, Embeddable, EmbeddableInput } from 'src/plugins/embeddable/public';
-import { ActionByType, IncompatibleActionError } from '../../../../src/plugins/ui_actions/public';
+import { Action, IncompatibleActionError } from '../../../../src/plugins/ui_actions/public';
 import { TimeRange } from '../../../../src/plugins/data/public';
 import { CustomizeTimeRangeModal } from './customize_time_range_modal';
 import { OpenModal, CommonlyUsedRange } from './types';
 
 export const CUSTOM_TIME_RANGE = 'CUSTOM_TIME_RANGE';
-const SEARCH_EMBEDDABLE_TYPE = 'search';
 
 export interface TimeRangeInput extends EmbeddableInput {
   timeRange: TimeRange;
@@ -38,7 +38,7 @@ export interface TimeRangeActionContext {
   embeddable: Embeddable<TimeRangeInput>;
 }
 
-export class CustomTimeRangeAction implements ActionByType<typeof CUSTOM_TIME_RANGE> {
+export class CustomTimeRangeAction implements Action<TimeRangeActionContext> {
   public readonly type = CUSTOM_TIME_RANGE;
   private openModal: OpenModal;
   private dateFormat?: string;
@@ -78,15 +78,7 @@ export class CustomTimeRangeAction implements ActionByType<typeof CUSTOM_TIME_RA
     const isMarkdown =
       isVisualizeEmbeddable(embeddable) &&
       (embeddable as VisualizeEmbeddable).getOutput().visTypeName === 'markdown';
-    return Boolean(
-      embeddable &&
-        hasTimeRange(embeddable) &&
-        // Saved searches don't listen to the time range from the container that is passed down to them so it
-        // won't work without a fix.  For now, just leave them out.
-        embeddable.type !== SEARCH_EMBEDDABLE_TYPE &&
-        !isInputControl &&
-        !isMarkdown
-    );
+    return Boolean(embeddable && hasTimeRange(embeddable) && !isInputControl && !isMarkdown);
   }
 
   public async execute({ embeddable }: TimeRangeActionContext) {

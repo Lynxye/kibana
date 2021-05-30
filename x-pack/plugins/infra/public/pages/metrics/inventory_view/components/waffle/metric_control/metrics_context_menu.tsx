@@ -1,10 +1,13 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import React, { useCallback } from 'react';
 import { EuiContextMenuPanelDescriptor, EuiContextMenu } from '@elastic/eui';
+import { getCustomMetricLabel } from '../../../../../../../common/formatters/get_custom_metric_label';
 import {
   SnapshotMetricInput,
   SnapshotCustomMetricInput,
@@ -14,7 +17,6 @@ import {
   SnapshotMetricTypeRT,
   SnapshotMetricType,
 } from '../../../../../../../common/inventory_models/types';
-import { getCustomMetricLabel } from './get_custom_metric_label';
 
 interface Props {
   options: Array<{ text: string; value: string }>;

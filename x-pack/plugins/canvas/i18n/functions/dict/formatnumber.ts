@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
@@ -12,7 +13,7 @@ import { NUMERALJS } from '../../constants';
 
 export const help: FunctionHelp<FunctionFactory<typeof formatnumber>> = {
   help: i18n.translate('xpack.canvas.functions.formatnumberHelpText', {
-    defaultMessage: 'Formats a number into a formatted number string using {NUMERALJS}.',
+    defaultMessage: 'Formats a number into a formatted number string using the {NUMERALJS}.',
     values: {
       NUMERALJS,
     },
@@ -22,8 +23,8 @@ export const help: FunctionHelp<FunctionFactory<typeof formatnumber>> = {
     format: i18n.translate('xpack.canvas.functions.formatnumber.args.formatHelpText', {
       defaultMessage: 'A {NUMERALJS} format string. For example, {example1} or {example2}.',
       values: {
-        example1: `"0.0a"`,
-        example2: `"0%"`,
+        example1: '`"0.0a"`',
+        example2: '`"0%"`',
         NUMERALJS,
       },
     }),

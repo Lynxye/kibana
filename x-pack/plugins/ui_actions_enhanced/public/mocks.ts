@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { CoreSetup, CoreStart } from '../../../../src/core/public';
@@ -11,6 +12,7 @@ import { embeddablePluginMock } from '../../../../src/plugins/embeddable/public/
 import { AdvancedUiActionsSetup, AdvancedUiActionsStart } from '.';
 import { plugin as pluginInitializer } from '.';
 import { licensingMock } from '../../licensing/public/mocks';
+import { StartDependencies } from './plugin';
 
 export type Setup = jest.Mocked<AdvancedUiActionsSetup>;
 export type Start = jest.Mocked<AdvancedUiActionsStart>;
@@ -28,14 +30,18 @@ const createStartContract = (): Start => {
     ...uiActionsPluginMock.createStartContract(),
     getActionFactories: jest.fn(),
     getActionFactory: jest.fn(),
-    FlyoutManageDrilldowns: jest.fn(),
+    hasActionFactory: jest.fn(),
+    DrilldownManager: jest.fn(),
+    telemetry: jest.fn(),
+    extract: jest.fn(),
+    inject: jest.fn(),
   };
 
   return startContract;
 };
 
 const createPlugin = (
-  coreSetup: CoreSetup = coreMock.createSetup(),
+  coreSetup: CoreSetup<StartDependencies> = coreMock.createSetup(),
   coreStart: CoreStart = coreMock.createStart()
 ) => {
   const pluginInitializerContext = coreMock.createPluginInitializerContext();
@@ -47,6 +53,7 @@ const createPlugin = (
   const setup = plugin.setup(coreSetup, {
     uiActions: uiActions.setup,
     embeddable: embeddable.setup,
+    licensing: licensingMock.createSetup(),
   });
 
   return {

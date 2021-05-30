@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 /*
@@ -21,6 +22,9 @@ import { withKibana } from '../../../../../../../../src/plugins/kibana_react/pub
 import { FilterListsHeader } from './header';
 import { FilterListsTable } from './table';
 import { ml } from '../../../services/ml_api_service';
+
+import { getDocLinks } from '../../../util/dependency_cache';
+import { HelpMenu } from '../../../components/help_menu';
 
 export class FilterListsUI extends Component {
   static displayName = 'FilterLists';
@@ -85,11 +89,12 @@ export class FilterListsUI extends Component {
   render() {
     const { filterLists, selectedFilterLists } = this.state;
     const { canCreateFilter, canDeleteFilter } = this.props;
+    const helpLink = getDocLinks().links.ml.customRules;
 
     return (
       <Fragment>
         <NavigationMenu tabId="settings" />
-        <EuiPage className="ml-list-filter-lists">
+        <EuiPage className="ml-list-filter-lists" data-test-subj="mlPageFilterListManagement">
           <EuiPageBody>
             <EuiPageContent
               className="ml-list-filter-lists-content"
@@ -111,6 +116,7 @@ export class FilterListsUI extends Component {
             </EuiPageContent>
           </EuiPageBody>
         </EuiPage>
+        <HelpMenu docLink={helpLink} />
       </Fragment>
     );
   }

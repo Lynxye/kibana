@@ -1,33 +1,30 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import { i18n } from '@kbn/i18n';
-import { SearchResponse } from 'elasticsearch';
-import { LegacyAPICaller, IRouter } from 'src/core/server';
+import { ElasticsearchClient } from 'src/core/server';
+import type { LogstashPluginRouter } from '../../types';
 import { wrapRouteWithLicenseCheck } from '../../../../licensing/server';
 
-import { INDEX_NAMES, ES_SCROLL_SETTINGS } from '../../../common/constants';
 import { PipelineListItem } from '../../models/pipeline_list_item';
-import { fetchAllFromScroll } from '../../lib/fetch_all_from_scroll';
 import { checkLicense } from '../../lib/check_license';
 
-async function fetchPipelines(callWithRequest: LegacyAPICaller) {
-  const params = {
-    index: INDEX_NAMES.PIPELINES,
-    scroll: ES_SCROLL_SETTINGS.KEEPALIVE,
-    body: {
-      size: ES_SCROLL_SETTINGS.PAGE_SIZE,
+async function fetchPipelines(client: ElasticsearchClient) {
+  const { body } = await client.transport.request(
+    {
+      method: 'GET',
+      path: '/_logstash/pipeline',
     },
-    ignore: [404],
-  };
-
-  const response = await callWithRequest<SearchResponse<any>>('search', params);
-  return fetchAllFromScroll(response, callWithRequest);
+    { ignore: [404] }
+  );
+  return body;
 }
 
-export function registerPipelinesListRoute(router: IRouter) {
+export function registerPipelinesListRoute(router: LogstashPluginRouter) {
   router.get(
     {
       path: '/api/logstash/pipelines',
@@ -37,12 +34,17 @@ export function registerPipelinesListRoute(router: IRouter) {
       checkLicense,
       router.handleLegacyErrors(async (context, request, response) => {
         try {
-          const client = context.logstash!.esClient;
-          const pipelinesHits = await fetchPipelines(client.callAsCurrentUser);
+          const { client } = context.core.elasticsearch;
+          const pipelinesRecord = (await fetchPipelines(client.asCurrentUser)) as Record<
+            string,
+            any
+          >;
 
-          const pipelines = pipelinesHits.map((pipeline) => {
-            return PipelineListItem.fromUpstreamJSON(pipeline).downstreamJSON;
-          });
+          const pipelines = Object.keys(pipelinesRecord)
+            .sort()
+            .map((key) => {
+              return PipelineListItem.fromUpstreamJSON(key, pipelinesRecord).downstreamJSON;
+            });
 
           return response.ok({ body: { pipelines } });
         } catch (err) {

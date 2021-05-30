@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { MouseEventHandler, useCallback } from 'react';
@@ -12,7 +13,7 @@ type NavigateToAppHandlerOptions<S = unknown> = NavigateToAppOptions & {
   state?: S;
   onClick?: EventHandlerCallback;
 };
-type EventHandlerCallback = MouseEventHandler<HTMLButtonElement | HTMLAnchorElement>;
+type EventHandlerCallback = MouseEventHandler<HTMLButtonElement | HTMLAnchorElement | Element>;
 
 /**
  * Provides an event handlers that can be used with (for example) `onClick` to prevent the
@@ -25,8 +26,8 @@ type EventHandlerCallback = MouseEventHandler<HTMLButtonElement | HTMLAnchorElem
  *
  * @example
  *
- * const handleOnClick = useNavigateToAppEventHandler('ingestManager', {path: '#/configs'})
- * return <EuiLink onClick={handleOnClick}>See configs</EuiLink>
+ * const handleOnClick = useNavigateToAppEventHandler('fleet', {path: '#/policies'})
+ * return <EuiLink onClick={handleOnClick}>See policies</EuiLink>
  */
 export const useNavigateToAppEventHandler = <S = unknown>(
   /** the app id - normally the value of the `id` in that plugin's `kibana.json`  */

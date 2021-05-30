@@ -1,8 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import React from 'react';
 import { i18n } from '@kbn/i18n';
 import {
@@ -42,13 +44,6 @@ export interface Props {
   exitEdit(): void;
   updateField: UpdateFieldFunc;
 }
-
-export const defaultFlyoutProps = {
-  'data-test-subj': 'mappingsEditorFieldEdit',
-  'aria-labelledby': 'mappingsEditorFieldEditTitle',
-  className: 'mappingsEditor__editField',
-  maxWidth: 720,
-};
 
 // The default FormWrapper is the <EuiForm />, which wrapps the form with
 // a <div>. We can't have a div as first child of the Flyout as it breaks
@@ -98,15 +93,15 @@ export const EditField = React.memo(({ form, field, allFields, exitEdit, updateF
           <FormDataProvider pathsToWatch={['type', 'subType']}>
             {({ type, subType }) => {
               const linkDocumentation =
-                documentationService.getTypeDocLink(subType) ||
-                documentationService.getTypeDocLink(type);
+                documentationService.getTypeDocLink(subType?.[0]?.value) ||
+                documentationService.getTypeDocLink(type?.[0]?.value);
 
               if (!linkDocumentation) {
                 return null;
               }
 
-              const typeDefinition = TYPE_DEFINITION[type as MainType];
-              const subTypeDefinition = TYPE_DEFINITION[subType as SubType];
+              const typeDefinition = TYPE_DEFINITION[type[0].value as MainType];
+              const subTypeDefinition = TYPE_DEFINITION[subType?.[0].value as SubType];
 
               return (
                 <EuiFlexItem grow={false}>
@@ -148,7 +143,7 @@ export const EditField = React.memo(({ form, field, allFields, exitEdit, updateF
 
         <FormDataProvider pathsToWatch={['type', 'subType']}>
           {({ type, subType }) => {
-            const ParametersForm = getParametersFormForType(type, subType);
+            const ParametersForm = getParametersFormForType(type?.[0].value, subType?.[0].value);
 
             if (!ParametersForm) {
               return null;

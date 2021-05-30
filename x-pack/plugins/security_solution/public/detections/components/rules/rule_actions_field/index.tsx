@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { isEmpty } from 'lodash/fp';
@@ -12,17 +13,22 @@ import ReactMarkdown from 'react-markdown';
 import styled from 'styled-components';
 
 import { NOTIFICATION_SUPPORTED_ACTION_TYPES_IDS } from '../../../../../common/constants';
-import { SelectField } from '../../../../shared_imports';
+import { FieldHook, useFormContext } from '../../../../shared_imports';
 import {
   ActionForm,
   ActionType,
   loadActionTypes,
+  ActionVariables,
 } from '../../../../../../triggers_actions_ui/public';
-import { AlertAction } from '../../../../../../alerts/common';
+import { AlertAction } from '../../../../../../alerting/common';
 import { useKibana } from '../../../../common/lib/kibana';
 import { FORM_ERRORS_TITLE } from './translations';
 
-type ThrottleSelectField = typeof SelectField;
+interface Props {
+  field: FieldHook;
+  hasErrorOnCreationCaseAction: boolean;
+  messageVariables: ActionVariables;
+}
 
 const DEFAULT_ACTION_GROUP_ID = 'default';
 const DEFAULT_ACTION_MESSAGE =
@@ -34,20 +40,67 @@ const FieldErrorsContainer = styled.div`
   }
 `;
 
-export const RuleActionsField: ThrottleSelectField = ({ field, messageVariables }) => {
+const ContainerActions = styled.div.attrs(
+  ({ className = '', $caseIndexes = [] }: { className?: string; $caseIndexes: string[] }) => ({
+    className,
+  })
+)<{ $caseIndexes: string[] }>`
+  ${({ $caseIndexes }) =>
+    $caseIndexes.map(
+      (index) => `
+        div[id="${index}"].euiAccordion__childWrapper .euiAccordion__padding--l {
+          padding: 0px;
+          .euiFlexGroup {
+            display: none;
+          }
+          .euiSpacer.euiSpacer--xl {
+            height: 0px;
+          }
+        }
+      `
+    )}
+`;
+
+export const getSupportedActions = (
+  actionTypes: ActionType[],
+  hasErrorOnCreationCaseAction: boolean
+): ActionType[] => {
+  return actionTypes.filter((actionType) => {
+    if (actionType.id === '.case' && hasErrorOnCreationCaseAction) {
+      return false;
+    }
+    return NOTIFICATION_SUPPORTED_ACTION_TYPES_IDS.includes(actionType.id);
+  });
+};
+
+export const RuleActionsField: React.FC<Props> = ({
+  field,
+  hasErrorOnCreationCaseAction,
+  messageVariables,
+}) => {
   const [fieldErrors, setFieldErrors] = useState<string | null>(null);
   const [supportedActionTypes, setSupportedActionTypes] = useState<ActionType[] | undefined>();
+  const form = useFormContext();
+  const { isSubmitted, isSubmitting, isValid } = form;
   const {
     http,
-    triggers_actions_ui: { actionTypeRegistry },
-    notifications,
-    docLinks,
-    application: { capabilities },
+    triggersActionsUi: { actionTypeRegistry },
   } = useKibana().services;
 
   const actions: AlertAction[] = useMemo(
     () => (!isEmpty(field.value) ? (field.value as AlertAction[]) : []),
     [field.value]
+  );
+
+  const caseActionIndexes = useMemo(
+    () =>
+      actions.reduce<string[]>((acc, action, actionIndex) => {
+        if (action.actionTypeId === '.case') {
+          return [...acc, `${actionIndex}`];
+        }
+        return acc;
+      }, []),
+    [actions]
   );
 
   const setActionIdByIndex = useCallback(
@@ -60,7 +113,7 @@ export const RuleActionsField: ThrottleSelectField = ({ field, messageVariables 
     [field.setValue, actions]
   );
 
-  const setAlertProperty = useCallback(
+  const setAlertActionsProperty = useCallback(
     (updatedActions: AlertAction[]) => field.setValue(updatedActions),
     [field]
   );
@@ -79,40 +132,26 @@ export const RuleActionsField: ThrottleSelectField = ({ field, messageVariables 
   useEffect(() => {
     (async function () {
       const actionTypes = await loadActionTypes({ http });
-      const supportedTypes = actionTypes.filter((actionType) =>
-        NOTIFICATION_SUPPORTED_ACTION_TYPES_IDS.includes(actionType.id)
-      );
+      const supportedTypes = getSupportedActions(actionTypes, hasErrorOnCreationCaseAction);
       setSupportedActionTypes(supportedTypes);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [hasErrorOnCreationCaseAction]);
 
   useEffect(() => {
-    if (field.form.isSubmitting || !field.errors.length) {
+    if (isSubmitting || !field.errors.length) {
       return setFieldErrors(null);
     }
-    if (
-      field.form.isSubmitted &&
-      !field.form.isSubmitting &&
-      field.form.isValid === false &&
-      field.errors.length
-    ) {
+    if (isSubmitted && !isSubmitting && isValid === false && field.errors.length) {
       const errorsString = field.errors.map(({ message }) => message).join('\n');
       return setFieldErrors(errorsString);
     }
-  }, [
-    field.form.isSubmitted,
-    field.form.isSubmitting,
-    field.isChangingValue,
-    field.form.isValid,
-    field.errors,
-    setFieldErrors,
-  ]);
+  }, [isSubmitted, isSubmitting, field.isChangingValue, isValid, field.errors, setFieldErrors]);
 
   if (!supportedActionTypes) return <></>;
 
   return (
-    <>
+    <ContainerActions $caseIndexes={caseActionIndexes}>
       {fieldErrors ? (
         <>
           <FieldErrorsContainer>
@@ -125,19 +164,15 @@ export const RuleActionsField: ThrottleSelectField = ({ field, messageVariables 
       ) : null}
       <ActionForm
         actions={actions}
-        docLinks={docLinks}
-        capabilities={capabilities}
         messageVariables={messageVariables}
         defaultActionGroupId={DEFAULT_ACTION_GROUP_ID}
         setActionIdByIndex={setActionIdByIndex}
-        setAlertProperty={setAlertProperty}
+        setActions={setAlertActionsProperty}
         setActionParamsProperty={setActionParamsProperty}
-        http={http}
         actionTypeRegistry={actionTypeRegistry}
         actionTypes={supportedActionTypes}
         defaultActionMessage={DEFAULT_ACTION_MESSAGE}
-        toastNotifications={notifications.toasts}
       />
-    </>
+    </ContainerActions>
   );
 };

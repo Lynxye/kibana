@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { shallow, ShallowWrapper } from 'enzyme';
@@ -21,12 +22,12 @@ jest.mock('react-router-dom', () => {
   };
 });
 jest.mock('../../overview/components/events_by_dataset');
-jest.mock('../../common/containers/source', () => {
-  const originalModule = jest.requireActual('../../common/containers/source');
+jest.mock('../../common/containers/sourcerer', () => {
+  const originalModule = jest.requireActual('../../common/containers/sourcerer');
 
   return {
     ...originalModule,
-    useWithSource: jest.fn().mockReturnValue({
+    useSourcererScope: jest.fn().mockReturnValue({
       indicesExist: true,
     }),
   };

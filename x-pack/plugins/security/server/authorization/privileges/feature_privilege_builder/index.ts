@@ -1,12 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { flatten } from 'lodash';
-import { Feature, FeatureKibanaPrivileges } from '../../../../../features/server';
-import { Actions } from '../../actions';
+
+import type { FeatureKibanaPrivileges, KibanaFeature } from '../../../../../features/server';
+import type { Actions } from '../../actions';
+import { FeaturePrivilegeAlertingBuilder } from './alerting';
 import { FeaturePrivilegeApiBuilder } from './api';
 import { FeaturePrivilegeAppBuilder } from './app';
 import { FeaturePrivilegeCatalogueBuilder } from './catalogue';
@@ -14,8 +17,8 @@ import { FeaturePrivilegeBuilder } from './feature_privilege_builder';
 import { FeaturePrivilegeManagementBuilder } from './management';
 import { FeaturePrivilegeNavlinkBuilder } from './navlink';
 import { FeaturePrivilegeSavedObjectBuilder } from './saved_object';
-import { FeaturePrivilegeAlertingBuilder } from './alerting';
 import { FeaturePrivilegeUIBuilder } from './ui';
+
 export { FeaturePrivilegeBuilder };
 
 export const featurePrivilegeBuilderFactory = (actions: Actions): FeaturePrivilegeBuilder => {
@@ -31,7 +34,7 @@ export const featurePrivilegeBuilderFactory = (actions: Actions): FeaturePrivile
   ];
 
   return {
-    getActions(privilege: FeatureKibanaPrivileges, feature: Feature) {
+    getActions(privilege: FeatureKibanaPrivileges, feature: KibanaFeature) {
       return flatten(builders.map((builder) => builder.getActions(privilege, feature)));
     },
   };

@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { get } from 'lodash/fp';
@@ -13,54 +14,70 @@ import {
   SavedObjectsFindResponse,
   SavedObjectsClientContract,
 } from 'kibana/server';
+import type {
+  MachineLearningJobIdOrUndefined,
+  From,
+  FromOrUndefined,
+  RiskScore,
+  RiskScoreMapping,
+  RiskScoreMappingOrUndefined,
+  RiskScoreOrUndefined,
+  ThreatIndexOrUndefined,
+  ThreatQueryOrUndefined,
+  ThreatMappingOrUndefined,
+  ThreatFiltersOrUndefined,
+  ThreatLanguageOrUndefined,
+  ConcurrentSearchesOrUndefined,
+  ItemsPerSearchOrUndefined,
+  ThreatIndicatorPathOrUndefined,
+  Threats,
+  ThreatsOrUndefined,
+  TypeOrUndefined,
+  Type,
+  LanguageOrUndefined,
+  SeverityMapping,
+  SeverityMappingOrUndefined,
+  SeverityOrUndefined,
+  Severity,
+  MaxSignalsOrUndefined,
+  MaxSignals,
+} from '@kbn/securitysolution-io-ts-alerting-types';
+import type { VersionOrUndefined, Version } from '@kbn/securitysolution-io-ts-types';
+
+import type { ListArrayOrUndefined, ListArray } from '@kbn/securitysolution-io-ts-list-types';
+import { UpdateRulesSchema } from '../../../../common/detection_engine/schemas/request';
 import { RuleAlertAction } from '../../../../common/detection_engine/types';
 import {
   FalsePositives,
-  From,
   RuleId,
   Immutable,
   DescriptionOrUndefined,
   Interval,
-  MaxSignals,
-  RiskScore,
   OutputIndex,
   Name,
-  Severity,
   Tags,
-  Threat,
   To,
-  Type,
   References,
-  Version,
   AnomalyThresholdOrUndefined,
   QueryOrUndefined,
-  LanguageOrUndefined,
   SavedIdOrUndefined,
   TimelineIdOrUndefined,
   TimelineTitleOrUndefined,
-  MachineLearningJobIdOrUndefined,
   IndexOrUndefined,
   NoteOrUndefined,
   MetaOrUndefined,
   Description,
   Enabled,
-  VersionOrUndefined,
   IdOrUndefined,
   RuleIdOrUndefined,
   EnabledOrUndefined,
   FalsePositivesOrUndefined,
-  FromOrUndefined,
   OutputIndexOrUndefined,
   IntervalOrUndefined,
-  MaxSignalsOrUndefined,
-  RiskScoreOrUndefined,
   NameOrUndefined,
-  SeverityOrUndefined,
   TagsOrUndefined,
   ToOrUndefined,
-  ThreatOrUndefined,
   ThresholdOrUndefined,
-  TypeOrUndefined,
   ReferencesOrUndefined,
   PerPageOrUndefined,
   PageOrUndefined,
@@ -77,26 +94,22 @@ import {
   Author,
   AuthorOrUndefined,
   LicenseOrUndefined,
-  RiskScoreMapping,
-  RiskScoreMappingOrUndefined,
-  SeverityMapping,
-  SeverityMappingOrUndefined,
   TimestampOverrideOrUndefined,
   BuildingBlockTypeOrUndefined,
   RuleNameOverrideOrUndefined,
+  EventCategoryOverrideOrUndefined,
 } from '../../../../common/detection_engine/schemas/common/schemas';
-import { AlertsClient, PartialAlert } from '../../../../../alerts/server';
-import { Alert, SanitizedAlert } from '../../../../../alerts/common';
-import { SIGNALS_ID } from '../../../../common/constants';
-import { RuleTypeParams, PartialFilter } from '../types';
-import { ListArrayOrUndefined, ListArray } from '../../../../common/detection_engine/schemas/types';
 
-export interface RuleAlertType extends Alert {
-  params: RuleTypeParams;
-}
+import { AlertsClient, PartialAlert } from '../../../../../alerting/server';
+import { Alert, SanitizedAlert } from '../../../../../alerting/common';
+import { SIGNALS_ID } from '../../../../common/constants';
+import { PartialFilter } from '../types';
+import { RuleParams } from '../schemas/rule_schemas';
+
+export type RuleAlertType = Alert<RuleParams>;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export interface IRuleStatusAttributes extends Record<string, any> {
+export interface IRuleStatusSOAttributes extends Record<string, any> {
   alertId: string; // created alert id.
   statusDate: StatusDate;
   lastFailureAt: LastFailureAt | null | undefined;
@@ -110,21 +123,35 @@ export interface IRuleStatusAttributes extends Record<string, any> {
   searchAfterTimeDurations: string[] | null | undefined;
 }
 
+export interface IRuleStatusResponseAttributes {
+  alert_id: string; // created alert id.
+  status_date: StatusDate;
+  last_failure_at: LastFailureAt | null | undefined;
+  last_failure_message: LastFailureMessage | null | undefined;
+  last_success_at: LastSuccessAt | null | undefined;
+  last_success_message: LastSuccessMessage | null | undefined;
+  status: JobStatus | null | undefined;
+  last_look_back_date: string | null | undefined; // NOTE: This is no longer used on the UI, but left here in case users are using it within the API
+  gap: string | null | undefined;
+  bulk_create_time_durations: string[] | null | undefined;
+  search_after_time_durations: string[] | null | undefined;
+}
+
 export interface RuleStatusResponse {
   [key: string]: {
-    current_status: IRuleStatusAttributes | null | undefined;
-    failures: IRuleStatusAttributes[] | null | undefined;
+    current_status: IRuleStatusResponseAttributes | null | undefined;
+    failures: IRuleStatusResponseAttributes[] | null | undefined;
   };
 }
 
 export interface IRuleSavedAttributesSavedObjectAttributes
-  extends IRuleStatusAttributes,
+  extends IRuleStatusSOAttributes,
     SavedObjectAttributes {}
 
 export interface IRuleStatusSavedObject {
   type: string;
   id: string;
-  attributes: Array<SavedObject<IRuleStatusAttributes & SavedObjectAttributes>>;
+  attributes: Array<SavedObject<IRuleStatusSOAttributes & SavedObjectAttributes>>;
   references: unknown[];
   updated_at: string;
   version: string;
@@ -137,6 +164,19 @@ export interface IRuleStatusFindType {
   saved_objects: IRuleStatusSavedObject[];
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export interface IRuleAssetSOAttributes extends Record<string, any> {
+  rule_id: string | null | undefined;
+  version: string | null | undefined;
+  name: string | null | undefined;
+}
+
+export interface IRuleAssetSavedObject {
+  type: string;
+  id: string;
+  attributes: IRuleAssetSOAttributes & SavedObjectAttributes;
+}
+
 export interface HapiReadableStream extends Readable {
   hapi: {
     filename: string;
@@ -147,11 +187,15 @@ export interface Clients {
   alertsClient: AlertsClient;
 }
 
-export const isAlertTypes = (partialAlert: PartialAlert[]): partialAlert is RuleAlertType[] => {
+export const isAlertTypes = (
+  partialAlert: Array<PartialAlert<RuleParams>>
+): partialAlert is RuleAlertType[] => {
   return partialAlert.every((rule) => isAlertType(rule));
 };
 
-export const isAlertType = (partialAlert: PartialAlert): partialAlert is RuleAlertType => {
+export const isAlertType = (
+  partialAlert: PartialAlert<RuleParams>
+): partialAlert is RuleAlertType => {
   return partialAlert.alertTypeId === SIGNALS_ID;
 };
 
@@ -167,12 +211,6 @@ export const isRuleStatusFindType = (
   return get('saved_objects', obj) != null;
 };
 
-export const isRuleStatusFindTypes = (
-  obj: unknown[] | undefined
-): obj is Array<SavedObjectsFindResponse<IRuleSavedAttributesSavedObjectAttributes>> => {
-  return obj ? obj.every((ruleStatus) => isRuleStatusFindType(ruleStatus)) : false;
-};
-
 export interface CreateRulesOptions {
   alertsClient: AlertsClient;
   anomalyThreshold: AnomalyThresholdOrUndefined;
@@ -180,6 +218,7 @@ export interface CreateRulesOptions {
   buildingBlockType: BuildingBlockTypeOrUndefined;
   description: Description;
   enabled: Enabled;
+  eventCategoryOverride: EventCategoryOverrideOrUndefined;
   falsePositives: FalsePositives;
   from: From;
   query: QueryOrUndefined;
@@ -204,8 +243,16 @@ export interface CreateRulesOptions {
   severity: Severity;
   severityMapping: SeverityMapping;
   tags: Tags;
-  threat: Threat;
+  threat: Threats;
   threshold: ThresholdOrUndefined;
+  threatFilters: ThreatFiltersOrUndefined;
+  threatIndex: ThreatIndexOrUndefined;
+  threatIndicatorPath: ThreatIndicatorPathOrUndefined;
+  threatQuery: ThreatQueryOrUndefined;
+  threatMapping: ThreatMappingOrUndefined;
+  concurrentSearches: ConcurrentSearchesOrUndefined;
+  itemsPerSearch: ItemsPerSearchOrUndefined;
+  threatLanguage: ThreatLanguageOrUndefined;
   timestampOverride: TimestampOverrideOrUndefined;
   to: To;
   type: Type;
@@ -217,47 +264,10 @@ export interface CreateRulesOptions {
 }
 
 export interface UpdateRulesOptions {
-  id: IdOrUndefined;
   savedObjectsClient: SavedObjectsClientContract;
   alertsClient: AlertsClient;
-  anomalyThreshold: AnomalyThresholdOrUndefined;
-  author: Author;
-  buildingBlockType: BuildingBlockTypeOrUndefined;
-  description: Description;
-  enabled: Enabled;
-  falsePositives: FalsePositives;
-  from: From;
-  query: QueryOrUndefined;
-  language: LanguageOrUndefined;
-  savedId: SavedIdOrUndefined;
-  timelineId: TimelineIdOrUndefined;
-  timelineTitle: TimelineTitleOrUndefined;
-  meta: MetaOrUndefined;
-  machineLearningJobId: MachineLearningJobIdOrUndefined;
-  filters: PartialFilter[];
-  ruleId: RuleIdOrUndefined;
-  index: IndexOrUndefined;
-  interval: Interval;
-  license: LicenseOrUndefined;
-  maxSignals: MaxSignals;
-  riskScore: RiskScore;
-  riskScoreMapping: RiskScoreMapping;
-  ruleNameOverride: RuleNameOverrideOrUndefined;
-  outputIndex: OutputIndex;
-  name: Name;
-  severity: Severity;
-  severityMapping: SeverityMapping;
-  tags: Tags;
-  threat: Threat;
-  threshold: ThresholdOrUndefined;
-  timestampOverride: TimestampOverrideOrUndefined;
-  to: To;
-  type: Type;
-  references: References;
-  note: NoteOrUndefined;
-  version: VersionOrUndefined;
-  exceptionsList: ListArray;
-  actions: RuleAlertAction[];
+  defaultOutputIndex: string;
+  ruleUpdate: UpdateRulesSchema;
 }
 
 export interface PatchRulesOptions {
@@ -268,6 +278,7 @@ export interface PatchRulesOptions {
   buildingBlockType: BuildingBlockTypeOrUndefined;
   description: DescriptionOrUndefined;
   enabled: EnabledOrUndefined;
+  eventCategoryOverride: EventCategoryOverrideOrUndefined;
   falsePositives: FalsePositivesOrUndefined;
   from: FromOrUndefined;
   query: QueryOrUndefined;
@@ -290,8 +301,15 @@ export interface PatchRulesOptions {
   severity: SeverityOrUndefined;
   severityMapping: SeverityMappingOrUndefined;
   tags: TagsOrUndefined;
-  threat: ThreatOrUndefined;
+  threat: ThreatsOrUndefined;
+  itemsPerSearch: ItemsPerSearchOrUndefined;
+  concurrentSearches: ConcurrentSearchesOrUndefined;
   threshold: ThresholdOrUndefined;
+  threatFilters: ThreatFiltersOrUndefined;
+  threatIndex: ThreatIndexOrUndefined;
+  threatQuery: ThreatQueryOrUndefined;
+  threatMapping: ThreatMappingOrUndefined;
+  threatLanguage: ThreatLanguageOrUndefined;
   timestampOverride: TimestampOverrideOrUndefined;
   to: ToOrUndefined;
   type: TypeOrUndefined;
@@ -300,7 +318,7 @@ export interface PatchRulesOptions {
   version: VersionOrUndefined;
   exceptionsList: ListArrayOrUndefined;
   actions: RuleAlertAction[] | undefined;
-  rule: SanitizedAlert | null;
+  rule: SanitizedAlert<RuleParams> | null;
 }
 
 export interface ReadRuleOptions {

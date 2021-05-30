@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { isEmpty } from 'lodash/fp';
@@ -12,7 +13,7 @@ import React, { useMemo, useCallback } from 'react';
 
 import { DEFAULT_NUMBER_FORMAT, APP_ID } from '../../../../common/constants';
 import { ESQuery } from '../../../../common/typed_json';
-import { ID as OverviewHostQueryId, OverviewHostQuery } from '../../containers/overview_host';
+import { ID as OverviewHostQueryId, useHostOverview } from '../../containers/overview_host';
 import { HeaderSection } from '../../../common/components/header_section';
 import { useUiSetting$, useKibana } from '../../../common/lib/kibana';
 import { getHostsUrl, useFormatUrl } from '../../../common/components/link_to';
@@ -26,6 +27,7 @@ import { LinkButton } from '../../../common/components/links';
 export interface OwnProps {
   startDate: GlobalTimeArgs['from'];
   endDate: GlobalTimeArgs['to'];
+  indexNames: string[];
   filterQuery?: ESQuery | string;
   setQuery: GlobalTimeArgs['setQuery'];
 }
@@ -36,12 +38,20 @@ export type OverviewHostProps = OwnProps;
 const OverviewHostComponent: React.FC<OverviewHostProps> = ({
   endDate,
   filterQuery,
+  indexNames,
   startDate,
   setQuery,
 }) => {
   const { formatUrl, search: urlSearch } = useFormatUrl(SecurityPageName.hosts);
   const { navigateToApp } = useKibana().services.application;
   const [defaultNumberFormat] = useUiSetting$<string>(DEFAULT_NUMBER_FORMAT);
+
+  const [loading, { overviewHost, id, inspect, refetch }] = useHostOverview({
+    endDate,
+    filterQuery,
+    indexNames,
+    startDate,
+  });
 
   const goToHost = useCallback(
     (ev) => {
@@ -51,6 +61,16 @@ const OverviewHostComponent: React.FC<OverviewHostProps> = ({
       });
     },
     [navigateToApp, urlSearch]
+  );
+
+  const hostEventsCount = useMemo(
+    () => getOverviewHostStats(overviewHost).reduce((total, stat) => total + stat.count, 0),
+    [overviewHost]
+  );
+
+  const formattedHostEventsCount = useMemo(
+    () => numeral(hostEventsCount).format(defaultNumberFormat),
+    [defaultNumberFormat, hostEventsCount]
   );
 
   const hostPageButton = useMemo(
@@ -64,68 +84,56 @@ const OverviewHostComponent: React.FC<OverviewHostProps> = ({
     ),
     [goToHost, formatUrl]
   );
+
+  const title = useMemo(
+    () => (
+      <FormattedMessage
+        id="xpack.securitySolution.overview.hostsTitle"
+        defaultMessage="Host events"
+      />
+    ),
+    []
+  );
+
+  const subtitle = useMemo(
+    () =>
+      !isEmpty(overviewHost) ? (
+        <FormattedMessage
+          defaultMessage="Showing: {formattedHostEventsCount} {hostEventsCount, plural, one {event} other {events}}"
+          id="xpack.securitySolution.overview.overviewHost.hostsSubtitle"
+          values={{
+            hostEventsCount,
+            formattedHostEventsCount,
+          }}
+        />
+      ) : (
+        <>{''}</>
+      ),
+    [formattedHostEventsCount, hostEventsCount, overviewHost]
+  );
+
   return (
     <EuiFlexItem>
       <InspectButtonContainer>
         <EuiPanel>
-          <OverviewHostQuery
-            data-test-subj="overview-host-query"
-            endDate={endDate}
-            filterQuery={filterQuery}
-            sourceId="default"
-            startDate={startDate}
-          >
-            {({ overviewHost, loading, id, inspect, refetch }) => {
-              const hostEventsCount = getOverviewHostStats(overviewHost).reduce(
-                (total, stat) => total + stat.count,
-                0
-              );
-              const formattedHostEventsCount = numeral(hostEventsCount).format(defaultNumberFormat);
+          <HeaderSection id={OverviewHostQueryId} subtitle={subtitle} title={title}>
+            <>{hostPageButton}</>
+          </HeaderSection>
 
-              return (
-                <>
-                  <HeaderSection
-                    id={OverviewHostQueryId}
-                    subtitle={
-                      !isEmpty(overviewHost) ? (
-                        <FormattedMessage
-                          defaultMessage="Showing: {formattedHostEventsCount} {hostEventsCount, plural, one {event} other {events}}"
-                          id="xpack.securitySolution.overview.overviewHost.hostsSubtitle"
-                          values={{
-                            formattedHostEventsCount,
-                            hostEventsCount,
-                          }}
-                        />
-                      ) : (
-                        <>{''}</>
-                      )
-                    }
-                    title={
-                      <FormattedMessage
-                        id="xpack.securitySolution.overview.hostsTitle"
-                        defaultMessage="Host events"
-                      />
-                    }
-                  >
-                    {hostPageButton}
-                  </HeaderSection>
-
-                  <OverviewHostStatsManage
-                    loading={loading}
-                    data={overviewHost}
-                    setQuery={setQuery}
-                    id={id}
-                    inspect={inspect}
-                    refetch={refetch}
-                  />
-                </>
-              );
-            }}
-          </OverviewHostQuery>
+          <OverviewHostStatsManage
+            loading={loading}
+            data={overviewHost}
+            setQuery={setQuery}
+            id={id}
+            inspect={inspect}
+            refetch={refetch}
+          />
         </EuiPanel>
       </InspectButtonContainer>
     </EuiFlexItem>
   );
 };
+
+OverviewHostComponent.displayName = 'OverviewHostComponent';
 
 export const OverviewHost = React.memo(OverviewHostComponent);

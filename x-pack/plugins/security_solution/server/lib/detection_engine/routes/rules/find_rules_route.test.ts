@@ -1,30 +1,33 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { DETECTION_ENGINE_RULES_URL } from '../../../../../common/constants';
 import {
-  getResult,
+  getAlertMock,
   getFindRequest,
   getFindResultWithSingleHit,
-  getFindResultStatus,
+  getFindBulkResultStatus,
 } from '../__mocks__/request_responses';
 import { requestContextMock, serverMock, requestMock } from '../__mocks__';
 import { findRulesRoute } from './find_rules_route';
+import { getQueryRuleParams } from '../../schemas/rule_schemas.mock';
 
+jest.mock('../../signals/rule_status_service');
 describe('find_rules', () => {
   let server: ReturnType<typeof serverMock.create>;
   let { clients, context } = requestContextMock.createTools();
 
-  beforeEach(() => {
+  beforeEach(async () => {
     server = serverMock.create();
     ({ clients, context } = requestContextMock.createTools());
 
     clients.alertsClient.find.mockResolvedValue(getFindResultWithSingleHit());
-    clients.alertsClient.get.mockResolvedValue(getResult());
-    clients.savedObjectsClient.find.mockResolvedValue(getFindResultStatus());
+    clients.alertsClient.get.mockResolvedValue(getAlertMock(getQueryRuleParams()));
+    clients.savedObjectsClient.find.mockResolvedValue(getFindBulkResultStatus());
 
     findRulesRoute(server.router);
   });

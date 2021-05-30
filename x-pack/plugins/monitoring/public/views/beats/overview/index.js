@@ -1,9 +1,11 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
+import React from 'react';
 import { find } from 'lodash';
 import { i18n } from '@kbn/i18n';
 import { uiRoutes } from '../../../angular/helpers/routes';
@@ -12,6 +14,7 @@ import { MonitoringViewBaseController } from '../../';
 import { getPageData } from './get_page_data';
 import template from './index.html';
 import { CODE_PATH_BEATS } from '../../../../common/constants';
+import { BeatsOverview } from '../../../components/beats/overview';
 
 uiRoutes.when('/beats', {
   template,
@@ -23,7 +26,7 @@ uiRoutes.when('/beats', {
     pageData: getPageData,
   },
   controllerAs: 'beats',
-  controller: class BeatsOverview extends MonitoringViewBaseController {
+  controller: class extends MonitoringViewBaseController {
     constructor($injector, $scope) {
       // breadcrumbs + page title
       const $route = $injector.get('$route');
@@ -36,12 +39,24 @@ uiRoutes.when('/beats', {
         title: i18n.translate('xpack.monitoring.beats.overview.routeTitle', {
           defaultMessage: 'Beats - Overview',
         }),
+        pageTitle: i18n.translate('xpack.monitoring.beats.overview.pageTitle', {
+          defaultMessage: 'Beats overview',
+        }),
         getPageData,
         $scope,
         $injector,
+        reactNodeId: 'monitoringBeatsOverviewApp',
       });
 
       this.data = $route.current.locals.pageData;
+      $scope.$watch(
+        () => this.data,
+        (data) => {
+          this.renderReact(
+            <BeatsOverview {...data} onBrush={$scope.onBrush} zoomInfo={$scope.zoomInfo} />
+          );
+        }
+      );
     }
   },
 });

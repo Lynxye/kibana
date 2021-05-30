@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React from 'react';
@@ -27,6 +28,18 @@ describe('VisualizationContainer', () => {
     expect(reportingEl.prop('data-shared-item')).toBeTruthy();
   });
 
+  test('increments counter in data attribute for each render', () => {
+    const component = mount(<VisualizationContainer isReady={true}>Hello!</VisualizationContainer>);
+
+    let reportingEl = component.find('[data-shared-item]').first();
+    expect(reportingEl.prop('data-rendering-count')).toEqual(1);
+
+    component.setProps({ children: 'Hello2!' });
+
+    reportingEl = component.find('[data-shared-item]').first();
+    expect(reportingEl.prop('data-rendering-count')).toEqual(2);
+  });
+
   test('renders child content', () => {
     const component = mount(
       <VisualizationContainer isReady={false}>Hello!</VisualizationContainer>
@@ -43,13 +56,16 @@ describe('VisualizationContainer', () => {
     expect(reportingEl.prop('data-shared-item')).toBeTruthy();
   });
 
-  test('renders title for reporting, if provided', () => {
+  test('renders title and description for reporting, if provided', () => {
     const component = mount(
-      <VisualizationContainer reportTitle="shazam!">Hello!</VisualizationContainer>
+      <VisualizationContainer reportTitle="shazam!" reportDescription="Description">
+        Hello!
+      </VisualizationContainer>
     );
     const reportingEl = component.find('[data-shared-item]').first();
 
     expect(reportingEl.prop('data-title')).toEqual('shazam!');
+    expect(reportingEl.prop('data-description')).toEqual('Description');
   });
 
   test('renders style', () => {

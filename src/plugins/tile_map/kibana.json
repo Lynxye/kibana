@@ -2,19 +2,20 @@
   "id": "tileMap",
   "version": "8.0.0",
   "kibanaVersion": "kibana",
-  "configPath": ["map", "tilemap"],
   "ui": true,
   "server": true,
   "requiredPlugins": [
     "visualizations",
     "expressions",
     "mapsLegacy",
+    "mapsEms",
     "kibanaLegacy",
-    "data"
+    "data",
+    "share"
   ],
   "requiredBundles": [
     "kibanaUtils",
-    "kibanaReact",
-    "charts"
+    "charts",
+    "visDefaultEditor"
   ]
 }

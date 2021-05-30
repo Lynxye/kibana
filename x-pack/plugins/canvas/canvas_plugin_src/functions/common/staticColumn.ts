@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { getType } from '@kbn/interpreter/common';
@@ -48,7 +49,7 @@ export function staticColumn(): ExpressionFunctionDefinition<
       const type = getType(args.value) as DatatableColumnType;
       const columns = [...input.columns];
       const existingColumnIndex = columns.findIndex(({ name }) => name === args.name);
-      const newColumn = { name: args.name, type };
+      const newColumn = { id: args.name, name: args.name, meta: { type } };
 
       if (existingColumnIndex > -1) {
         columns[existingColumnIndex] = newColumn;

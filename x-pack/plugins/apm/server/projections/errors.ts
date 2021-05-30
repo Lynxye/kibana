@@ -1,29 +1,34 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import {
-  Setup,
-  SetupTimeRange,
-  SetupUIFilters,
-} from '../../server/lib/helpers/setup_request';
+import { Setup, SetupTimeRange } from '../../server/lib/helpers/setup_request';
 import {
   SERVICE_NAME,
   ERROR_GROUP_ID,
 } from '../../common/elasticsearch_fieldnames';
-import { rangeFilter } from '../../common/utils/range_filter';
+import {
+  environmentQuery,
+  rangeQuery,
+  kqlQuery,
+} from '../../server/utils/queries';
 import { ProcessorEvent } from '../../common/processor_event';
 
 export function getErrorGroupsProjection({
+  environment,
+  kuery,
   setup,
   serviceName,
 }: {
-  setup: Setup & SetupTimeRange & SetupUIFilters;
+  environment?: string;
+  kuery?: string;
+  setup: Setup & SetupTimeRange;
   serviceName: string;
 }) {
-  const { start, end, uiFiltersES } = setup;
+  const { start, end } = setup;
 
   return {
     apm: {
@@ -34,8 +39,9 @@ export function getErrorGroupsProjection({
         bool: {
           filter: [
             { term: { [SERVICE_NAME]: serviceName } },
-            { range: rangeFilter(start, end) },
-            ...uiFiltersES,
+            ...rangeQuery(start, end),
+            ...environmentQuery(environment),
+            ...kqlQuery(kuery),
           ],
         },
       },

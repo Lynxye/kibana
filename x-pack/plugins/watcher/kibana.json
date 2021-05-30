@@ -5,9 +5,11 @@
   "requiredPlugins": [
     "home",
     "licensing",
+    "licenseApiGuard",
     "management",
     "charts",
-    "data"
+    "data",
+    "features"
   ],
   "server": true,
   "ui": true,

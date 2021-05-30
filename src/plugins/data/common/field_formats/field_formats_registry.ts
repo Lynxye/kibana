@@ -1,20 +1,9 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 // eslint-disable-next-line max-classes-per-file
@@ -27,13 +16,14 @@ import {
   FieldFormatInstanceType,
   FieldFormatId,
   IFieldFormatMetaParams,
-  IFieldFormat,
 } from './types';
 import { baseFormatters } from './constants/base_formatters';
 import { FieldFormat } from './field_format';
+import { FormatFactory } from './utils';
+import { ES_FIELD_TYPES, KBN_FIELD_TYPES } from '../kbn_field_types/types';
+import { UI_SETTINGS } from '../constants';
+import { FieldFormatNotFoundError } from '../field_formats';
 import { SerializedFieldFormat } from '../../../expressions/common/types';
-import { ES_FIELD_TYPES, KBN_FIELD_TYPES } from '../types';
-import { UI_SETTINGS } from '../';
 
 export class FieldFormatsRegistry {
   protected fieldFormats: Map<FieldFormatId, FieldFormatInstanceType> = new Map();
@@ -41,7 +31,20 @@ export class FieldFormatsRegistry {
   protected metaParamsOptions: Record<string, any> = {};
   protected getConfig?: FieldFormatsGetConfigFn;
   // overriden on the public contract
-  public deserialize: (mapping: SerializedFieldFormat) => IFieldFormat = () => {
+  public deserialize: FormatFactory = (mapping?: SerializedFieldFormat) => {
+    if (!mapping) {
+      return new (FieldFormat.from(identity))();
+    }
+
+    const { id, params = {} } = mapping;
+    if (id) {
+      const Format = this.getType(id);
+
+      if (Format) {
+        return new Format(params, this.getConfig);
+      }
+    }
+
     return new (FieldFormat.from(identity))();
   };
 
@@ -161,7 +164,7 @@ export class FieldFormatsRegistry {
       const ConcreteFieldFormat = this.getType(formatId);
 
       if (!ConcreteFieldFormat) {
-        throw new Error(`Field Format '${formatId}' not found!`);
+        throw new FieldFormatNotFoundError(`Field Format '${formatId}' not found!`, formatId);
       }
 
       return new ConcreteFieldFormat(params, this.getConfig);
@@ -180,11 +183,11 @@ export class FieldFormatsRegistry {
    * @param  {ES_FIELD_TYPES[]} esTypes
    * @return {FieldFormat}
    */
-  getDefaultInstancePlain(
+  getDefaultInstancePlain = (
     fieldType: KBN_FIELD_TYPES,
     esTypes?: ES_FIELD_TYPES[],
     params: Record<string, any> = {}
-  ): FieldFormat {
+  ): FieldFormat => {
     const conf = this.getDefaultConfig(fieldType, esTypes);
     const instanceParams = {
       ...conf.params,
@@ -192,7 +195,7 @@ export class FieldFormatsRegistry {
     };
 
     return this.getInstance(conf.id, instanceParams);
-  }
+  };
   /**
    * Returns a cache key built by the given variables for caching in memoized
    * Where esType contains fieldType, fieldType is returned

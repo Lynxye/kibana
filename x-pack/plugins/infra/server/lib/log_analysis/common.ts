@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import type { MlAnomalyDetectors, MlSystem } from '../../types';
@@ -36,7 +37,7 @@ export async function fetchMlJob(mlAnomalyDetectors: MlAnomalyDetectors, jobId: 
   };
 }
 
-const COMPOSITE_AGGREGATION_BATCH_SIZE = 1000;
+export const COMPOSITE_AGGREGATION_BATCH_SIZE = 1000;
 
 // Finds datasets related to ML job ids
 export async function getLogEntryDatasets(
@@ -62,7 +63,8 @@ export async function getLogEntryDatasets(
           endTime,
           COMPOSITE_AGGREGATION_BATCH_SIZE,
           afterLatestBatchKey
-        )
+        ),
+        jobIds
       )
     );
 

@@ -1,23 +1,25 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import { Transform } from 'stream';
 import { has, isString } from 'lodash/fp';
 import { pipe } from 'fp-ts/lib/pipeable';
 import { fold } from 'fp-ts/lib/Either';
 import * as t from 'io-ts';
-import { formatErrors } from '../../../common/format_errors';
+import { createMapStream, createFilterStream } from '@kbn/utils';
+
+import { exactCheck, formatErrors } from '@kbn/securitysolution-io-ts-utils';
+import { BadRequestError } from '@kbn/securitysolution-es-utils';
 import { importRuleValidateTypeDependents } from '../../../common/detection_engine/schemas/request/import_rules_type_dependents';
 import {
   ImportRulesSchemaDecoded,
   importRulesSchema,
   ImportRulesSchema,
 } from '../../../common/detection_engine/schemas/request/import_rules_schema';
-import { exactCheck } from '../../../common/exact_check';
-import { createMapStream, createFilterStream } from '../../../../../../src/legacy/utils/streams';
-import { BadRequestError } from '../../lib/detection_engine/errors/bad_request_error';
 
 export interface RulesObjectsExportResultDetails {
   /** number of successfully exported objects */

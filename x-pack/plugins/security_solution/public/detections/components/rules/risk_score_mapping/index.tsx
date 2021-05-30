@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import {
@@ -13,24 +14,25 @@ import {
   EuiFormLabel,
   EuiIcon,
   EuiSpacer,
+  EuiRange,
 } from '@elastic/eui';
 import React, { useCallback, useMemo } from 'react';
 import styled from 'styled-components';
 import { noop } from 'lodash/fp';
+import { RiskScoreMapping } from '@kbn/securitysolution-io-ts-alerting-types';
 import * as i18n from './translations';
 import { FieldHook } from '../../../../../../../../src/plugins/es_ui_shared/static/forms/hook_form_lib';
-import { CommonUseField } from '../../../../cases/components/create';
 import { AboutStepRiskScore } from '../../../pages/detection_engine/rules/types';
 import { FieldComponent } from '../../../../common/components/autocomplete/field';
 import { IFieldType } from '../../../../../../../../src/plugins/data/common/index_patterns/fields';
 import { IIndexPattern } from '../../../../../../../../src/plugins/data/common/index_patterns';
 
-const RiskScoreMappingEuiFormRow = styled(EuiFormRow)`
-  width: 468px;
-`;
-
 const NestedContent = styled.div`
   margin-left: 24px;
+`;
+
+const EuiFlexItemComboBoxColumn = styled(EuiFlexItem)`
+  max-width: 376px;
 `;
 
 const EuiFlexItemIconColumn = styled(EuiFlexItem)`
@@ -43,7 +45,7 @@ const EuiFlexItemRiskScoreColumn = styled(EuiFlexItem)`
 
 interface RiskScoreFieldProps {
   dataTestSubj: string;
-  field: FieldHook;
+  field: FieldHook<AboutStepRiskScore>;
   idAria: string;
   indices: IIndexPattern;
   isDisabled: boolean;
@@ -58,43 +60,49 @@ export const RiskScoreField = ({
   isDisabled,
   placeholder,
 }: RiskScoreFieldProps) => {
-  const fieldTypeFilter = useMemo(() => ['number'], []);
+  const { value, isMappingChecked, mapping } = field.value;
+  const { setValue } = field;
 
-  const handleFieldChange = useCallback(
+  const fieldTypeFilter = useMemo(() => ['number'], []);
+  const selectedField = useMemo(() => getFieldTypeByMapping(mapping, indices), [mapping, indices]);
+
+  const handleDefaultRiskScoreChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement> | React.MouseEvent<HTMLButtonElement>): void => {
+      const range = (e.target as HTMLInputElement).value;
+      setValue({
+        value: Number(range.trim()),
+        isMappingChecked,
+        mapping,
+      });
+    },
+    [setValue, isMappingChecked, mapping]
+  );
+
+  const handleRiskScoreMappingChange = useCallback(
     ([newField]: IFieldType[]): void => {
-      const values = field.value as AboutStepRiskScore;
-      field.setValue({
-        value: values.value,
-        isMappingChecked: values.isMappingChecked,
+      setValue({
+        value,
+        isMappingChecked,
         mapping: [
           {
             field: newField?.name ?? '',
             operator: 'equals',
             value: '',
-            riskScore: undefined,
+            risk_score: undefined,
           },
         ],
       });
     },
-    [field]
+    [setValue, value, isMappingChecked]
   );
 
-  const selectedField = useMemo(() => {
-    const existingField = (field.value as AboutStepRiskScore).mapping?.[0]?.field ?? '';
-    const [newSelectedField] = indices.fields.filter(
-      ({ name }) => existingField != null && existingField === name
-    );
-    return newSelectedField;
-  }, [field.value, indices]);
-
   const handleRiskScoreMappingChecked = useCallback(() => {
-    const values = field.value as AboutStepRiskScore;
-    field.setValue({
-      value: values.value,
-      mapping: [...values.mapping],
-      isMappingChecked: !values.isMappingChecked,
+    setValue({
+      value,
+      isMappingChecked: !isMappingChecked,
+      mapping: [...mapping],
     });
-  }, [field]);
+  }, [setValue, value, isMappingChecked, mapping]);
 
   const riskScoreLabel = useMemo(() => {
     return (
@@ -119,7 +127,7 @@ export const RiskScoreField = ({
           <EuiFlexItem grow={false}>
             <EuiCheckbox
               id={`risk_score-mapping-override`}
-              checked={(field.value as AboutStepRiskScore).isMappingChecked}
+              checked={isMappingChecked}
               disabled={isDisabled}
               onChange={handleRiskScoreMappingChecked}
             />
@@ -132,10 +140,10 @@ export const RiskScoreField = ({
         </NestedContent>
       </div>
     );
-  }, [field.value, handleRiskScoreMappingChecked, isDisabled]);
+  }, [isMappingChecked, handleRiskScoreMappingChecked, isDisabled]);
 
   return (
-    <EuiFlexGroup>
+    <EuiFlexGroup direction={'column'}>
       <EuiFlexItem>
         <EuiFormRow
           label={riskScoreLabel}
@@ -144,37 +152,29 @@ export const RiskScoreField = ({
           error={'errorMessage'}
           isInvalid={false}
           fullWidth
-          data-test-subj={dataTestSubj}
+          data-test-subj={`${dataTestSubj}-defaultRisk`}
           describedByIds={idAria ? [idAria] : undefined}
         >
-          <CommonUseField
-            path="riskScore.value"
-            componentProps={{
-              idAria: 'detectionEngineStepAboutRuleRiskScore',
-              'data-test-subj': 'detectionEngineStepAboutRuleRiskScore',
-              isDisabled,
-              euiFieldProps: {
-                max: 100,
-                min: 0,
-                fullWidth: false,
-                disabled: false,
-                showTicks: true,
-                tickInterval: 25,
-              },
-            }}
+          <EuiRange
+            value={value}
+            onChange={handleDefaultRiskScoreChange}
+            max={100}
+            min={0}
+            showRange
+            showInput
+            fullWidth={false}
+            showTicks
+            tickInterval={25}
+            data-test-subj={`${dataTestSubj}-defaultRiskRange`}
           />
         </EuiFormRow>
       </EuiFlexItem>
       <EuiFlexItem>
-        <RiskScoreMappingEuiFormRow
+        <EuiFormRow
           label={riskScoreMappingLabel}
           labelAppend={field.labelAppend}
           helpText={
-            (field.value as AboutStepRiskScore).isMappingChecked ? (
-              <NestedContent>{i18n.RISK_SCORE_MAPPING_DETAILS}</NestedContent>
-            ) : (
-              ''
-            )
+            isMappingChecked ? <NestedContent>{i18n.RISK_SCORE_MAPPING_DETAILS}</NestedContent> : ''
           }
           error={'errorMessage'}
           isInvalid={false}
@@ -184,13 +184,13 @@ export const RiskScoreField = ({
         >
           <NestedContent>
             <EuiSpacer size="s" />
-            {(field.value as AboutStepRiskScore).isMappingChecked && (
+            {isMappingChecked && (
               <EuiFlexGroup direction={'column'} gutterSize="s">
                 <EuiFlexItem>
                   <EuiFlexGroup alignItems="center" gutterSize="s">
-                    <EuiFlexItem>
+                    <EuiFlexItemComboBoxColumn>
                       <EuiFormLabel>{i18n.SOURCE_FIELD}</EuiFormLabel>
-                    </EuiFlexItem>
+                    </EuiFlexItemComboBoxColumn>
                     <EuiFlexItemIconColumn grow={false} />
                     <EuiFlexItemRiskScoreColumn grow={false}>
                       <EuiFormLabel>{i18n.DEFAULT_RISK_SCORE}</EuiFormLabel>
@@ -200,7 +200,7 @@ export const RiskScoreField = ({
 
                 <EuiFlexItem>
                   <EuiFlexGroup alignItems="center" gutterSize="s">
-                    <EuiFlexItem>
+                    <EuiFlexItemComboBoxColumn>
                       <FieldComponent
                         placeholder={placeholder ?? ''}
                         indexPattern={indices}
@@ -209,12 +209,11 @@ export const RiskScoreField = ({
                         isLoading={false}
                         isClearable={false}
                         isDisabled={isDisabled}
-                        onChange={handleFieldChange}
+                        onChange={handleRiskScoreMappingChange}
                         data-test-subj={dataTestSubj}
                         aria-label={idAria}
-                        fieldInputWidth={270}
                       />
-                    </EuiFlexItem>
+                    </EuiFlexItemComboBoxColumn>
                     <EuiFlexItemIconColumn grow={false}>
                       <EuiIcon type={'sortRight'} />
                     </EuiFlexItemIconColumn>
@@ -226,8 +225,22 @@ export const RiskScoreField = ({
               </EuiFlexGroup>
             )}
           </NestedContent>
-        </RiskScoreMappingEuiFormRow>
+        </EuiFormRow>
       </EuiFlexItem>
     </EuiFlexGroup>
   );
+};
+
+/**
+ * Looks for field metadata (IFieldType) in existing index pattern.
+ * If specified field doesn't exist, returns a stub IFieldType created based on the mapping --
+ * because the field might not have been indexed yet, but we still need to display the mapping.
+ *
+ * @param mapping Mapping of a specified field name to risk score.
+ * @param pattern Existing index pattern.
+ */
+const getFieldTypeByMapping = (mapping: RiskScoreMapping, pattern: IIndexPattern): IFieldType => {
+  const field = mapping?.[0]?.field ?? '';
+  const [knownFieldType] = pattern.fields.filter(({ name }) => field != null && field === name);
+  return knownFieldType ?? { name: field, type: 'number' };
 };

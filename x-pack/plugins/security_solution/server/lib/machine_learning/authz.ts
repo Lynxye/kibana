@@ -1,24 +1,24 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
 
-import { KibanaRequest } from '../../../../../../src/core/server/';
+import { Type } from '@kbn/securitysolution-io-ts-alerting-types';
+import { KibanaRequest, SavedObjectsClientContract } from '../../../../../../src/core/server/';
 import { ILicense } from '../../../../licensing/server';
 import { MlPluginSetup } from '../../../../ml/server';
 import { SetupPlugins } from '../../plugin';
 import { MINIMUM_ML_LICENSE } from '../../../common/constants';
 import { hasMlAdminPermissions } from '../../../common/machine_learning/has_ml_admin_permissions';
 import { isMlRule } from '../../../common/machine_learning/helpers';
-import { RuleType } from '../../../common/detection_engine/types';
 import { Validation } from './validation';
 import { cache } from './cache';
-
 export interface MlAuthz {
-  validateRuleType: (type: RuleType) => Promise<Validation>;
+  validateRuleType: (type: Type) => Promise<Validation>;
 }
 
 /**
@@ -34,13 +34,15 @@ export const buildMlAuthz = ({
   license,
   ml,
   request,
+  savedObjectsClient,
 }: {
   license: ILicense;
   ml: SetupPlugins['ml'];
   request: KibanaRequest;
+  savedObjectsClient: SavedObjectsClientContract;
 }): MlAuthz => {
-  const cachedValidate = cache(() => validateMlAuthz({ license, ml, request }));
-  const validateRuleType = async (type: RuleType): Promise<Validation> => {
+  const cachedValidate = cache(() => validateMlAuthz({ license, ml, request, savedObjectsClient }));
+  const validateRuleType = async (type: Type): Promise<Validation> => {
     if (!isMlRule(type)) {
       return { valid: true, message: undefined };
     } else {
@@ -64,10 +66,12 @@ export const validateMlAuthz = async ({
   license,
   ml,
   request,
+  savedObjectsClient,
 }: {
   license: ILicense;
   ml: SetupPlugins['ml'];
   request: KibanaRequest;
+  savedObjectsClient: SavedObjectsClientContract;
 }): Promise<Validation> => {
   let message: string | undefined;
 
@@ -80,7 +84,7 @@ export const validateMlAuthz = async ({
       defaultMessage:
         'Your license does not support machine learning. Please upgrade your license.',
     });
-  } else if (!(await isMlAdmin({ ml, request }))) {
+  } else if (!(await isMlAdmin({ ml, request, savedObjectsClient }))) {
     message = i18n.translate('xpack.securitySolution.authz.userIsNotMlAdminMessage', {
       defaultMessage: 'The current user is not a machine learning administrator.',
     });
@@ -109,12 +113,13 @@ export const hasMlLicense = (license: ILicense): boolean => license.hasAtLeast(M
  */
 export const isMlAdmin = async ({
   request,
+  savedObjectsClient,
   ml,
 }: {
   request: KibanaRequest;
+  savedObjectsClient: SavedObjectsClientContract;
   ml: MlPluginSetup;
 }): Promise<boolean> => {
-  const scopedMlClient = ml.mlClient.asScoped(request);
-  const mlCapabilities = await ml.mlSystemProvider(scopedMlClient, request).mlCapabilities();
+  const mlCapabilities = await ml.mlSystemProvider(request, savedObjectsClient).mlCapabilities();
   return hasMlAdminPermissions(mlCapabilities);
 };

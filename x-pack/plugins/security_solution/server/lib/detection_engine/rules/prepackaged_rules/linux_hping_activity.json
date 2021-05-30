@@ -6,12 +6,13 @@
   "false_positives": [
     "Normal use of hping is uncommon apart from security testing and research. Use by non-security engineers is very uncommon."
   ],
+  "from": "now-9m",
   "index": [
     "auditbeat-*",
     "logs-endpoint.events.*"
   ],
   "language": "kuery",
-  "license": "Elastic License",
+  "license": "Elastic License v2",
   "name": "Hping Process Activity",
   "query": "event.category:process and event.type:(start or process_started) and process.name:(hping or hping2 or hping3)",
   "references": [
@@ -22,8 +23,11 @@
   "severity": "high",
   "tags": [
     "Elastic",
-    "Linux"
+    "Host",
+    "Linux",
+    "Threat Detection"
   ],
+  "timestamp_override": "event.ingested",
   "type": "query",
-  "version": 3
+  "version": 7
 }

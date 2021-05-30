@@ -1,10 +1,12 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { savedObjectsTypeRegistryMock } from 'src/core/server/mocks';
+
 import { getDescriptorNamespace } from './get_descriptor_namespace';
 
 describe('getDescriptorNamespace', () => {
@@ -63,6 +65,17 @@ describe('getDescriptorNamespace', () => {
       mockBaseTypeRegistry.isNamespaceAgnostic.mockReturnValue(false);
 
       expect(getDescriptorNamespace(mockBaseTypeRegistry, 'singletype', 'foo-namespace')).toEqual(
+        'foo-namespace'
+      );
+    });
+
+    it('returns the provided namespace if it is in array format', () => {
+      const mockBaseTypeRegistry = savedObjectsTypeRegistryMock.create();
+      mockBaseTypeRegistry.isSingleNamespace.mockReturnValue(true);
+      mockBaseTypeRegistry.isMultiNamespace.mockReturnValue(false);
+      mockBaseTypeRegistry.isNamespaceAgnostic.mockReturnValue(false);
+
+      expect(getDescriptorNamespace(mockBaseTypeRegistry, 'singletype', ['foo-namespace'])).toEqual(
         'foo-namespace'
       );
     });

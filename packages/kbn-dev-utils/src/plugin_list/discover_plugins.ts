@@ -1,20 +1,9 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import Path from 'path';
@@ -22,30 +11,49 @@ import Fs from 'fs';
 
 import MarkdownIt from 'markdown-it';
 import cheerio from 'cheerio';
+import { REPO_ROOT } from '@kbn/utils';
 
-import { REPO_ROOT } from '../repo_root';
-import { simpleKibanaPlatformPluginDiscovery } from '../simple_kibana_platform_plugin_discovery';
+import { simpleKibanaPlatformPluginDiscovery } from '../plugins';
+import { extractAsciidocInfo } from './extract_asciidoc_info';
 
 export interface Plugin {
   id: string;
-  relativeDir?: string;
+  relativeDir: string;
   relativeReadmePath?: string;
   readmeSnippet?: string;
+  readmeAsciidocAnchor?: string;
 }
 
 export type Plugins = Plugin[];
 
 const getReadmeName = (directory: string) =>
-  Fs.readdirSync(directory).find((name) => name.toLowerCase() === 'readme.md');
+  Fs.readdirSync(directory).find(
+    (name) => name.toLowerCase() === 'readme.md' || name.toLowerCase() === 'readme.mdx'
+  );
+
+const getReadmeAsciidocName = (directory: string) =>
+  Fs.readdirSync(directory).find((name) => name.toLowerCase() === 'readme.asciidoc');
 
 export const discoverPlugins = (pluginsRootDir: string): Plugins =>
   simpleKibanaPlatformPluginDiscovery([pluginsRootDir], []).map(
     ({ directory, manifest: { id } }): Plugin => {
       const readmeName = getReadmeName(directory);
+      const readmeAsciidocName = getReadmeAsciidocName(directory);
 
       let relativeReadmePath: string | undefined;
       let readmeSnippet: string | undefined;
-      if (readmeName) {
+      let readmeAsciidocAnchor: string | undefined;
+
+      if (readmeAsciidocName) {
+        const readmePath = Path.resolve(directory, readmeAsciidocName);
+        relativeReadmePath = Path.relative(REPO_ROOT, readmePath);
+
+        const readmeText = Fs.readFileSync(relativeReadmePath).toString();
+
+        const { firstParagraph, anchor } = extractAsciidocInfo(readmeText);
+        readmeSnippet = firstParagraph;
+        readmeAsciidocAnchor = anchor;
+      } else if (readmeName) {
         const readmePath = Path.resolve(directory, readmeName);
         relativeReadmePath = Path.relative(REPO_ROOT, readmePath);
 
@@ -64,6 +72,7 @@ export const discoverPlugins = (pluginsRootDir: string): Plugins =>
         relativeReadmePath,
         relativeDir: relativeReadmePath || Path.relative(REPO_ROOT, directory),
         readmeSnippet,
+        readmeAsciidocAnchor,
       };
     }
   );

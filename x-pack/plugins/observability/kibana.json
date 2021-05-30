@@ -7,7 +7,16 @@
     "observability"
   ],
   "optionalPlugins": [
-    "licensing"
+    "licensing",
+    "home",
+    "usageCollection",
+    "lens"
+  ],
+  "requiredPlugins": [
+    "data",
+    "alerting",
+    "ruleRegistry",
+    "triggersActionsUi"
   ],
   "ui": true,
   "server": true,

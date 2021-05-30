@@ -1,23 +1,26 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { IRouter } from 'kibana/server';
-
-import { ENDPOINT_LIST_ITEM_URL } from '../../common/constants';
-import { buildRouteValidation, buildSiemResponse, transformError } from '../siem_server_deps';
-import { validate } from '../../common/shared_imports';
+import { validate } from '@kbn/securitysolution-io-ts-utils';
+import { transformError } from '@kbn/securitysolution-es-utils';
 import {
   UpdateEndpointListItemSchemaDecoded,
   exceptionListItemSchema,
   updateEndpointListItemSchema,
-} from '../../common/schemas';
+} from '@kbn/securitysolution-io-ts-list-types';
+import { ENDPOINT_LIST_ITEM_URL } from '@kbn/securitysolution-list-constants';
+
+import type { ListsPluginRouter } from '../types';
+
+import { buildRouteValidation, buildSiemResponse } from './utils';
 
 import { getExceptionListClient } from '.';
 
-export const updateEndpointListItemRoute = (router: IRouter): void => {
+export const updateEndpointListItemRoute = (router: ListsPluginRouter): void => {
   router.put(
     {
       options: {
@@ -38,9 +41,9 @@ export const updateEndpointListItemRoute = (router: IRouter): void => {
           description,
           id,
           name,
+          os_types: osTypes,
           meta,
           type,
-          _tags,
           _version,
           comments,
           entries,
@@ -49,7 +52,6 @@ export const updateEndpointListItemRoute = (router: IRouter): void => {
         } = request.body;
         const exceptionLists = getExceptionListClient(context);
         const exceptionListItem = await exceptionLists.updateEndpointListItem({
-          _tags,
           _version,
           comments,
           description,
@@ -58,6 +60,7 @@ export const updateEndpointListItemRoute = (router: IRouter): void => {
           itemId,
           meta,
           name,
+          osTypes,
           tags,
           type,
         });

@@ -1,19 +1,20 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import { SavedObjectsFindResponse } from 'src/core/server';
-import { AgentEventSOAttributes } from './../../../../ingest_manager/common/types/models/agent';
+
+import { Agent } from '../../../../fleet/common';
 import {
-  AGENT_SAVED_OBJECT_TYPE,
+  FLEET_ENDPOINT_PACKAGE_CONSTANT,
   AGENT_EVENT_SAVED_OBJECT_TYPE,
-} from '../../../../ingest_manager/common/constants/agent';
-import { Agent } from '../../../../ingest_manager/common';
-import { FLEET_ENDPOINT_PACKAGE_CONSTANT } from './fleet_saved_objects';
+} from './fleet_saved_objects';
 
 const testAgentId = 'testAgentId';
-const testConfigId = 'testConfigId';
+const testAgentPolicyId = 'testAgentPolicyId';
 const testHostId = 'randoHostId';
 const testHostName = 'testDesktop';
 
@@ -34,84 +35,66 @@ export const MockOSFullName = 'somePlatformFullName';
 export const mockFleetObjectsResponse = (
   hasDuplicates = true,
   lastCheckIn = new Date().toISOString()
-): SavedObjectsFindResponse<Agent> => ({
+): { agents: Agent[]; total: number; page: number; perPage: number } | undefined => ({
   page: 1,
-  per_page: 20,
+  perPage: 20,
   total: 1,
-  saved_objects: [
+  agents: [
     {
-      type: AGENT_SAVED_OBJECT_TYPE,
+      active: true,
       id: testAgentId,
-      attributes: {
-        active: true,
-        id: testAgentId,
-        config_id: 'randoConfigId',
-        type: 'PERMANENT',
-        user_provided_metadata: {},
-        enrolled_at: lastCheckIn,
-        current_error_events: [],
-        local_metadata: {
-          elastic: {
-            agent: {
-              id: testAgentId,
-            },
-          },
-          host: {
-            hostname: testHostName,
-            name: testHostName,
-            id: testHostId,
-          },
-          os: {
-            platform: MockOSPlatform,
-            version: MockOSVersion,
-            name: MockOSName,
-            full: MockOSFullName,
+      policy_id: 'randoAgentPolicyId',
+      type: 'PERMANENT',
+      user_provided_metadata: {},
+      enrolled_at: lastCheckIn,
+      local_metadata: {
+        elastic: {
+          agent: {
+            id: testAgentId,
           },
         },
-        packages: [FLEET_ENDPOINT_PACKAGE_CONSTANT, 'system'],
-        last_checkin: lastCheckIn,
+        host: {
+          hostname: testHostName,
+          name: testHostName,
+          id: testHostId,
+        },
+        os: {
+          platform: MockOSPlatform,
+          version: MockOSVersion,
+          name: MockOSName,
+          full: MockOSFullName,
+        },
       },
-      references: [],
-      updated_at: lastCheckIn,
-      version: 'WzI4MSwxXQ==',
-      score: 0,
+      packages: [FLEET_ENDPOINT_PACKAGE_CONSTANT, 'system'],
+      last_checkin: lastCheckIn,
     },
     {
-      type: AGENT_SAVED_OBJECT_TYPE,
-      id: testAgentId,
-      attributes: {
-        active: true,
-        id: 'oldTestAgentId',
-        config_id: 'randoConfigId',
-        type: 'PERMANENT',
-        user_provided_metadata: {},
-        enrolled_at: lastCheckIn,
-        current_error_events: [],
-        local_metadata: {
-          elastic: {
-            agent: {
-              id: 'oldTestAgentId',
-            },
-          },
-          host: {
-            hostname: hasDuplicates ? testHostName : 'oldRandoHostName',
-            name: hasDuplicates ? testHostName : 'oldRandoHostName',
-            id: hasDuplicates ? testHostId : 'oldRandoHostId',
-          },
-          os: {
-            platform: MockOSPlatform,
-            version: MockOSVersion,
-            name: MockOSName,
-            full: MockOSFullName,
+      active: true,
+      id: 'oldTestAgentId',
+      policy_id: 'randoAgentPolicyId',
+      type: 'PERMANENT',
+      user_provided_metadata: {},
+      enrolled_at: lastCheckIn,
+      local_metadata: {
+        elastic: {
+          agent: {
+            id: 'oldTestAgentId',
           },
         },
-        packages: [FLEET_ENDPOINT_PACKAGE_CONSTANT, 'system'],
-        last_checkin: lastCheckIn,
+        host: {
+          hostname: hasDuplicates ? testHostName : 'oldRandoHostName',
+          name: hasDuplicates ? testHostName : 'oldRandoHostName',
+          id: hasDuplicates ? testHostId : 'oldRandoHostId',
+        },
+        os: {
+          platform: MockOSPlatform,
+          version: MockOSVersion,
+          name: MockOSName,
+          full: MockOSFullName,
+        },
       },
-      references: [],
-      updated_at: lastCheckIn,
-      version: 'WzI4MSwxXQ==',
-      score: 0,
+      packages: [FLEET_ENDPOINT_PACKAGE_CONSTANT, 'system'],
+      last_checkin: lastCheckIn,
     },
   ],
 });
@@ -232,7 +215,7 @@ export const mockFleetEventsObjectsResponse = (
   updatedDate = new Date().toISOString(),
   policyStatus: 'success' | 'failure' = running ? 'success' : 'failure',
   policyMode: 'prevent' | 'detect' | 'off' = 'prevent'
-): SavedObjectsFindResponse<AgentEventSOAttributes> => {
+): SavedObjectsFindResponse => {
   return {
     page: 1,
     per_page: 20,
@@ -250,7 +233,7 @@ export const mockFleetEventsObjectsResponse = (
             running ? 'RUNNING' : 'FAILED'
           }: `,
           payload: running ? mockPolicyPayload(policyStatus, policyMode) : undefined,
-          config_id: testConfigId,
+          policy_id: testAgentPolicyId,
         },
         references: [],
         updated_at: updatedDate,
@@ -267,7 +250,7 @@ export const mockFleetEventsObjectsResponse = (
           subtype: 'STARTING',
           message:
             'Application: endpoint-security--8.0.0[d8f7f6e8-9375-483c-b456-b479f1d7a4f2]: State changed to STARTING: Starting',
-          config_id: testConfigId,
+          policy_id: testAgentPolicyId,
         },
         references: [],
         updated_at: updatedDate,

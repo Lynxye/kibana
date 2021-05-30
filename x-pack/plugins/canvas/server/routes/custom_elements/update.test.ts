@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import sinon from 'sinon';
@@ -9,13 +10,9 @@ import { CustomElement } from '../../../types';
 import { CUSTOM_ELEMENT_TYPE } from '../../../common/lib/constants';
 import { initializeUpdateCustomElementRoute } from './update';
 import { kibanaResponseFactory, RequestHandlerContext, RequestHandler } from 'src/core/server';
-import {
-  savedObjectsClientMock,
-  httpServiceMock,
-  httpServerMock,
-  loggingSystemMock,
-} from 'src/core/server/mocks';
+import { savedObjectsClientMock, httpServerMock } from 'src/core/server/mocks';
 import { okResponse } from '../ok_response';
+import { getMockedRouterDeps } from '../test_helpers';
 
 const mockRouteContext = ({
   core: {
@@ -51,14 +48,10 @@ describe('PUT custom element', () => {
   beforeEach(() => {
     clock = sinon.useFakeTimers(now);
 
-    const httpService = httpServiceMock.createSetupContract();
-    const router = httpService.createRouter();
-    initializeUpdateCustomElementRoute({
-      router,
-      logger: loggingSystemMock.create().get(),
-    });
+    const routerDeps = getMockedRouterDeps();
+    initializeUpdateCustomElementRoute(routerDeps);
 
-    routeHandler = router.put.mock.calls[0][1];
+    routeHandler = routerDeps.router.put.mock.calls[0][1];
   });
 
   afterEach(() => {

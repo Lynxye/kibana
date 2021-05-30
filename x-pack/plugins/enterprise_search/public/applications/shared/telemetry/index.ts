@@ -1,9 +1,13 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-export { sendTelemetry } from './send_telemetry';
-export { SendAppSearchTelemetry } from './send_telemetry';
-export { SendWorkplaceSearchTelemetry } from './send_telemetry';
+export { TelemetryLogic } from './telemetry_logic';
+export {
+  SendEnterpriseSearchTelemetry,
+  SendAppSearchTelemetry,
+  SendWorkplaceSearchTelemetry,
+} from './send_telemetry';

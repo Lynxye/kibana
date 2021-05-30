@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { isEqual, first, gt, gte, last, lt, lte, sortBy } from 'lodash';
@@ -68,8 +69,9 @@ export const calculateSteppedGradientColor = (
 
   // Since the stepped legend matches a range we need to ensure anything outside
   // the max bounds get's the maximum color.
-  if (gte(normalizedValue, (last(rules) as any).value)) {
-    return (last(rules) as any).color;
+  const lastRule = last(rules);
+  if (lastRule && gte(normalizedValue, lastRule.value)) {
+    return lastRule.color;
   }
 
   return rules.reduce((color: string, rule) => {
@@ -79,7 +81,7 @@ export const calculateSteppedGradientColor = (
       return rule.color;
     }
     return color;
-  }, (first(rules) as any).color || defaultColor);
+  }, first(rules)?.color ?? defaultColor);
 };
 
 export const calculateStepColor = (
@@ -106,7 +108,7 @@ export const calculateGradientColor = (
     return defaultColor;
   }
   if (rules.length === 1) {
-    return (last(rules) as any).color;
+    return last(rules)!.color;
   }
   const { min, max } = bounds;
   const sortedRules = sortBy(rules, 'value');
@@ -116,10 +118,8 @@ export const calculateGradientColor = (
       return rule;
     }
     return acc;
-  }, first(sortedRules)) as any;
-  const endRule = sortedRules
-    .filter((r) => r !== startRule)
-    .find((r) => r.value >= normValue) as any;
+  }, first(sortedRules))!;
+  const endRule = sortedRules.filter((r) => r !== startRule).find((r) => r.value >= normValue);
   if (!endRule) {
     return startRule.color;
   }

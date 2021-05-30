@@ -1,31 +1,27 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import React, { useState } from 'react';
-import { uniqueId, startsWith } from 'lodash';
-import styled from 'styled-components';
 import { i18n } from '@kbn/i18n';
-import { fromQuery, toQuery } from '../Links/url_helpers';
-// @ts-expect-error
-import { Typeahead } from './Typeahead';
-import { getBoolFilter } from './get_bool_filter';
-import { useLocation } from '../../../hooks/useLocation';
-import { useUrlParams } from '../../../hooks/useUrlParams';
-import { history } from '../../../utils/history';
-import { useApmPluginContext } from '../../../hooks/useApmPluginContext';
-import { useDynamicIndexPattern } from '../../../hooks/useDynamicIndexPattern';
+import { startsWith, uniqueId } from 'lodash';
+import React, { useState } from 'react';
+import { useHistory, useLocation, useParams } from 'react-router-dom';
 import {
-  QuerySuggestion,
   esKuery,
   IIndexPattern,
+  QuerySuggestion,
 } from '../../../../../../../src/plugins/data/public';
-
-const Container = styled.div`
-  margin-bottom: 10px;
-`;
+import { useApmPluginContext } from '../../../context/apm_plugin/use_apm_plugin_context';
+import { useUrlParams } from '../../../context/url_params_context/use_url_params';
+import { useDynamicIndexPatternFetcher } from '../../../hooks/use_dynamic_index_pattern';
+import { fromQuery, toQuery } from '../Links/url_helpers';
+import { getBoolFilter } from './get_bool_filter';
+// @ts-expect-error
+import { Typeahead } from './Typeahead';
+import { useProcessorEvent } from './use_processor_event';
 
 interface State {
   suggestions: QuerySuggestion[];
@@ -37,7 +33,12 @@ function convertKueryToEsQuery(kuery: string, indexPattern: IIndexPattern) {
   return esKuery.toElasticsearchQuery(ast, indexPattern);
 }
 
-export function KueryBar() {
+export function KueryBar(props: { prepend?: React.ReactNode | string }) {
+  const { groupId, serviceName } = useParams<{
+    groupId?: string;
+    serviceName?: string;
+  }>();
+  const history = useHistory();
   const [state, setState] = useState<State>({
     suggestions: [],
     isLoadingSuggestions: false,
@@ -48,7 +49,7 @@ export function KueryBar() {
 
   let currentRequestCheck;
 
-  const { processorEvent } = urlParams;
+  const processorEvent = useProcessorEvent();
 
   const examples = {
     transaction: 'transaction.duration.us > 300000',
@@ -60,7 +61,7 @@ export function KueryBar() {
 
   const example = examples[processorEvent || 'defaults'];
 
-  const { indexPattern } = useDynamicIndexPattern(processorEvent);
+  const { indexPattern } = useDynamicIndexPatternFetcher();
 
   const placeholder = i18n.translate('xpack.apm.kueryBar.placeholder', {
     defaultMessage: `Search {event, select,
@@ -74,13 +75,6 @@ export function KueryBar() {
       event: processorEvent,
     },
   });
-
-  // The bar should be disabled when viewing the service map
-  const disabled = /\/(service-map)$/.test(location.pathname);
-  const disabledPlaceholder = i18n.translate(
-    'xpack.apm.kueryBar.disabledPlaceholder',
-    { defaultMessage: 'Search is not available here' }
-  );
 
   async function onChange(inputValue: string, selectionStart: number) {
     if (indexPattern == null) {
@@ -97,10 +91,16 @@ export function KueryBar() {
         (await data.autocomplete.getQuerySuggestions({
           language: 'kuery',
           indexPatterns: [indexPattern],
-          boolFilter: getBoolFilter(urlParams),
+          boolFilter: getBoolFilter({
+            groupId,
+            processorEvent,
+            serviceName,
+            urlParams,
+          }),
           query: inputValue,
           selectionStart,
           selectionEnd: selectionStart,
+          useTimeRange: true,
         })) || []
       )
         .filter((suggestion) => !startsWith(suggestion.text, 'span.'))
@@ -140,16 +140,14 @@ export function KueryBar() {
   }
 
   return (
-    <Container>
-      <Typeahead
-        disabled={disabled}
-        isLoading={state.isLoadingSuggestions}
-        initialValue={urlParams.kuery}
-        onChange={onChange}
-        onSubmit={onSubmit}
-        suggestions={state.suggestions}
-        placeholder={disabled ? disabledPlaceholder : placeholder}
-      />
-    </Container>
+    <Typeahead
+      isLoading={state.isLoadingSuggestions}
+      initialValue={urlParams.kuery}
+      onChange={onChange}
+      onSubmit={onSubmit}
+      suggestions={state.suggestions}
+      placeholder={placeholder}
+      prepend={props.prepend}
+    />
   );
 }

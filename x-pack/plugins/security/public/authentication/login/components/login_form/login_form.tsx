@@ -1,51 +1,54 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import './login_form.scss';
 
-import React, { ChangeEvent, Component, FormEvent, Fragment, MouseEvent } from 'react';
-import ReactMarkdown from 'react-markdown';
 import {
   EuiButton,
-  EuiIcon,
+  EuiButtonEmpty,
   EuiCallOut,
   EuiFieldPassword,
   EuiFieldText,
+  EuiFlexGroup,
+  EuiFlexItem,
   EuiFormRow,
+  EuiHorizontalRule,
+  EuiIcon,
+  EuiLink,
+  EuiLoadingSpinner,
   EuiPanel,
   EuiSpacer,
   EuiText,
-  EuiButtonEmpty,
-  EuiFlexGroup,
-  EuiFlexItem,
   EuiTitle,
-  EuiLoadingSpinner,
-  EuiLink,
-  EuiHorizontalRule,
 } from '@elastic/eui';
+import type { ChangeEvent, FormEvent, MouseEvent } from 'react';
+import React, { Component, Fragment } from 'react';
+import ReactMarkdown from 'react-markdown';
+
 import { i18n } from '@kbn/i18n';
 import { FormattedMessage } from '@kbn/i18n/react';
-import { HttpStart, IHttpFetchError, NotificationsStart } from 'src/core/public';
-import { parseNext } from '../../../../../common/parse_next';
-import { LoginSelector } from '../../../../../common/login_state';
+import type { HttpStart, IHttpFetchError, NotificationsStart } from 'src/core/public';
+
+import type { LoginSelector, LoginSelectorProvider } from '../../../../../common/login_state';
 import { LoginValidator } from './validate_login';
 
 interface Props {
   http: HttpStart;
   notifications: NotificationsStart;
   selector: LoginSelector;
-  infoMessage?: string;
+  message?: { type: MessageType.Danger | MessageType.Info; content: string };
   loginAssistanceMessage: string;
   loginHelp?: string;
+  authProviderHint?: string;
 }
 
 interface State {
   loadingState:
-    | { type: LoadingStateType.None }
-    | { type: LoadingStateType.Form }
+    | { type: LoadingStateType.None | LoadingStateType.Form | LoadingStateType.AutoLogin }
     | { type: LoadingStateType.Selector; providerName: string };
   username: string;
   password: string;
@@ -60,9 +63,10 @@ enum LoadingStateType {
   None,
   Form,
   Selector,
+  AutoLogin,
 }
 
-enum MessageType {
+export enum MessageType {
   None,
   Info,
   Danger,
@@ -77,25 +81,48 @@ export enum PageMode {
 export class LoginForm extends Component<Props, State> {
   private readonly validator: LoginValidator;
 
+  /**
+   * Optional provider that was suggested by the `auth_provider_hint={providerName}` query string parameter. If provider
+   * doesn't require Kibana native login form then login process is triggered automatically, otherwise Login Selector
+   * just switches to the Login Form mode.
+   */
+  private readonly suggestedProvider?: LoginSelectorProvider;
+
   constructor(props: Props) {
     super(props);
     this.validator = new LoginValidator({ shouldValidate: false });
 
-    const mode = this.showLoginSelector() ? PageMode.Selector : PageMode.Form;
+    this.suggestedProvider = this.props.authProviderHint
+      ? this.props.selector.providers.find(({ name }) => name === this.props.authProviderHint)
+      : undefined;
+
+    // Switch to the Form mode right away if provider from the hint requires it.
+    const mode =
+      this.showLoginSelector() && !this.suggestedProvider?.usesLoginForm
+        ? PageMode.Selector
+        : PageMode.Form;
 
     this.state = {
       loadingState: { type: LoadingStateType.None },
       username: '',
       password: '',
-      message: this.props.infoMessage
-        ? { type: MessageType.Info, content: this.props.infoMessage }
-        : { type: MessageType.None },
+      message: this.props.message || { type: MessageType.None },
       mode,
       previousMode: mode,
     };
   }
 
+  async componentDidMount() {
+    if (this.suggestedProvider?.usesLoginForm === false) {
+      await this.loginWithSelector({ provider: this.suggestedProvider, autoLogin: true });
+    }
+  }
+
   public render() {
+    if (this.isLoadingState(LoadingStateType.AutoLogin)) {
+      return this.renderAutoLoginOverlay();
+    }
+
     return (
       <Fragment>
         {this.renderLoginAssistanceMessage()}
@@ -112,7 +139,7 @@ export class LoginForm extends Component<Props, State> {
     }
 
     return (
-      <div className="secLoginAssistanceMessage">
+      <div data-test-subj="loginAssistanceMessage" className="secLoginAssistanceMessage">
         <EuiHorizontalRule size="half" />
         <EuiText size="xs">
           <ReactMarkdown>{this.props.loginAssistanceMessage}</ReactMarkdown>
@@ -177,7 +204,7 @@ export class LoginForm extends Component<Props, State> {
         >
           <FormattedMessage
             id="xpack.security.loginPage.loginSelectorLinkText"
-            defaultMessage="See more login options"
+            defaultMessage="More login options"
           />
         </EuiButtonEmpty>
       </EuiFlexItem>
@@ -196,6 +223,7 @@ export class LoginForm extends Component<Props, State> {
             {...this.validator.validateUsername(this.state.username)}
           >
             <EuiFieldText
+              autoComplete="off"
               id="username"
               name="username"
               data-test-subj="loginUsername"
@@ -222,6 +250,7 @@ export class LoginForm extends Component<Props, State> {
               id="password"
               name="password"
               data-test-subj="loginPassword"
+              type={'dual'}
               value={this.state.password}
               onChange={this.onPasswordChange}
               disabled={!this.isLoadingState(LoadingStateType.None)}
@@ -257,9 +286,10 @@ export class LoginForm extends Component<Props, State> {
   };
 
   private renderSelector = () => {
+    const providers = this.props.selector.providers.filter((provider) => provider.showInSelector);
     return (
       <EuiPanel data-test-subj="loginSelector" paddingSize="none">
-        {this.props.selector.providers.map((provider) => (
+        {providers.map((provider) => (
           <button
             key={provider.name}
             data-test-subj={`loginCard-${provider.type}/${provider.name}`}
@@ -267,7 +297,7 @@ export class LoginForm extends Component<Props, State> {
             onClick={() =>
               provider.usesLoginForm
                 ? this.onPageModeChange(PageMode.Form)
-                : this.loginWithSelector(provider.type, provider.name)
+                : this.loginWithSelector({ provider })
             }
             className={`secLoginCard ${
               this.isLoadingState(LoadingStateType.Selector, provider.name)
@@ -360,6 +390,30 @@ export class LoginForm extends Component<Props, State> {
     return null;
   };
 
+  private renderAutoLoginOverlay = () => {
+    return (
+      <EuiFlexGroup
+        data-test-subj="autoLoginOverlay"
+        alignItems="center"
+        justifyContent="center"
+        gutterSize="m"
+        responsive={false}
+      >
+        <EuiFlexItem grow={false}>
+          <EuiLoadingSpinner size="l" />
+        </EuiFlexItem>
+        <EuiFlexItem grow={false}>
+          <EuiText size="m" className="eui-textCenter">
+            <FormattedMessage
+              id="xpack.security.loginPage.autoLoginAuthenticatingLabel"
+              defaultMessage="Authenticating…"
+            />
+          </EuiText>
+        </EuiFlexItem>
+      </EuiFlexGroup>
+    );
+  };
+
   private setUsernameInputRef(ref: HTMLInputElement) {
     if (ref) {
       ref.focus();
@@ -401,17 +455,31 @@ export class LoginForm extends Component<Props, State> {
       message: { type: MessageType.None },
     });
 
-    const { http } = this.props;
+    // We try to log in with the provider that uses login form and has the lowest order.
+    const providerToLoginWith = this.props.selector.providers.find(
+      (provider) => provider.usesLoginForm
+    )!;
 
     try {
-      await http.post('/internal/security/login', { body: JSON.stringify({ username, password }) });
-      window.location.href = parseNext(window.location.href, http.basePath.serverBasePath);
+      const { location } = await this.props.http.post<{ location: string }>(
+        '/internal/security/login',
+        {
+          body: JSON.stringify({
+            providerType: providerToLoginWith.type,
+            providerName: providerToLoginWith.name,
+            currentURL: window.location.href,
+            params: { username, password },
+          }),
+        }
+      );
+
+      window.location.href = location;
     } catch (error) {
       const message =
         (error as IHttpFetchError).response?.status === 401
           ? i18n.translate(
-              'xpack.security.login.basicLoginForm.invalidUsernameOrPasswordErrorMessage',
-              { defaultMessage: 'Invalid username or password. Please try again.' }
+              'xpack.security.login.basicLoginForm.usernameOrPasswordIsIncorrectErrorMessage',
+              { defaultMessage: 'Username or password is incorrect. Please try again.' }
             )
           : i18n.translate('xpack.security.login.basicLoginForm.unknownErrorMessage', {
               defaultMessage: 'Oops! Error. Try again.',
@@ -424,31 +492,45 @@ export class LoginForm extends Component<Props, State> {
     }
   };
 
-  private loginWithSelector = async (providerType: string, providerName: string) => {
+  private loginWithSelector = async ({
+    provider: { type: providerType, name: providerName },
+    autoLogin,
+  }: {
+    provider: LoginSelectorProvider;
+    autoLogin?: boolean;
+  }) => {
     this.setState({
-      loadingState: { type: LoadingStateType.Selector, providerName },
+      loadingState: autoLogin
+        ? { type: LoadingStateType.AutoLogin }
+        : { type: LoadingStateType.Selector, providerName },
       message: { type: MessageType.None },
     });
 
     try {
       const { location } = await this.props.http.post<{ location: string }>(
-        '/internal/security/login_with',
+        '/internal/security/login',
         { body: JSON.stringify({ providerType, providerName, currentURL: window.location.href }) }
       );
 
       window.location.href = location;
     } catch (err) {
-      this.props.notifications.toasts.addError(err, {
-        title: i18n.translate('xpack.security.loginPage.loginSelectorErrorMessage', {
-          defaultMessage: 'Could not perform login.',
-        }),
-      });
+      this.props.notifications.toasts.addError(
+        err?.body?.message ? new Error(err?.body?.message) : err,
+        {
+          title: i18n.translate('xpack.security.loginPage.loginSelectorErrorMessage', {
+            defaultMessage: 'Could not perform login.',
+          }),
+          toastMessage: err?.message,
+        }
+      );
 
       this.setState({ loadingState: { type: LoadingStateType.None } });
     }
   };
 
-  private isLoadingState(type: LoadingStateType.None | LoadingStateType.Form): boolean;
+  private isLoadingState(
+    type: LoadingStateType.None | LoadingStateType.Form | LoadingStateType.AutoLogin
+  ): boolean;
   private isLoadingState(type: LoadingStateType.Selector, providerName: string): boolean;
   private isLoadingState(type: LoadingStateType, providerName?: string) {
     const { loadingState } = this.state;
@@ -464,7 +546,9 @@ export class LoginForm extends Component<Props, State> {
   private showLoginSelector() {
     return (
       this.props.selector.enabled &&
-      this.props.selector.providers.some((provider) => !provider.usesLoginForm)
+      this.props.selector.providers.some(
+        (provider) => !provider.usesLoginForm && provider.showInSelector
+      )
     );
   }
 }

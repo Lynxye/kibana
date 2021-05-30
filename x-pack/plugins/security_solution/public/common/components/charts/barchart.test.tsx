@@ -1,21 +1,30 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { Chart, BarSeries, Axis, ScaleType } from '@elastic/charts';
-import euiDarkVars from '@elastic/eui/dist/eui_theme_dark.json';
 import { mount, ReactWrapper, shallow, ShallowWrapper } from 'enzyme';
 import React from 'react';
-import { ThemeProvider } from 'styled-components';
 
 import { escapeDataProviderId } from '../drag_and_drop/helpers';
 import { TestProviders } from '../../mock';
 import '../../mock/match_media';
+import '../../mock/react_beautiful_dnd';
 
 import { BarChartBaseComponent, BarChartComponent } from './barchart';
 import { ChartSeriesData } from './common';
+
+jest.mock('@elastic/eui', () => {
+  const original = jest.requireActual('@elastic/eui');
+  return {
+    ...original,
+    // eslint-disable-next-line react/display-name
+    EuiScreenReaderOnly: () => <></>,
+  };
+});
 
 jest.mock('../../lib/kibana');
 
@@ -25,8 +34,6 @@ jest.mock('uuid', () => {
     v4: jest.fn(() => 'uuid.v4()'),
   };
 });
-
-const theme = () => ({ eui: euiDarkVars, darkMode: true });
 
 const customHeight = '100px';
 const customWidth = '120px';
@@ -130,19 +137,6 @@ const mockConfig = {
   },
   customHeight: 324,
 };
-
-// Suppress warnings about "react-beautiful-dnd"
-/* eslint-disable no-console */
-const originalError = console.error;
-const originalWarn = console.warn;
-beforeAll(() => {
-  console.warn = jest.fn();
-  console.error = jest.fn();
-});
-afterAll(() => {
-  console.error = originalError;
-  console.warn = originalWarn;
-});
 
 describe('BarChartBaseComponent', () => {
   let shallowWrapper: ShallowWrapper;
@@ -325,11 +319,9 @@ describe.each(chartDataSets)('BarChart with stackByField', () => {
 
   beforeAll(() => {
     wrapper = mount(
-      <ThemeProvider theme={theme}>
-        <TestProviders>
-          <BarChartComponent configs={mockConfig} barChart={data} stackByField={stackByField} />
-        </TestProviders>
-      </ThemeProvider>
+      <TestProviders>
+        <BarChartComponent configs={mockConfig} barChart={data} stackByField={stackByField} />
+      </TestProviders>
     );
   });
 
@@ -350,7 +342,10 @@ describe.each(chartDataSets)('BarChart with stackByField', () => {
       )}-${escapeDataProviderId(datum.key)}`;
 
       expect(
-        wrapper.find(`div [data-rbd-draggable-id="${dataProviderId}"]`).first().text()
+        wrapper
+          .find(`[draggableId="${dataProviderId}"] [data-test-subj="providerContainer"]`)
+          .first()
+          .text()
       ).toEqual(datum.key);
     });
   });
@@ -406,11 +401,9 @@ describe.each(chartDataSets)('BarChart with custom color', () => {
 
   beforeAll(() => {
     wrapper = mount(
-      <ThemeProvider theme={theme}>
-        <TestProviders>
-          <BarChartComponent configs={mockConfig} barChart={data} stackByField={stackByField} />
-        </TestProviders>
-      </ThemeProvider>
+      <TestProviders>
+        <BarChartComponent configs={mockConfig} barChart={data} stackByField={stackByField} />
+      </TestProviders>
     );
   });
 

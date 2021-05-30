@@ -1,21 +1,24 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { PathReporter } from 'io-ts/lib/PathReporter';
 import { isRight } from 'fp-ts/lib/Either';
 import { HttpFetchQuery, HttpSetup } from 'src/core/public';
 import * as t from 'io-ts';
+import { startsWith } from 'lodash';
 
 function isObject(value: unknown) {
   const type = typeof value;
   return value != null && (type === 'object' || type === 'function');
 }
 
-// TODO: Copied from https://github.com/elastic/kibana/blob/master/x-pack/plugins/security_solution/common/format_errors.ts
-// We should figure out a better way to share this
+/**
+ * @deprecated Use packages/kbn-securitysolution-io-ts-utils/src/format_errors/index.ts
+ */
 export const formatErrors = (errors: t.Errors): string[] => {
   return errors.map((error) => {
     if (error.message != null) {
@@ -59,8 +62,15 @@ class ApiService {
     return ApiService.instance;
   }
 
-  public async get(apiUrl: string, params?: HttpFetchQuery, decodeType?: any) {
-    const response = await this._http!.get(apiUrl, { query: params });
+  public async get(apiUrl: string, params?: HttpFetchQuery, decodeType?: any, asResponse = false) {
+    const debugEnabled =
+      sessionStorage.getItem('uptime_debug') === 'true' && startsWith(apiUrl, '/api/uptime');
+
+    const response = await this._http!.fetch({
+      path: apiUrl,
+      query: { ...params, ...(debugEnabled ? { _inspect: true } : {}) },
+      asResponse,
+    });
 
     if (decodeType) {
       const decoded = decodeType.decode(response);

@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import React from 'react';
@@ -30,46 +31,40 @@ function renderLatestActive(latestActive, latestTypes, latestVersions) {
     return (
       <EuiFlexGroup wrap>
         <EuiFlexItem>
-          <EuiPanel>
-            <EuiTitle size="s">
-              <h2>
-                <FormattedMessage
-                  id="xpack.monitoring.beats.overview.activeBeatsInLastDayTitle"
-                  defaultMessage="Active Beats in Last Day"
-                />
-              </h2>
-            </EuiTitle>
-            <EuiSpacer size="s" />
-            <LatestActive latestActive={latestActive} />
-          </EuiPanel>
+          <EuiTitle size="s">
+            <h2>
+              <FormattedMessage
+                id="xpack.monitoring.beats.overview.activeBeatsInLastDayTitle"
+                defaultMessage="Active Beats in last day"
+              />
+            </h2>
+          </EuiTitle>
+          <EuiSpacer size="s" />
+          <LatestActive latestActive={latestActive} />
         </EuiFlexItem>
         <EuiFlexItem>
-          <EuiPanel>
-            <EuiTitle size="s">
-              <h2>
-                <FormattedMessage
-                  id="xpack.monitoring.beats.overview.top5BeatTypesInLastDayTitle"
-                  defaultMessage="Top 5 Beat Types in Last Day"
-                />
-              </h2>
-            </EuiTitle>
-            <EuiSpacer size="s" />
-            <LatestTypes latestTypes={latestTypes} />
-          </EuiPanel>
+          <EuiTitle size="s">
+            <h2>
+              <FormattedMessage
+                id="xpack.monitoring.beats.overview.top5BeatTypesInLastDayTitle"
+                defaultMessage="Top 5 Beat Types in last day"
+              />
+            </h2>
+          </EuiTitle>
+          <EuiSpacer size="s" />
+          <LatestTypes latestTypes={latestTypes} />
         </EuiFlexItem>
         <EuiFlexItem>
-          <EuiPanel>
-            <EuiTitle size="s">
-              <h2>
-                <FormattedMessage
-                  id="xpack.monitoring.beats.overview.top5VersionsInLastDayTitle"
-                  defaultMessage="Top 5 Versions in Last Day"
-                />
-              </h2>
-            </EuiTitle>
-            <EuiSpacer size="s" />
-            <LatestVersions latestVersions={latestVersions} />
-          </EuiPanel>
+          <EuiTitle size="s">
+            <h2>
+              <FormattedMessage
+                id="xpack.monitoring.beats.overview.top5VersionsInLastDayTitle"
+                defaultMessage="Top 5 Versions in last day"
+              />
+            </h2>
+          </EuiTitle>
+          <EuiSpacer size="s" />
+          <LatestVersions latestVersions={latestVersions} />
         </EuiFlexItem>
       </EuiFlexGroup>
     );
@@ -90,6 +85,7 @@ export function BeatsOverview({
   latestVersions,
   stats,
   metrics,
+  alerts,
   ...props
 }) {
   const seriesToShow = [
@@ -118,10 +114,13 @@ export function BeatsOverview({
             />
           </h1>
         </EuiScreenReaderOnly>
+        <EuiPanel>
+          <Stats stats={stats} alerts={alerts} />
+        </EuiPanel>
+        <EuiSpacer size="m" />
+        <EuiPanel>{renderLatestActive(latestActive, latestTypes, latestVersions)}</EuiPanel>
+        <EuiSpacer size="m" />
         <EuiPageContent>
-          <Stats stats={stats} />
-          {renderLatestActive(latestActive, latestTypes, latestVersions)}
-          <EuiSpacer size="s" />
           <EuiFlexGroup wrap>{charts}</EuiFlexGroup>
         </EuiPageContent>
       </EuiPageBody>

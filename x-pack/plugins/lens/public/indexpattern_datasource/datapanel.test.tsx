@@ -1,23 +1,152 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import React, { ChangeEvent } from 'react';
+import React, { ChangeEvent, ReactElement } from 'react';
 import { createMockedDragDropContext } from './mocks';
 import { dataPluginMock } from '../../../../../src/plugins/data/public/mocks';
 import { InnerIndexPatternDataPanel, IndexPatternDataPanel, MemoizedDataPanel } from './datapanel';
+import { FieldList } from './field_list';
 import { FieldItem } from './field_item';
 import { NoFieldsCallout } from './no_fields_callout';
 import { act } from 'react-dom/test-utils';
 import { coreMock } from 'src/core/public/mocks';
 import { IndexPatternPrivateState } from './types';
-import { mountWithIntl, shallowWithIntl } from 'test_utils/enzyme_helpers';
+import { mountWithIntl, shallowWithIntl } from '@kbn/test/jest';
 import { ChangeIndexPattern } from './change_indexpattern';
 import { EuiProgress, EuiLoadingSpinner } from '@elastic/eui';
 import { documentField } from './document_field';
 import { chartPluginMock } from '../../../../../src/plugins/charts/public/mocks';
+import { indexPatternFieldEditorPluginMock } from '../../../../../src/plugins/index_pattern_field_editor/public/mocks';
+import { getFieldByNameFactory } from './pure_helpers';
+import { uiActionsPluginMock } from '../../../../../src/plugins/ui_actions/public/mocks';
+
+const fieldsOne = [
+  {
+    name: 'timestamp',
+    displayName: 'timestampLabel',
+    type: 'date',
+    aggregatable: true,
+    searchable: true,
+  },
+  {
+    name: 'bytes',
+    displayName: 'bytes',
+    type: 'number',
+    aggregatable: true,
+    searchable: true,
+  },
+  {
+    name: 'memory',
+    displayName: 'amemory',
+    type: 'number',
+    aggregatable: true,
+    searchable: true,
+  },
+  {
+    name: 'unsupported',
+    displayName: 'unsupported',
+    type: 'geo',
+    aggregatable: true,
+    searchable: true,
+  },
+  {
+    name: 'source',
+    displayName: 'source',
+    type: 'string',
+    aggregatable: true,
+    searchable: true,
+  },
+  {
+    name: 'client',
+    displayName: 'client',
+    type: 'ip',
+    aggregatable: true,
+    searchable: true,
+  },
+  documentField,
+];
+
+const fieldsTwo = [
+  {
+    name: 'timestamp',
+    displayName: 'timestampLabel',
+    type: 'date',
+    aggregatable: true,
+    searchable: true,
+    aggregationRestrictions: {
+      date_histogram: {
+        agg: 'date_histogram',
+        fixed_interval: '1d',
+        delay: '7d',
+        time_zone: 'UTC',
+      },
+    },
+  },
+  {
+    name: 'bytes',
+    displayName: 'bytes',
+    type: 'number',
+    aggregatable: true,
+    searchable: true,
+    aggregationRestrictions: {
+      histogram: {
+        agg: 'histogram',
+        interval: 1000,
+      },
+      max: {
+        agg: 'max',
+      },
+      min: {
+        agg: 'min',
+      },
+      sum: {
+        agg: 'sum',
+      },
+    },
+  },
+  {
+    name: 'source',
+    displayName: 'source',
+    type: 'string',
+    aggregatable: true,
+    searchable: true,
+    aggregationRestrictions: {
+      terms: {
+        agg: 'terms',
+      },
+    },
+  },
+  documentField,
+];
+
+const fieldsThree = [
+  {
+    name: 'timestamp',
+    displayName: 'timestampLabel',
+    type: 'date',
+    aggregatable: true,
+    searchable: true,
+  },
+  {
+    name: 'bytes',
+    displayName: 'bytes',
+    type: 'number',
+    aggregatable: true,
+    searchable: true,
+  },
+  {
+    name: 'source',
+    displayName: 'source',
+    type: 'string',
+    aggregatable: true,
+    searchable: true,
+  },
+  documentField,
+];
 
 const initialState: IndexPatternPrivateState = {
   indexPatternRefs: [],
@@ -46,7 +175,7 @@ const initialState: IndexPatternPrivateState = {
           label: 'My Op',
           dataType: 'number',
           isBucketed: false,
-          operationType: 'avg',
+          operationType: 'average',
           sourceField: 'memory',
         },
       },
@@ -73,7 +202,7 @@ const initialState: IndexPatternPrivateState = {
           label: 'My Op',
           dataType: 'number',
           isBucketed: false,
-          operationType: 'avg',
+          operationType: 'average',
           sourceField: 'bytes',
         },
       },
@@ -84,125 +213,25 @@ const initialState: IndexPatternPrivateState = {
       id: '1',
       title: 'idx1',
       timeFieldName: 'timestamp',
-      fields: [
-        {
-          name: 'timestamp',
-          type: 'date',
-          aggregatable: true,
-          searchable: true,
-        },
-        {
-          name: 'bytes',
-          type: 'number',
-          aggregatable: true,
-          searchable: true,
-        },
-        {
-          name: 'memory',
-          type: 'number',
-          aggregatable: true,
-          searchable: true,
-        },
-        {
-          name: 'unsupported',
-          type: 'geo',
-          aggregatable: true,
-          searchable: true,
-        },
-        {
-          name: 'source',
-          type: 'string',
-          aggregatable: true,
-          searchable: true,
-        },
-        {
-          name: 'client',
-          type: 'ip',
-          aggregatable: true,
-          searchable: true,
-        },
-        documentField,
-      ],
+      hasRestrictions: false,
+      fields: fieldsOne,
+      getFieldByName: getFieldByNameFactory(fieldsOne),
     },
     '2': {
       id: '2',
       title: 'idx2',
       timeFieldName: 'timestamp',
-      fields: [
-        {
-          name: 'timestamp',
-          type: 'date',
-          aggregatable: true,
-          searchable: true,
-          aggregationRestrictions: {
-            date_histogram: {
-              agg: 'date_histogram',
-              fixed_interval: '1d',
-              delay: '7d',
-              time_zone: 'UTC',
-            },
-          },
-        },
-        {
-          name: 'bytes',
-          type: 'number',
-          aggregatable: true,
-          searchable: true,
-          aggregationRestrictions: {
-            histogram: {
-              agg: 'histogram',
-              interval: 1000,
-            },
-            max: {
-              agg: 'max',
-            },
-            min: {
-              agg: 'min',
-            },
-            sum: {
-              agg: 'sum',
-            },
-          },
-        },
-        {
-          name: 'source',
-          type: 'string',
-          aggregatable: true,
-          searchable: true,
-          aggregationRestrictions: {
-            terms: {
-              agg: 'terms',
-            },
-          },
-        },
-        documentField,
-      ],
+      hasRestrictions: true,
+      fields: fieldsTwo,
+      getFieldByName: getFieldByNameFactory(fieldsTwo),
     },
     '3': {
       id: '3',
       title: 'idx3',
       timeFieldName: 'timestamp',
-      fields: [
-        {
-          name: 'timestamp',
-          type: 'date',
-          aggregatable: true,
-          searchable: true,
-        },
-        {
-          name: 'bytes',
-          type: 'number',
-          aggregatable: true,
-          searchable: true,
-        },
-        {
-          name: 'source',
-          type: 'string',
-          aggregatable: true,
-          searchable: true,
-        },
-        documentField,
-      ],
+      hasRestrictions: false,
+      fields: fieldsThree,
+      getFieldByName: getFieldByNameFactory(fieldsThree),
     },
   },
   isFirstExistenceFetch: false,
@@ -214,14 +243,16 @@ describe('IndexPattern Data Panel', () => {
   let defaultProps: Parameters<typeof InnerIndexPatternDataPanel>[0] & {
     showNoDataPopover: () => void;
   };
-  let core: ReturnType<typeof coreMock['createSetup']>;
+  let core: ReturnType<typeof coreMock['createStart']>;
 
   beforeEach(() => {
-    core = coreMock.createSetup();
+    core = coreMock.createStart();
     defaultProps = {
       indexPatternRefs: [],
       existingFields: {},
       data: dataPluginMock.createStartContract(),
+      indexPatternFieldEditor: indexPatternFieldEditorPluginMock.createStartContract(),
+      onUpdateIndexPattern: jest.fn(),
       dragDropContext: createMockedDragDropContext(),
       currentIndexPatternId: '1',
       indexPatterns: initialState.indexPatterns,
@@ -235,6 +266,9 @@ describe('IndexPattern Data Panel', () => {
       query: { query: '', language: 'lucene' },
       filters: [],
       showNoDataPopover: jest.fn(),
+      dropOntoWorkspace: jest.fn(),
+      hasSuggestionForField: jest.fn(() => false),
+      uiActions: uiActionsPluginMock.createStartContract(),
     };
   });
 
@@ -251,7 +285,10 @@ describe('IndexPattern Data Panel', () => {
         {...defaultProps}
         state={state}
         setState={setStateSpy}
-        dragDropContext={{ dragging: {}, setDragging: () => {} }}
+        dragDropContext={{
+          ...createMockedDragDropContext(),
+          dragging: { id: '1', humanData: { label: 'Label' } },
+        }}
       />
     );
 
@@ -270,7 +307,10 @@ describe('IndexPattern Data Panel', () => {
           indexPatterns: {},
         }}
         setState={jest.fn()}
-        dragDropContext={{ dragging: {}, setDragging: () => {} }}
+        dragDropContext={{
+          ...createMockedDragDropContext(),
+          dragging: { id: '1', humanData: { label: 'Label' } },
+        }}
         changeIndexPattern={jest.fn()}
       />
     );
@@ -302,7 +342,10 @@ describe('IndexPattern Data Panel', () => {
         ...defaultProps,
         changeIndexPattern: jest.fn(),
         setState,
-        dragDropContext: { dragging: {}, setDragging: () => {} },
+        dragDropContext: {
+          ...createMockedDragDropContext(),
+          dragging: { id: '1', humanData: { label: 'Label' } },
+        },
         dateRange: { fromDate: '2019-01-01', toDate: '2020-01-01' },
         state: {
           indexPatternRefs: [],
@@ -310,8 +353,22 @@ describe('IndexPattern Data Panel', () => {
           isFirstExistenceFetch: false,
           currentIndexPatternId: 'a',
           indexPatterns: {
-            a: { id: 'a', title: 'aaa', timeFieldName: 'atime', fields: [] },
-            b: { id: 'b', title: 'bbb', timeFieldName: 'btime', fields: [] },
+            a: {
+              id: 'a',
+              title: 'aaa',
+              timeFieldName: 'atime',
+              fields: [],
+              getFieldByName: getFieldByNameFactory([]),
+              hasRestrictions: false,
+            },
+            b: {
+              id: 'b',
+              title: 'bbb',
+              timeFieldName: 'btime',
+              fields: [],
+              getFieldByName: getFieldByNameFactory([]),
+              hasRestrictions: false,
+            },
           },
           layers: {
             1: {
@@ -581,25 +638,55 @@ describe('IndexPattern Data Panel', () => {
           .find('[data-test-subj="lnsIndexPatternAvailableFields"]')
           .find(FieldItem)
           .map((fieldItem) => fieldItem.prop('field').name)
-      ).toEqual(['bytes', 'memory']);
+      ).toEqual(['memory', 'bytes']);
       wrapper
         .find('[data-test-subj="lnsIndexPatternEmptyFields"]')
         .find('button')
         .first()
         .simulate('click');
+      const emptyAccordion = wrapper.find('[data-test-subj="lnsIndexPatternEmptyFields"]');
+      expect(
+        emptyAccordion.find(FieldItem).map((fieldItem) => fieldItem.prop('field').name)
+      ).toEqual(['client', 'source', 'timestamp']);
+      expect(
+        emptyAccordion.find(FieldItem).map((fieldItem) => fieldItem.prop('field').displayName)
+      ).toEqual(['client', 'source', 'timestampLabel']);
+    });
+
+    it('should show meta fields accordion', async () => {
+      const wrapper = mountWithIntl(
+        <InnerIndexPatternDataPanel
+          {...props}
+          indexPatterns={{
+            '1': {
+              ...props.indexPatterns['1'],
+              fields: [
+                ...props.indexPatterns['1'].fields,
+                { name: '_id', displayName: '_id', meta: true, type: 'string' },
+              ],
+            },
+          }}
+        />
+      );
+      wrapper
+        .find('[data-test-subj="lnsIndexPatternMetaFields"]')
+        .find('button')
+        .first()
+        .simulate('click');
       expect(
         wrapper
-          .find('[data-test-subj="lnsIndexPatternEmptyFields"]')
+          .find('[data-test-subj="lnsIndexPatternMetaFields"]')
           .find(FieldItem)
-          .map((fieldItem) => fieldItem.prop('field').name)
-      ).toEqual(['client', 'source', 'timestamp']);
+          .first()
+          .prop('field').name
+      ).toEqual('_id');
     });
 
     it('should display NoFieldsCallout when all fields are empty', async () => {
       const wrapper = mountWithIntl(
         <InnerIndexPatternDataPanel {...defaultProps} existingFields={{ idx1: {} }} />
       );
-      expect(wrapper.find(NoFieldsCallout).length).toEqual(1);
+      expect(wrapper.find(NoFieldsCallout).length).toEqual(2);
       expect(
         wrapper
           .find('[data-test-subj="lnsIndexPatternAvailableFields"]')
@@ -615,8 +702,8 @@ describe('IndexPattern Data Panel', () => {
         wrapper
           .find('[data-test-subj="lnsIndexPatternEmptyFields"]')
           .find(FieldItem)
-          .map((fieldItem) => fieldItem.prop('field').name)
-      ).toEqual(['bytes', 'client', 'memory', 'source', 'timestamp']);
+          .map((fieldItem) => fieldItem.prop('field').displayName)
+      ).toEqual(['amemory', 'bytes', 'client', 'source', 'timestampLabel']);
     });
 
     it('should display spinner for available fields accordion if existing fields are not loaded yet', async () => {
@@ -626,7 +713,31 @@ describe('IndexPattern Data Panel', () => {
           .length
       ).toEqual(1);
       wrapper.setProps({ existingFields: { idx1: {} } });
-      expect(wrapper.find(NoFieldsCallout).length).toEqual(1);
+      expect(wrapper.find(NoFieldsCallout).length).toEqual(2);
+    });
+
+    it('should not allow field details when error', () => {
+      const wrapper = mountWithIntl(
+        <InnerIndexPatternDataPanel {...props} existenceFetchFailed={true} />
+      );
+
+      expect(wrapper.find(FieldList).prop('fieldGroups')).toEqual(
+        expect.objectContaining({
+          AvailableFields: expect.objectContaining({ hideDetails: true }),
+        })
+      );
+    });
+
+    it('should allow field details when timeout', () => {
+      const wrapper = mountWithIntl(
+        <InnerIndexPatternDataPanel {...props} existenceFetchTimeout={true} />
+      );
+
+      expect(wrapper.find(FieldList).prop('fieldGroups')).toEqual(
+        expect.objectContaining({
+          AvailableFields: expect.objectContaining({ hideDetails: false }),
+        })
+      );
     });
 
     it('should filter down by name', () => {
@@ -649,6 +760,25 @@ describe('IndexPattern Data Panel', () => {
       ]);
     });
 
+    it('should announce filter in live region', () => {
+      const wrapper = mountWithIntl(<InnerIndexPatternDataPanel {...props} />);
+      act(() => {
+        wrapper.find('[data-test-subj="lnsIndexPatternFieldSearch"]').prop('onChange')!({
+          target: { value: 'me' },
+        } as ChangeEvent<HTMLInputElement>);
+      });
+
+      wrapper
+        .find('[data-test-subj="lnsIndexPatternEmptyFields"]')
+        .find('button')
+        .first()
+        .simulate('click');
+
+      expect(wrapper.find('[aria-live="polite"]').text()).toEqual(
+        '1 available field. 1 empty field. 0 meta fields.'
+      );
+    });
+
     it('should filter down by type', () => {
       const wrapper = mountWithIntl(<InnerIndexPatternDataPanel {...props} />);
 
@@ -656,10 +786,9 @@ describe('IndexPattern Data Panel', () => {
 
       wrapper.find('[data-test-subj="typeFilter-number"]').first().simulate('click');
 
-      expect(wrapper.find(FieldItem).map((fieldItem) => fieldItem.prop('field').name)).toEqual([
-        'bytes',
-        'memory',
-      ]);
+      expect(
+        wrapper.find(FieldItem).map((fieldItem) => fieldItem.prop('field').displayName)
+      ).toEqual(['amemory', 'bytes']);
     });
 
     it('should display no fields in groups when filtered by type Record', () => {
@@ -672,7 +801,7 @@ describe('IndexPattern Data Panel', () => {
       expect(wrapper.find(FieldItem).map((fieldItem) => fieldItem.prop('field').name)).toEqual([
         'Records',
       ]);
-      expect(wrapper.find(NoFieldsCallout).length).toEqual(2);
+      expect(wrapper.find(NoFieldsCallout).length).toEqual(3);
     });
 
     it('should toggle type if clicked again', () => {
@@ -686,14 +815,9 @@ describe('IndexPattern Data Panel', () => {
         .find('button')
         .first()
         .simulate('click');
-      expect(wrapper.find(FieldItem).map((fieldItem) => fieldItem.prop('field').name)).toEqual([
-        'Records',
-        'bytes',
-        'memory',
-        'client',
-        'source',
-        'timestamp',
-      ]);
+      expect(
+        wrapper.find(FieldItem).map((fieldItem) => fieldItem.prop('field').displayName)
+      ).toEqual(['Records', 'amemory', 'bytes', 'client', 'source', 'timestampLabel']);
     });
 
     it('should filter down by type and by name', () => {
@@ -711,6 +835,80 @@ describe('IndexPattern Data Panel', () => {
       expect(wrapper.find(FieldItem).map((fieldItem) => fieldItem.prop('field').name)).toEqual([
         'memory',
       ]);
+    });
+    describe('edit field list', () => {
+      beforeEach(() => {
+        props.indexPatternFieldEditor.userPermissions.editIndexPattern = () => true;
+      });
+      it('should call field editor plugin on clicking add button', async () => {
+        const mockIndexPattern = {};
+        (props.data.indexPatterns.get as jest.Mock).mockImplementation(() =>
+          Promise.resolve(mockIndexPattern)
+        );
+        const wrapper = mountWithIntl(<InnerIndexPatternDataPanel {...props} />);
+        act(() => {
+          (wrapper
+            .find('[data-test-subj="lnsIndexPatternActions-popover"]')
+            .first()
+            .prop('children') as ReactElement).props.items[0].props.onClick();
+        });
+
+        // wait for indx pattern to be loaded
+        await act(async () => await new Promise((r) => setTimeout(r, 0)));
+
+        expect(props.indexPatternFieldEditor.openEditor).toHaveBeenCalledWith(
+          expect.objectContaining({
+            ctx: expect.objectContaining({
+              indexPattern: mockIndexPattern,
+            }),
+          })
+        );
+      });
+
+      it('should reload index pattern if callback gets called', async () => {
+        const mockIndexPattern = {
+          id: '1',
+          fields: [
+            {
+              name: 'fieldOne',
+              aggregatable: true,
+            },
+          ],
+          metaFields: [],
+        };
+        (props.data.indexPatterns.get as jest.Mock).mockImplementation(() =>
+          Promise.resolve(mockIndexPattern)
+        );
+        const wrapper = mountWithIntl(<InnerIndexPatternDataPanel {...props} />);
+        act(() => {
+          (wrapper
+            .find('[data-test-subj="lnsIndexPatternActions-popover"]')
+            .first()
+            .prop('children') as ReactElement).props.items[0].props.onClick();
+        });
+        // wait for indx pattern to be loaded
+        await act(async () => await new Promise((r) => setTimeout(r, 0)));
+
+        await (props.indexPatternFieldEditor.openEditor as jest.Mock).mock.calls[0][0].onSave();
+        // wait for indx pattern to be loaded
+        await act(async () => await new Promise((r) => setTimeout(r, 0)));
+        expect(props.onUpdateIndexPattern).toHaveBeenCalledWith(
+          expect.objectContaining({
+            fields: [
+              expect.objectContaining({
+                name: 'fieldOne',
+              }),
+              expect.anything(),
+            ],
+          })
+        );
+      });
+
+      it('should not render add button without permissions', () => {
+        props.indexPatternFieldEditor.userPermissions.editIndexPattern = () => false;
+        const wrapper = mountWithIntl(<InnerIndexPatternDataPanel {...props} />);
+        expect(wrapper.find('[data-test-subj="indexPattern-add-field"]').exists()).toBe(false);
+      });
     });
   });
 });

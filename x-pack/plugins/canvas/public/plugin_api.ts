@@ -1,34 +1,39 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import {
   AnyExpressionFunctionDefinition,
   AnyExpressionTypeDefinition,
-  RendererFactory,
+  AnyExpressionRenderDefinition,
+  AnyRendererFactory,
 } from '../types';
 import { ElementFactory } from '../types';
 import { ExpressionsSetup } from '../../../../src/plugins/expressions/public';
 
-type AddToRegistry<T extends any> = (add: T[]) => void;
+type SpecPromiseFn<T extends any> = () => Promise<T[]>;
+type AddToRegistry<T extends any> = (add: T[] | SpecPromiseFn<T>) => void;
+type AddSpecsToRegistry<T extends any> = (add: T[]) => void;
 
 export interface CanvasApi {
   addArgumentUIs: AddToRegistry<any>;
   addDatasourceUIs: AddToRegistry<any>;
   addElements: AddToRegistry<ElementFactory>;
-  addFunctions: AddToRegistry<() => AnyExpressionFunctionDefinition>;
+  addFunctions: AddSpecsToRegistry<() => AnyExpressionFunctionDefinition>;
   addModelUIs: AddToRegistry<any>;
-  addRenderers: AddToRegistry<RendererFactory>;
+  addRenderers: AddSpecsToRegistry<AnyRendererFactory>;
   addTagUIs: AddToRegistry<any>;
   addTransformUIs: AddToRegistry<any>;
   addTransitions: AddToRegistry<any>;
-  addTypes: AddToRegistry<() => AnyExpressionTypeDefinition>;
+  addTypes: AddSpecsToRegistry<() => AnyExpressionTypeDefinition>;
   addViewUIs: AddToRegistry<any>;
 }
 
-export interface SetupRegistries {
-  elements: ElementFactory[];
+export interface SetupRegistries extends Record<string, any[]> {
+  elements: Array<ElementFactory | SpecPromiseFn<ElementFactory>>;
   transformUIs: any[];
   datasourceUIs: any[];
   modelUIs: any[];
@@ -52,6 +57,16 @@ export function getPluginApi(
     transitions: [],
   };
 
+  const addToRegistry = <T>(registry: Array<T | SpecPromiseFn<T>>) => {
+    return (entries: T[] | SpecPromiseFn<T>) => {
+      if (Array.isArray(entries)) {
+        registry.push(...entries);
+      } else {
+        registry.push(entries);
+      }
+    };
+  };
+
   const api: CanvasApi = {
     // Functions, types and renderers are registered directly to expression plugin
     addFunctions: (fns) => {
@@ -65,20 +80,23 @@ export function getPluginApi(
       });
     },
     addRenderers: (renderers) => {
-      renderers.forEach((r: any) => {
-        expressionsPluginSetup.registerRenderer(r);
+      renderers.forEach((r) => {
+        // There is an issue of the canvas render definition not matching the expression render definition
+        // due to our handlers needing additional methods.  For now, we are going to cast to get to the proper
+        // type, but we should work with AppArch to figure out how the Handlers can be genericized
+        expressionsPluginSetup.registerRenderer((r as unknown) as AnyExpressionRenderDefinition);
       });
     },
 
     // All these others are local to canvas, and they will only register on start
-    addElements: (elements) => registries.elements.push(...elements),
-    addTransformUIs: (transforms) => registries.transformUIs.push(...transforms),
-    addDatasourceUIs: (datasources) => registries.datasourceUIs.push(...datasources),
-    addModelUIs: (models) => registries.modelUIs.push(...models),
-    addViewUIs: (views) => registries.viewUIs.push(...views),
-    addArgumentUIs: (args) => registries.argumentUIs.push(...args),
-    addTagUIs: (tags) => registries.tagUIs.push(...tags),
-    addTransitions: (transitions) => registries.transitions.push(...transitions),
+    addElements: addToRegistry(registries.elements),
+    addTransformUIs: addToRegistry(registries.transformUIs),
+    addDatasourceUIs: addToRegistry(registries.datasourceUIs),
+    addModelUIs: addToRegistry(registries.modelUIs),
+    addViewUIs: addToRegistry(registries.viewUIs),
+    addArgumentUIs: addToRegistry(registries.argumentUIs),
+    addTagUIs: addToRegistry(registries.tagUIs),
+    addTransitions: addToRegistry(registries.transitions),
   };
 
   return { api, registries };

@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { mount, shallow } from 'enzyme';
@@ -14,7 +15,7 @@ import { TestProviders } from '../../../common/mock/test_providers';
 describe('Overview Host Stat Data', () => {
   describe('rendering', () => {
     test('it renders the default OverviewHostStats', () => {
-      const wrapper = shallow(<OverviewHostStats data={mockData.OverviewHost} loading={false} />);
+      const wrapper = shallow(<OverviewHostStats data={mockData} loading={false} />);
       expect(wrapper).toMatchSnapshot();
     });
   });
@@ -22,7 +23,7 @@ describe('Overview Host Stat Data', () => {
     test('it does NOT show loading indicator when loading is false', () => {
       const wrapper = mount(
         <TestProviders>
-          <OverviewHostStats data={mockData.OverviewHost} loading={false} />
+          <OverviewHostStats data={mockData} loading={false} />
         </TestProviders>
       );
 
@@ -42,7 +43,7 @@ describe('Overview Host Stat Data', () => {
     test('it shows loading indicator when loading is true', () => {
       const wrapper = mount(
         <TestProviders>
-          <OverviewHostStats data={mockData.OverviewHost} loading={true} />
+          <OverviewHostStats data={mockData} loading={true} />
         </TestProviders>
       );
 

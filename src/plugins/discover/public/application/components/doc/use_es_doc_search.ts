@@ -1,25 +1,19 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
-import { useEffect, useState } from 'react';
-import { IndexPattern } from '../../../kibana_services';
+
+import { useEffect, useState, useMemo } from 'react';
+import type { estypes } from '@elastic/elasticsearch';
+import { IndexPattern, getServices } from '../../../kibana_services';
 import { DocProps } from './doc';
 import { ElasticSearchHit } from '../../doc_views/doc_views_types';
+import { SEARCH_FIELDS_FROM_SOURCE } from '../../../../common';
+
+type RequestBody = Pick<estypes.SearchRequest, 'body'>;
 
 export enum ElasticRequestState {
   Loading,
@@ -33,27 +27,42 @@ export enum ElasticRequestState {
  * helper function to build a query body for Elasticsearch
  * https://www.elastic.co/guide/en/elasticsearch/reference/current//query-dsl-ids-query.html
  */
-export function buildSearchBody(id: string, indexPattern: IndexPattern): Record<string, any> {
+export function buildSearchBody(
+  id: string,
+  indexPattern: IndexPattern,
+  useNewFieldsApi: boolean
+): RequestBody | undefined {
   const computedFields = indexPattern.getComputedFields();
-
-  return {
-    query: {
-      ids: {
-        values: [id],
+  const runtimeFields = computedFields.runtimeFields as estypes.RuntimeFields;
+  const request: RequestBody = {
+    body: {
+      query: {
+        ids: {
+          values: [id],
+        },
       },
+      stored_fields: computedFields.storedFields,
+      script_fields: computedFields.scriptFields,
     },
-    stored_fields: computedFields.storedFields,
-    _source: true,
-    script_fields: computedFields.scriptFields,
-    docvalue_fields: computedFields.docvalueFields,
   };
+  if (!request.body) {
+    return undefined;
+  }
+  if (useNewFieldsApi) {
+    // @ts-expect-error
+    request.body.fields = [{ field: '*', include_unmapped: 'true' }];
+    request.body.runtime_mappings = runtimeFields ? runtimeFields : {};
+  } else {
+    request.body._source = true;
+  }
+  request.body.fields = [...(request.body?.fields || []), ...(computedFields.docvalueFields || [])];
+  return request;
 }
 
 /**
  * Custom react hook for querying a single doc in ElasticSearch
  */
 export function useEsDocSearch({
-  esClient,
   id,
   index,
   indexPatternId,
@@ -62,6 +71,8 @@ export function useEsDocSearch({
   const [indexPattern, setIndexPattern] = useState<IndexPattern | null>(null);
   const [status, setStatus] = useState(ElasticRequestState.Loading);
   const [hit, setHit] = useState<ElasticSearchHit | null>(null);
+  const { data, uiSettings } = useMemo(() => getServices(), []);
+  const useNewFieldsApi = useMemo(() => !uiSettings.get(SEARCH_FIELDS_FROM_SOURCE), [uiSettings]);
 
   useEffect(() => {
     async function requestData() {
@@ -69,12 +80,18 @@ export function useEsDocSearch({
         const indexPatternEntity = await indexPatternService.get(indexPatternId);
         setIndexPattern(indexPatternEntity);
 
-        const { hits } = await esClient.search({
-          index,
-          body: buildSearchBody(id, indexPatternEntity),
-        });
+        const { rawResponse } = await data.search
+          .search({
+            params: {
+              index,
+              body: buildSearchBody(id, indexPatternEntity, useNewFieldsApi)?.body,
+            },
+          })
+          .toPromise();
 
-        if (hits && hits.hits && hits.hits[0]) {
+        const hits = rawResponse.hits;
+
+        if (hits?.hits?.[0]) {
           setStatus(ElasticRequestState.Found);
           setHit(hits.hits[0]);
         } else {
@@ -91,6 +108,6 @@ export function useEsDocSearch({
       }
     }
     requestData();
-  }, [esClient, id, index, indexPatternId, indexPatternService]);
+  }, [id, index, indexPatternId, indexPatternService, data.search, useNewFieldsApi]);
   return [status, hit, indexPattern];
 }

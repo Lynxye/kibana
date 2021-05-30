@@ -1,7 +1,8 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
 import { i18n } from '@kbn/i18n';
@@ -13,14 +14,14 @@ import { DATATABLE_COLUMN_TYPES } from '../../../common/lib/constants';
 export const help: FunctionHelp<FunctionFactory<typeof alterColumn>> = {
   help: i18n.translate('xpack.canvas.functions.alterColumnHelpText', {
     defaultMessage:
-      'Converts between core types, including {list}, and {end}, and rename columns. ' +
+      'Converts between core types, including {list}, and {end}, and renames columns. ' +
       'See also {mapColumnFn} and {staticColumnFn}.',
     values: {
       list: Object.values(DATATABLE_COLUMN_TYPES)
         .slice(0, -1)
         .map((type) => `\`${type}\``)
         .join(', '),
-      end: Object.values(DATATABLE_COLUMN_TYPES).slice(-1)[0],
+      end: `\`${Object.values(DATATABLE_COLUMN_TYPES).slice(-1)[0]}\``,
       mapColumnFn: '`mapColumn`',
       staticColumnFn: '`staticColumn`',
     },
@@ -33,7 +34,7 @@ export const help: FunctionHelp<FunctionFactory<typeof alterColumn>> = {
       defaultMessage: 'The resultant column name. Leave blank to not rename.',
     }),
     type: i18n.translate('xpack.canvas.functions.alterColumn.args.typeHelpText', {
-      defaultMessage: 'The type to convert the column to. Leave blank to not change type.',
+      defaultMessage: 'The type to convert the column to. Leave blank to not change the type.',
     }),
   },
 };

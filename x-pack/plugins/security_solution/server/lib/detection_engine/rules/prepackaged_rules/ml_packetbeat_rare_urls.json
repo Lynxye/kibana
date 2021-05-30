@@ -9,7 +9,7 @@
   ],
   "from": "now-45m",
   "interval": "15m",
-  "license": "Elastic License",
+  "license": "Elastic License v2",
   "machine_learning_job_id": "packetbeat_rare_urls",
   "name": "Unusual Web Request",
   "references": [
@@ -20,9 +20,10 @@
   "severity": "low",
   "tags": [
     "Elastic",
-    "ML",
-    "Packetbeat"
+    "Network",
+    "Threat Detection",
+    "ML"
   ],
   "type": "machine_learning",
-  "version": 2
+  "version": 4
 }

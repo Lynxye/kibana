@@ -1,45 +1,36 @@
 /*
- * Licensed to Elasticsearch B.V. under one or more contributor
- * license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership. Elasticsearch B.V. licenses this file to you under
- * the Apache License, Version 2.0 (the "License"); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0 and the Server Side Public License, v 1; you may not use this file except
+ * in compliance with, at your election, the Elastic License 2.0 or the Server
+ * Side Public License, v 1.
  */
 
 import PropTypes from 'prop-types';
-import React from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { AggSelect } from './agg_select';
 import { FieldSelect } from './field_select';
 import { AggRow } from './agg_row';
 import { createChangeHandler } from '../lib/create_change_handler';
 import { createSelectHandler } from '../lib/create_select_handler';
-import { createTextHandler } from '../lib/create_text_handler';
+import { getIndexPatternKey } from '../../../../common/index_patterns_utils';
+
 import {
   htmlIdGenerator,
   EuiFlexGroup,
   EuiFlexItem,
   EuiFormLabel,
-  EuiFieldText,
   EuiSpacer,
   EuiFormRow,
 } from '@elastic/eui';
 import { FormattedMessage } from '@kbn/i18n/react';
 import { KBN_FIELD_TYPES } from '../../../../../../plugins/data/public';
 import { getSupportedFieldsByMetricType } from '../lib/get_supported_fields_by_metric_type';
+import { getDataStart } from '../../../services';
+import { QueryBarWrapper } from '../query_bar_wrapper';
 
 const isFieldHistogram = (fields, indexPattern, field) => {
-  const indexFields = fields[indexPattern];
+  const indexFields = fields[getIndexPatternKey(indexPattern)];
   if (!indexFields) return false;
   const fieldObject = indexFields.find((f) => f.name === field);
   if (!fieldObject) return false;
@@ -49,15 +40,25 @@ const isFieldHistogram = (fields, indexPattern, field) => {
 export const FilterRatioAgg = (props) => {
   const { series, fields, panel } = props;
 
-  const handleChange = createChangeHandler(props.onChange, props.model);
+  const handleChange = useMemo(() => createChangeHandler(props.onChange, props.model), [
+    props.model,
+    props.onChange,
+  ]);
   const handleSelectChange = createSelectHandler(handleChange);
-  const handleTextChange = createTextHandler(handleChange);
-  const indexPattern =
-    (series.override_index_pattern && series.series_index_pattern) || panel.index_pattern;
+  const handleNumeratorQueryChange = useCallback((query) => handleChange({ numerator: query }), [
+    handleChange,
+  ]);
+  const handleDenominatorQueryChange = useCallback(
+    (query) => handleChange({ denominator: query }),
+    [handleChange]
+  );
+  const indexPattern = series.override_index_pattern
+    ? series.series_index_pattern
+    : panel.index_pattern;
 
   const defaults = {
-    numerator: '*',
-    denominator: '*',
+    numerator: getDataStart().query.queryString.getDefaultQuery(),
+    denominator: getDataStart().query.queryString.getDefaultQuery(),
     metric_agg: 'count',
   };
 
@@ -101,7 +102,11 @@ export const FilterRatioAgg = (props) => {
               />
             }
           >
-            <EuiFieldText onChange={handleTextChange('numerator')} value={model.numerator} />
+            <QueryBarWrapper
+              query={model.numerator}
+              onChange={handleNumeratorQueryChange}
+              indexPatterns={[indexPattern]}
+            />
           </EuiFormRow>
         </EuiFlexItem>
 
@@ -115,7 +120,11 @@ export const FilterRatioAgg = (props) => {
               />
             }
           >
-            <EuiFieldText onChange={handleTextChange('denominator')} value={model.denominator} />
+            <QueryBarWrapper
+              query={model.denominator}
+              onChange={handleDenominatorQueryChange}
+              indexPatterns={[indexPattern]}
+            />
           </EuiFormRow>
         </EuiFlexItem>
       </EuiFlexGroup>
@@ -144,24 +153,20 @@ export const FilterRatioAgg = (props) => {
 
         {model.metric_agg !== 'count' ? (
           <EuiFlexItem>
-            <EuiFormRow
-              id={htmlId('aggField')}
+            <FieldSelect
               label={
                 <FormattedMessage
                   id="visTypeTimeseries.filterRatio.fieldLabel"
                   defaultMessage="Field"
                 />
               }
-            >
-              <FieldSelect
-                fields={fields}
-                type={model.metric_agg}
-                restrict={getSupportedFieldsByMetricType(model.metric_agg)}
-                indexPattern={indexPattern}
-                value={model.field}
-                onChange={handleSelectChange('field')}
-              />
-            </EuiFormRow>
+              fields={fields}
+              type={model.metric_agg}
+              restrict={getSupportedFieldsByMetricType(model.metric_agg)}
+              indexPattern={indexPattern}
+              value={model.field}
+              onChange={handleSelectChange('field')}
+            />
           </EuiFlexItem>
         ) : null}
       </EuiFlexGroup>

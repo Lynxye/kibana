@@ -1,8 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
+
 import { i18n } from '@kbn/i18n';
 
 import { serializeComponentTemplate } from '../../../../common/lib';
@@ -10,11 +12,7 @@ import { RouteDependencies } from '../../../types';
 import { addBasePath } from '../index';
 import { componentTemplateSchema } from './schema_validation';
 
-export const registerCreateRoute = ({
-  router,
-  license,
-  lib: { isEsError },
-}: RouteDependencies): void => {
+export const registerCreateRoute = ({ router, lib: { isEsError } }: RouteDependencies): void => {
   router.post(
     {
       path: addBasePath('/component_templates'),
@@ -22,7 +20,7 @@ export const registerCreateRoute = ({
         body: componentTemplateSchema,
       },
     },
-    license.guardApiRoute(async (ctx, req, res) => {
+    async (ctx, req, res) => {
       const { callAsCurrentUser } = ctx.dataManagement!.client;
 
       const serializedComponentTemplate = serializeComponentTemplate(req.body);
@@ -69,8 +67,8 @@ export const registerCreateRoute = ({
           });
         }
 
-        return res.internalError({ body: error });
+        throw error;
       }
-    })
+    }
   );
 };

@@ -1,14 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License;
- * you may not use this file except in compliance with the Elastic License.
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
  */
 
-import { ILegacyScopedClusterClient } from 'kibana/server';
 import { getAdminCapabilities, getUserCapabilities } from './__mocks__/ml_capabilities';
 import { capabilitiesProvider } from './check_capabilities';
 import { MlLicense } from '../../../common/license';
 import { getDefaultCapabilities } from '../../../common/types/capabilities';
+import type { MlClient } from '../../lib/ml_client';
 
 const mlLicense = {
   isSecurityEnabled: () => true,
@@ -23,38 +24,41 @@ const mlLicenseBasic = {
 const mlIsEnabled = async () => true;
 const mlIsNotEnabled = async () => false;
 
-const mlClusterClientNonUpgrade = ({
-  callAsInternalUser: async () => ({
-    upgrade_mode: false,
+const mlClientNonUpgrade = ({
+  info: async () => ({
+    body: {
+      upgrade_mode: false,
+    },
   }),
-} as unknown) as ILegacyScopedClusterClient;
+} as unknown) as MlClient;
 
-const mlClusterClientUpgrade = ({
-  callAsInternalUser: async () => ({
-    upgrade_mode: true,
+const mlClientUpgrade = ({
+  info: async () => ({
+    body: {
+      upgrade_mode: true,
+    },
   }),
-} as unknown) as ILegacyScopedClusterClient;
+} as unknown) as MlClient;
 
 describe('check_capabilities', () => {
   describe('getCapabilities() - right number of capabilities', () => {
-    test('kibana capabilities count', async (done) => {
+    test('kibana capabilities count', async () => {
       const { getCapabilities } = capabilitiesProvider(
-        mlClusterClientNonUpgrade,
+        mlClientNonUpgrade,
         getAdminCapabilities(),
         mlLicense,
         mlIsEnabled
       );
       const { capabilities } = await getCapabilities();
       const count = Object.keys(capabilities).length;
-      expect(count).toBe(28);
-      done();
+      expect(count).toBe(30);
     });
   });
 
   describe('getCapabilities() with security', () => {
-    test('ml_user capabilities only', async (done) => {
+    test('ml_user capabilities only', async () => {
       const { getCapabilities } = capabilitiesProvider(
-        mlClusterClientNonUpgrade,
+        mlClientNonUpgrade,
         getUserCapabilities(),
         mlLicense,
         mlIsEnabled
@@ -78,6 +82,7 @@ describe('check_capabilities', () => {
       expect(capabilities.canGetAnnotations).toBe(true);
       expect(capabilities.canCreateAnnotation).toBe(true);
       expect(capabilities.canDeleteAnnotation).toBe(true);
+      expect(capabilities.canUseMlAlerts).toBe(true);
 
       expect(capabilities.canCreateJob).toBe(false);
       expect(capabilities.canDeleteJob).toBe(false);
@@ -98,12 +103,12 @@ describe('check_capabilities', () => {
       expect(capabilities.canDeleteDataFrameAnalytics).toBe(false);
       expect(capabilities.canCreateDataFrameAnalytics).toBe(false);
       expect(capabilities.canStartStopDataFrameAnalytics).toBe(false);
-      done();
+      expect(capabilities.canCreateMlAlerts).toBe(false);
     });
 
-    test('full capabilities', async (done) => {
+    test('full capabilities', async () => {
       const { getCapabilities } = capabilitiesProvider(
-        mlClusterClientNonUpgrade,
+        mlClientNonUpgrade,
         getAdminCapabilities(),
         mlLicense,
         mlIsEnabled
@@ -147,12 +152,11 @@ describe('check_capabilities', () => {
       expect(capabilities.canDeleteDataFrameAnalytics).toBe(true);
       expect(capabilities.canCreateDataFrameAnalytics).toBe(true);
       expect(capabilities.canStartStopDataFrameAnalytics).toBe(true);
-      done();
     });
 
-    test('upgrade in progress with full capabilities', async (done) => {
+    test('upgrade in progress with full capabilities', async () => {
       const { getCapabilities } = capabilitiesProvider(
-        mlClusterClientUpgrade,
+        mlClientUpgrade,
         getAdminCapabilities(),
         mlLicense,
         mlIsEnabled
@@ -196,12 +200,11 @@ describe('check_capabilities', () => {
       expect(capabilities.canDeleteDataFrameAnalytics).toBe(false);
       expect(capabilities.canCreateDataFrameAnalytics).toBe(false);
       expect(capabilities.canStartStopDataFrameAnalytics).toBe(false);
-      done();
     });
 
-    test('upgrade in progress with partial capabilities', async (done) => {
+    test('upgrade in progress with partial capabilities', async () => {
       const { getCapabilities } = capabilitiesProvider(
-        mlClusterClientUpgrade,
+        mlClientUpgrade,
         getUserCapabilities(),
         mlLicense,
         mlIsEnabled
@@ -245,12 +248,11 @@ describe('check_capabilities', () => {
       expect(capabilities.canDeleteDataFrameAnalytics).toBe(false);
       expect(capabilities.canCreateDataFrameAnalytics).toBe(false);
       expect(capabilities.canStartStopDataFrameAnalytics).toBe(false);
-      done();
     });
 
-    test('full capabilities, ml disabled in space', async (done) => {
+    test('full capabilities, ml disabled in space', async () => {
       const { getCapabilities } = capabilitiesProvider(
-        mlClusterClientNonUpgrade,
+        mlClientNonUpgrade,
         getDefaultCapabilities(),
         mlLicense,
         mlIsNotEnabled
@@ -294,13 +296,12 @@ describe('check_capabilities', () => {
       expect(capabilities.canDeleteDataFrameAnalytics).toBe(false);
       expect(capabilities.canCreateDataFrameAnalytics).toBe(false);
       expect(capabilities.canStartStopDataFrameAnalytics).toBe(false);
-      done();
     });
   });
 
-  test('full capabilities, basic license, ml disabled in space', async (done) => {
+  test('full capabilities, basic license, ml disabled in space', async () => {
     const { getCapabilities } = capabilitiesProvider(
-      mlClusterClientNonUpgrade,
+      mlClientNonUpgrade,
       getDefaultCapabilities(),
       mlLicenseBasic,
       mlIsNotEnabled
@@ -345,6 +346,5 @@ describe('check_capabilities', () => {
     expect(capabilities.canDeleteDataFrameAnalytics).toBe(false);
     expect(capabilities.canCreateDataFrameAnalytics).toBe(false);
     expect(capabilities.canStartStopDataFrameAnalytics).toBe(false);
-    done();
   });
 });
